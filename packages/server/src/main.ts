@@ -28,6 +28,7 @@ import { NestFactory } from '@nestjs/core';
 import { IONET_BAR_SKELETON, IonetModule } from '@nbb-ionet/extension-nestjs';
 import { type BarSkeleton } from '@nbb-ionet/core-framework';
 import { AppModule } from './app.module.js';
+import { ActionResultExceptionFilter } from './common/filters/action-result-exception.filter.js';
 import { appRef } from './ionet/app-ref.js';
 import { assertNoDuplicateRoutes, assertPublicActionsRegistered } from './ionet/route-check.js';
 
@@ -36,6 +37,9 @@ async function bootstrap(): Promise<void> {
 
   // REST 统一前缀（WS 走 /ws，不受影响）
   app.setGlobalPrefix('api');
+
+  // 未捕获异常统一成 ActionResult 失败体（避免裸 500 丢机器可读错误码）
+  app.useGlobalFilters(new ActionResultExceptionFilter());
 
   // resolveAction 需要 app 引用；必须早于 init() 触发 onModuleInit
   appRef.app = app;

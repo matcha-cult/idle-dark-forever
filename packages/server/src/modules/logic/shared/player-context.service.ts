@@ -63,6 +63,8 @@ interface AccountDataJson {
   enemyTasks?: Record<string, Record<string, number>>;
   medicineLevel?: Record<string, number>;
   medicineExp?: number;
+  worldSeeds?: Record<string, number>;
+  worldMaps?: Record<string, { map?: unknown; endlessLevel?: unknown }>;
 }
 
 @Injectable()
@@ -288,6 +290,8 @@ export class PlayerContextService {
       enemyTasks: cloneTasks(entry.extras.enemyTasks),
       medicineLevel: { ...entry.extras.medicineLevel },
       medicineExp: entry.extras.medicineExp,
+      worldSeeds: { ...entry.extras.worldSeeds },
+      worldMaps: cloneWorldMaps(entry.extras.worldMaps),
     };
     await this.db.query(
       `INSERT INTO account_state (user_id, diamonds, highest_endless_level, data, updated_at)
@@ -422,6 +426,24 @@ function applyAccountData(
   if (typeof data.medicineExp === 'number' && Number.isFinite(data.medicineExp)) {
     extras.medicineExp = data.medicineExp;
   }
+  if (data.worldSeeds && typeof data.worldSeeds === 'object') {
+    for (const key of Object.keys(data.worldSeeds)) {
+      const seed = data.worldSeeds[key];
+      if (typeof seed === 'number' && Number.isFinite(seed)) extras.worldSeeds[key] = seed;
+    }
+  }
+  if (data.worldMaps && typeof data.worldMaps === 'object') {
+    for (const key of Object.keys(data.worldMaps)) {
+      const entry = data.worldMaps[key];
+      if (!entry || typeof entry !== 'object') continue;
+      const map = typeof entry.map === 'string' && entry.map !== '' ? entry.map : 'home';
+      const endlessLevel =
+        typeof entry.endlessLevel === 'number' && Number.isFinite(entry.endlessLevel)
+          ? Math.trunc(entry.endlessLevel)
+          : 0;
+      extras.worldMaps[key] = { map, endlessLevel };
+    }
+  }
 }
 
 function cloneTasks(source: Record<string, Record<string, number>>): Record<string, Record<string, number>> {
@@ -429,6 +451,17 @@ function cloneTasks(source: Record<string, Record<string, number>>): Record<stri
   for (const key of Object.keys(source)) {
     const inner = source[key];
     if (inner) out[key] = { ...inner };
+  }
+  return out;
+}
+
+function cloneWorldMaps(
+  source: Record<string, { map: string; endlessLevel: number }>,
+): Record<string, { map: string; endlessLevel: number }> {
+  const out: Record<string, { map: string; endlessLevel: number }> = {};
+  for (const key of Object.keys(source)) {
+    const entry = source[key];
+    if (entry) out[key] = { map: entry.map, endlessLevel: entry.endlessLevel };
   }
   return out;
 }

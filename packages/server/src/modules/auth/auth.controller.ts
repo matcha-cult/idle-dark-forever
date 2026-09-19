@@ -8,26 +8,43 @@
  * 返回协议 `ActionResult<LoginResponseDto>`（`{success, message?, data:{token,expiresAt,userId,displayName}}`），
  * 与 WS Action 同形，前端只需一套两级错误判定（AGENTS.md §5.1）。
  */
-import { Body, Controller, Post } from '@nestjs/common';
-import { type ActionResult, type LoginResponseDto } from '@idle-dark/protocol';
+import { Body, Controller, Get, Post } from '@nestjs/common';
+import { type ActionResult, type LoginResponseDto, type MeDto } from '@idle-dark/protocol';
 import { Public } from '../../common/decorators/public.decorator.js';
+import { UserId } from '../../common/decorators/user-id.decorator.js';
 import { AuthService } from './auth.service.js';
 
-@Public()
+/**
+ * ⚠️ `@Public()` 标在**方法**上而不是类上：类上标会让 `GET /auth/me` 也免鉴权，
+ * 那样 `@UserId()` 取不到身份会抛错。注册/登录是唯一需要豁免 JWT 的两个入口。
+ */
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Public()
   @Post('register')
   async register(@Body() body: unknown): Promise<ActionResult<LoginResponseDto>> {
     const { username, password } = readCredentials(body);
     return this.authService.register(username, password);
   }
 
+  @Public()
   @Post('login')
   async login(@Body() body: unknown): Promise<ActionResult<LoginResponseDto>> {
     const { username, password } = readCredentials(body);
     return this.authService.login(username, password);
+  }
+
+  /**
+   * 账号级信息（`ActionResult<MeDto>`）。
+   *
+   * 前端 `RestClient.me()` 打的就是这条；虽当前 UI 走 WS 的 `AUTH_CMD.me`，
+   * 但 REST 面缺这条会让「带 REST 兜底的客户端」拿到 404。
+   */
+  @Get('me')
+  async me(@UserId() userId: number): Promise<ActionResult<MeDto>> {
+    return this.authService.me(userId);
   }
 }
 

@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf dist",
-    "smoke:ws": "node scripts/ws-protocol-smoke.mjs"
+    "smoke:ws": "node scripts/ws-protocol-smoke.mjs",
+    "smoke:game": "node scripts/game-flow-smoke.mjs"
   },
   "dependencies": {
     "@idle-dark/game-core": "workspace:*",

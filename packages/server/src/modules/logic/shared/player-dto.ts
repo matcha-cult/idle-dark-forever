@@ -37,10 +37,32 @@ export interface AccountExtras {
   /** 药剂等级：type → level。 */
   medicineLevel: Record<string, number>;
   medicineExp: number;
+  /**
+   * 每角色战斗世界的持久化随机种子（characterId → seed）。
+   *
+   * `game-core` 明确要求「用 `SeededRngFactory` 生成并持久化种子以保证可复算」；
+   * 但 `Player` 存档里没有种子字段（也不该有）。这里落在账号侧车：
+   * 既保证重启后同一角色继续同一随机序列，又不污染 `Player.toJSON()`。
+   */
+  worldSeeds: Record<string, number>;
+  /**
+   * 每角色当前所在地图（characterId → {map, endlessLevel}）。
+   *
+   * 原版 `worldState`（在飞的战斗快照）按方案 §9.2 **不迁**；但「玩家上次在哪张图」
+   * 必须记住，否则每次重连都回到 `home`。
+   */
+  worldMaps: Record<string, { map: string; endlessLevel: number }>;
 }
 
 export function createAccountExtras(): AccountExtras {
-  return { storiesMap: {}, enemyTasks: {}, medicineLevel: {}, medicineExp: 0 };
+  return {
+    storiesMap: {},
+    enemyTasks: {},
+    medicineLevel: {},
+    medicineExp: 0,
+    worldSeeds: {},
+    worldMaps: {},
+  };
 }
 
 /** 角色名 / 职业名的真实展示名（替换占位回退）。 */

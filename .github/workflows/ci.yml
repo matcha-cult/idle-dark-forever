@@ -97,6 +97,18 @@ jobs:
           node packages/server/scripts/ws-protocol-smoke.mjs 3000 "$JWT_SECRET"
           kill %1
 
+      - name: 端到端冒烟（完整游戏流程，需数据库）
+        run: |
+          node packages/server/dist/main.js > /tmp/server-game.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:3000/api/health > /dev/null && break
+            sleep 1
+          done
+          node packages/server/scripts/game-flow-smoke.mjs 3000
+          kill %1
+
       - name: 失败时输出服务端日志
         if: failure()
-        run: tail -200 /tmp/server.log || true
+        run: |
+          tail -200 /tmp/server.log || true
+          tail -200 /tmp/server-game.log || true
