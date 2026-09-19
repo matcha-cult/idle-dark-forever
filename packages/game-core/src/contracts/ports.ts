@@ -166,6 +166,13 @@ export interface BattleSink {
   loot(e: LootEvent): void;
   /** 进入地图（原版 `message.send('map.enter')`）。 */
   mapEnter(mapKey: string, name: string): void;
+  /**
+   * 技能使用通知（**可选**，加性扩展）。
+   *
+   * 数据表技能 `effect` 会调用 `world.sendSkillUsage(...)`；当前无推送/统计订阅方，
+   * 未实现该方法的 sink 直接跳过（`?.` 调用）。**不实现不会报错**。
+   */
+  skillUsage?(e: { unitId: string; name: string; targets: string[]; skill: string }): void;
 }
 
 // ────────────────────────────── 日志 ──────────────────────────────

@@ -468,6 +468,28 @@ export class BattleWorld {
     this.sink.general({ text: `breakCasting:${unit.displayName}:${name}` });
   }
 
+  /**
+   * 技能使用通知（数据表 `skills.ts` / `nightmare.ts` 的 `effect` 会调用）。
+   *
+   * ⚠️ 本方法此前**缺失**，导致使用这些技能的战斗抛
+   * `world.sendSkillUsage is not a function` —— 在线时被 tick 的 try/catch 吞掉、
+   * 离线时被结算的 catch 吞掉（表现为"离线秘境整段无收益"）。补齐后转发到
+   * `BattleSink.skillUsage`（**可选**端口方法；无订阅方时 no-op）。
+   *
+   * @param unit    施法单位
+   * @param targets 目标列表；`null` 表示无目标（自身 / 全场）
+   * @param skill   技能态（`null` 表示非技能来源）
+   */
+  sendSkillUsage(unit: Unit, targets: readonly Unit[] | null, skill: SkillState | null): void {
+    if (typeof this.sink.skillUsage !== 'function') return;
+    this.sink.skillUsage({
+      unitId: unit.id,
+      name: unit.displayName,
+      targets: (targets ?? []).map((target) => target.id),
+      skill: skill ? skill.skillData.name : '',
+    });
+  }
+
   // ────────────────────────────── 伤害 / 治疗 / 经验 ──────────────────────────────
 
   testDodge(from: Unit | null, to: Unit, skill: SkillState | null): boolean {
