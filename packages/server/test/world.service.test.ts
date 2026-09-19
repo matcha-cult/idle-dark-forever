@@ -16,7 +16,9 @@ import { OpIdempotencyService } from '../src/modules/game/op-idempotency.service
 import type { OnlineSessionService } from '../src/modules/online/online-session.service.js';
 import { PanelCharacterService } from '../src/modules/logic/shared/panel-character.service.js';
 import { PlayerContextService } from '../src/modules/logic/shared/player-context.service.js';
-import type { AccountExtras } from '../src/modules/logic/shared/index.js';
+import { InProcessEventBus } from '../src/modules/logic/shared/event-bus.js';
+import { StoryLogicService } from '../src/modules/logic/story/story.logic.service.js';
+import { RateLimiterService } from '../src/common/services/rate-limiter.service.js';
 import { WorldService } from '../src/modules/logic/world/world.service.js';
 import { FakeDatabase } from './helpers/fake-database.js';
 
@@ -62,6 +64,7 @@ describe('WorldService', () => {
       batcher,
       () => now,
       tables,
+      new InProcessEventBus(),
     );
   });
 
@@ -224,6 +227,7 @@ describe('WorldService · 进图自动触发剧情（原版 MapPanel.checkStorie
   let db: FakeDatabase;
   let context: PlayerContextService;
   let service: WorldService;
+  let events: InProcessEventBus;
   let frames: CapturedFrame[];
   let now: number;
 
@@ -244,15 +248,21 @@ describe('WorldService · 进图自动触发剧情（原版 MapPanel.checkStorie
       flushAll: () => ({ users: 0, frames: 0 }),
     } as unknown as NotificationBatcher;
     const onlineSessions = { isOnline: () => true } as unknown as OnlineSessionService;
+    events = new InProcessEventBus();
+    const characters = new PanelCharacterService(db.asService() as unknown as GameDatabaseService);
     service = new WorldService(
       context,
       onlineSessions,
       new OpIdempotencyService(),
-      new PanelCharacterService(db.asService() as unknown as GameDatabaseService),
+      characters,
       batcher,
       () => now,
       tables,
+      events,
     );
+    // 08 §2.3 解环后：进图剧情推进 / 击杀递减由 quest 服务**订阅事件**完成，
+    // 因此本组用例必须把 StoryLogicService 接在同一条总线上。
+    new StoryLogicService(context, characters, new RateLimiterService(), batcher, events).onModuleInit();
   });
 
   function storyUnlocks(): StoryUnlockDto[] {
@@ -321,11 +331,14 @@ describe('WorldService · 进图自动触发剧情（原版 MapPanel.checkStorie
     await service.start(1, 'c1');
     frames.length = 0;
 
-    // 直接调用击杀回调（`WorldService` 把它注入给战斗内核，单测里跳过真实战斗）。
-    const hook = service as unknown as {
-      onEnemyKilled: (userId: number, extras: AccountExtras, type: string, count: number) => void;
-    };
-    hook.onEnemyKilled(1, extras, 'slime.minimal', 1);
+    // battle 内核击杀 → 发布 `EnemyKilled`（单测跳过真实战斗，直接走同一条事件路径）。
+    events.emit({
+      type: 'EnemyKilled',
+      userId: 1,
+      characterId: 'c1',
+      enemyType: 'slime.minimal',
+      count: 1,
+    });
     expect(extras.enemyTasks['slime.minimal']?.['eyer-stories-3']).toBe(0);
     expect(storyUnlocks()).toEqual([
       {
@@ -338,7 +351,48 @@ describe('WorldService · 进图自动触发剧情（原版 MapPanel.checkStorie
 
     // 已经为 0 的任务不会重复推送
     frames.length = 0;
-    hook.onEnemyKilled(1, extras, 'slime.minimal', 1);
+    events.emit({
+      type: 'EnemyKilled',
+      userId: 1,
+      characterId: 'c1',
+      enemyType: 'slime.minimal',
+      count: 1,
+    });
     expect(storyUnlocks()).toEqual([]);
+  });
+
+  it('EnemyKilled 的 count 边界（NaN / Infinity / 0 / 负数）按 1 次计，不写坏剩余数', async () => {
+    const extras = await context.extrasOf(1);
+    extras.storiesMap['eyer-stories-3'] = 'task';
+    extras.enemyTasks['slime.minimal'] = { 'eyer-stories-3': 10 };
+    await service.start(1, 'c1');
+
+    for (const count of [Number.NaN, Number.POSITIVE_INFINITY, 0, -5]) {
+      events.emit({
+        type: 'EnemyKilled',
+        userId: 1,
+        characterId: 'c1',
+        enemyType: 'slime.minimal',
+        count,
+      });
+    }
+    const remaining = extras.enemyTasks['slime.minimal']?.['eyer-stories-3'];
+    expect(remaining).toBe(6);
+    expect(Number.isNaN(remaining)).toBe(false);
+  });
+
+  it('未加载账号时 MapEntered/EnemyKilled 事件安全 no-op（peek 未命中不抛错）', () => {
+    expect(() =>
+      events.emit({ type: 'MapEntered', userId: 999, characterId: 'nope', map: 'home' }),
+    ).not.toThrow();
+    expect(() =>
+      events.emit({
+        type: 'EnemyKilled',
+        userId: 999,
+        characterId: 'nope',
+        enemyType: 'slime.minimal',
+        count: 1,
+      }),
+    ).not.toThrow();
   });
 });

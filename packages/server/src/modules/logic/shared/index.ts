@@ -10,6 +10,8 @@ export * from './game-clock.js';
 export * from './player-dto.js';
 export * from './player-context.service.js';
 export * from './logic-shared.module.js';
+export * from './events.js';
+export * from './event-bus.js';
 export * from './panel-character.service.js';
 export * from './panel-character.module.js';
 export * from './notify.js';

@@ -4,6 +4,7 @@ import { InventorySlot, SeededRngFactory } from '@idle-dark/game-core';
 import { OpIdempotencyService } from '../../../src/modules/game/op-idempotency.service.js';
 import { RateLimiterService } from '../../../src/common/services/rate-limiter.service.js';
 import { InventoryLogicService } from '../../../src/modules/logic/inventory/inventory.logic.service.js';
+import { InProcessEventBus } from '../../../src/modules/logic/shared/event-bus.js';
 import { OpError } from '../../../src/modules/logic/shared/op-error.js';
 import { listPanelSlots, resolvePanelSlot } from '../../../src/modules/logic/shared/slot-ref.js';
 import {
@@ -43,6 +44,7 @@ function makeService(fixture: ReturnType<typeof makeFixture>) {
     rateLimiter,
     makeFakeBatcher(),
     () => FIXED_NOW,
+    new InProcessEventBus(),
   );
   return { service, opIds, rateLimiter };
 }

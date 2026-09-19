@@ -15,9 +15,8 @@ import type { Player } from '@idle-dark/game-core';
 import { RateLimiterService } from '../../../common/services/rate-limiter.service.js';
 import { NOTIFICATION_BATCHER } from '../../game/notification-batcher.provider.js';
 import type { NotificationBatcher } from '../../game/notification-batcher.js';
-import { PlayerContextService } from '../shared/index.js';
+import { EVENT_BUS, PlayerContextService, type EventBus } from '../shared/index.js';
 import { PanelCharacterService } from '../shared/panel-character.service.js';
-import { WorldService } from '../world/world.service.js';
 import { toFailOrThrow } from '../shared/op-error.js';
 import { pushCareerLevelup } from '../shared/notify.js';
 import {
@@ -46,8 +45,8 @@ export class CareerLogicService {
     private readonly characters: PanelCharacterService,
     private readonly rateLimiter: RateLimiterService,
     @Inject(NOTIFICATION_BATCHER) private readonly batcher: NotificationBatcher,
-    /** 末位且可选：单测手工 `new` 时不必造世界替身（见 inventory 同名注释）。 */
-    private readonly world?: WorldService,
+    /** 跨服事件总线（08 §2.3 解环）：切职业/技能/强化后发布 `CombatHooksDirty`。 */
+    @Inject(EVENT_BUS) private readonly events: EventBus,
   ) {}
 
   async list(userId: number, characterId?: string): Promise<ActionResult<CareerPanelDto>> {
@@ -156,8 +155,8 @@ export class CareerLogicService {
 
     this.contexts.markDirty(userId, cid);
     await this.contexts.flush(userId, cid);
-    // 切职业 / 选技能 / 选强化会让 PlayerUnit 的被动与强化 hook 过期。
-    this.world?.markCombatDirty(userId, cid);
+    // 切职业 / 选技能 / 选强化会让 PlayerUnit 的被动与强化 hook 过期 → 发布事件由 battle 重绑。
+    this.events.emit({ type: 'CombatHooksDirty', userId, characterId: cid });
     return ok(careerPanelOf(this.contexts.tables, player));
   }
 }

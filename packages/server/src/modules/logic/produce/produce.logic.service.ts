@@ -21,9 +21,8 @@ import { RateLimiterService } from '../../../common/services/rate-limiter.servic
 import { OpIdempotencyService } from '../../game/op-idempotency.service.js';
 import { NOTIFICATION_BATCHER } from '../../game/notification-batcher.provider.js';
 import type { NotificationBatcher } from '../../game/notification-batcher.js';
-import { GAME_CLOCK, PlayerContextService, type NowSource } from '../shared/index.js';
+import { EVENT_BUS, GAME_CLOCK, PlayerContextService, type EventBus, type NowSource } from '../shared/index.js';
 import { PanelCharacterService } from '../shared/panel-character.service.js';
-import { WorldService } from '../world/world.service.js';
 import { withOperation } from '../shared/idempotency.js';
 import { OpError, toFailOrThrow } from '../shared/op-error.js';
 import { dtoOfResolved, listPanelSlots, resolvePanelSlot } from '../shared/slot-ref.js';
@@ -65,8 +64,8 @@ export class ProduceLogicService {
     private readonly rateLimiter: RateLimiterService,
     @Inject(NOTIFICATION_BATCHER) private readonly batcher: NotificationBatcher,
     @Inject(GAME_CLOCK) private readonly now: NowSource,
-    /** 末位且可选：单测手工 `new` 时不必造世界替身（见 inventory 同名注释）。 */
-    private readonly world?: WorldService,
+    /** 跨服事件总线（08 §2.3 解环）：附魔/重铸/药剂改动后发布 `CombatHooksDirty`。 */
+    @Inject(EVENT_BUS) private readonly events: EventBus,
   ) {}
 
   async enchantCosts(
@@ -310,8 +309,8 @@ export class ProduceLogicService {
     this.contexts.markDirty(userId, characterId);
     this.contexts.markAccountDirty(userId);
     await this.contexts.flush(userId, characterId);
-    // 附魔 / 重铸会重掷词缀，而词缀是 PlayerUnit 装备 hook 的来源之一。
-    this.world?.markCombatDirty(userId, characterId);
+    // 附魔 / 重铸会重掷词缀，而词缀是 PlayerUnit 装备 hook 的来源之一 → 发布事件由 battle 重绑。
+    this.events.emit({ type: 'CombatHooksDirty', userId, characterId });
     pushInventoryChanged(this.batcher, userId, listPanelSlots(this.contexts.tables, player));
   }
 

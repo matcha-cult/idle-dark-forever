@@ -24,6 +24,9 @@ import type { OnlineSessionService } from '../src/modules/online/online-session.
 import { PanelCharacterService } from '../src/modules/logic/shared/panel-character.service.js';
 import { PlayerLogicService } from '../src/modules/logic/player/player-logic.service.js';
 import { PlayerContextService } from '../src/modules/logic/shared/player-context.service.js';
+import { InProcessEventBus } from '../src/modules/logic/shared/event-bus.js';
+import { StoryLogicService } from '../src/modules/logic/story/story.logic.service.js';
+import { RateLimiterService } from '../src/common/services/rate-limiter.service.js';
 import { WorldService } from '../src/modules/logic/world/world.service.js';
 import { FakeDatabase } from './helpers/fake-database.js';
 
@@ -64,6 +67,7 @@ describe('角色会话归属（切人 / 当前角色 / 推送范围）', () => {
     } as unknown as NotificationBatcher;
     const onlineSessions = { isOnline: () => true } as unknown as OnlineSessionService;
     panelCharacters = new PanelCharacterService(db.asService() as unknown as GameDatabaseService);
+    const events = new InProcessEventBus();
     world = new WorldService(
       context,
       onlineSessions,
@@ -72,7 +76,10 @@ describe('角色会话归属（切人 / 当前角色 / 推送范围）', () => {
       batcher,
       () => now,
       tables,
+      events,
     );
+    // 解环后进图剧情由 quest 订阅事件完成：接上真实订阅方，回归才有意义。
+    new StoryLogicService(context, panelCharacters, new RateLimiterService(), batcher, events).onModuleInit();
     const characters = new CharacterService(
       db.asService() as unknown as DatabaseService,
       context,

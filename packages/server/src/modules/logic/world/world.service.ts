@@ -38,10 +38,16 @@ import type { NotificationBatcher } from '../../game/notification-batcher.js';
 import { NOTIFICATION_BATCHER } from '../../game/notification-batcher.provider.js';
 import { OpIdempotencyService } from '../../game/op-idempotency.service.js';
 import { OnlineSessionService } from '../../online/online-session.service.js';
-import { DATA_TABLES, GAME_CLOCK, PlayerContextService, type AccountExtras, type NowSource, slotDtoOf } from '../shared/index.js';
+import {
+  DATA_TABLES,
+  EVENT_BUS,
+  GAME_CLOCK,
+  PlayerContextService,
+  type EventBus,
+  type NowSource,
+  slotDtoOf,
+} from '../shared/index.js';
 import { PanelCharacterService } from '../shared/panel-character.service.js';
-import { pushStoryUnlock } from '../shared/notify.js';
-import { opAdvanceStoriesOnMapEntry } from '../story/internal/story-ops.js';
 import { BattleCollector } from './internal/battle-collector.js';
 import { buildBattleWorld, nextWorldSeed } from './internal/headless.js';
 import { mapListDtoOf, pendingOfflineMsOf, requirementContextOf } from './internal/map-dto.js';
@@ -90,6 +96,8 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     @Inject(NOTIFICATION_BATCHER) private readonly batcher: NotificationBatcher,
     @Inject(GAME_CLOCK) now: NowSource,
     @Inject(DATA_TABLES) tables: DataTables,
+    /** 跨服事件总线（08 §2.3）：发布 `MapEntered`/`EnemyKilled`，订阅 `CombatHooksDirty`。 */
+    @Inject(EVENT_BUS) private readonly events: EventBus,
   ) {
     this.now = now;
     this.tables = tables;
@@ -102,6 +110,11 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     this.batcher.registerMerger(WORLD_CMD.cmd, WORLD_CMD.tick, mergeWorldTick);
     // `battle.loot` 在一个批次内累积成数组（前端做防御式处理；见交付报告"未闭合项"）。
     this.batcher.registerMerger(BATTLE_CMD.cmd, BATTLE_CMD.loot, mergeLoot);
+    // 面板域（item / character）改动了战斗相关状态 → 本 tick 重绑 hook。
+    // 订阅而非被直接调用：解环后 item/character 不再 import battle（08 §2.3）。
+    this.events.on('CombatHooksDirty', (event) => {
+      this.markCombatDirty(event.userId, event.characterId);
+    });
     this.startLoop();
   }
 
@@ -323,6 +336,10 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
 
     const extras = await this.playerContext.extrasOf(userId);
     const position = resolvePosition(this.tables, extras.worldMaps[characterId]);
+    // 持久化位置是「当前地图」的**唯一权威**（08 §2.3 / 09 §4.3）：quest 域据此判定
+    // 剧情的地图条件，不再反向调用 battle。会话启动即写入，保证从未进过图的角色也有位置。
+    extras.worldMaps[characterId] = { map: position.map, endlessLevel: position.endlessLevel };
+    this.playerContext.markAccountDirty(userId);
     const storedSeed = extras.worldSeeds[characterId];
     let seed = typeof storedSeed === 'number' && Number.isFinite(storedSeed) ? storedSeed : 0;
     if (seed === 0) {
@@ -359,7 +376,8 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       updateRate: 1,
       expRate: EXP_RATE,
       medicineLevel: (type) => extras.medicineLevel[type] ?? 0,
-      onEnemyKilled: (type, count) => this.onEnemyKilled(userId, extras, type, count),
+      onEnemyKilled: (type, count) =>
+        this.events.emit({ type: 'EnemyKilled', userId, characterId, enemyType: type, count }),
       lootRecorder: {
         record: (slot, handled) => {
           session.pendingLoot.push(toLootDto(slot, handled));
@@ -376,7 +394,8 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     this.activeByUser.set(userId, characterId);
     // 会话首次落地在该地图 = 「进入地图」：补一次剧情推进，否则
     // `enterMap(当前图)` 会走 early-return 分支，剧情永远不会自动触发。
-    this.advanceStoriesOnMapEntry(userId, session, position.map, extras);
+    // 由 quest 服务订阅同步处理（解环：battle 不再 import story）。
+    this.events.emit({ type: 'MapEntered', userId, characterId, map: position.map });
     return session;
   }
 
@@ -490,77 +509,6 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     this.playerContext.markAccountDirty(session.userId);
   }
 
-  /** 战斗内核击杀回调（原版 `game.onEnemyKilled`）：递减剧情击杀任务。 */
-  private onEnemyKilled(
-    userId: number,
-    extras: AccountExtras,
-    type: string,
-    count: number,
-  ): void {
-    const tasks = extras.enemyTasks[type];
-    if (!tasks) return;
-    let changed = false;
-    const dec = Math.max(1, Math.trunc(count));
-    const justFinished: string[] = [];
-    for (const storyKey of Object.keys(tasks)) {
-      const remaining = tasks[storyKey];
-      if (remaining === undefined || remaining <= 0) continue;
-      const next = Math.max(0, remaining - dec);
-      tasks[storyKey] = next;
-      changed = true;
-      if (next === 0) justFinished.push(storyKey);
-    }
-    if (!changed) return;
-    this.playerContext.markAccountDirty(userId);
-    // 原版 `checkKill()`：击杀任务达成且有剧本时**当场弹剧本**（前端据此自动打开）。
-    for (const key of justFinished) {
-      const story = this.tables.stories[key];
-      if (story?.script) {
-        pushStoryUnlock(this.batcher, userId, {
-          key,
-          name: story.name,
-          taskType: 'script',
-          autoPlay: true,
-        });
-      }
-    }
-  }
-
-  /**
-   * 进入地图时的剧情推进（原版 `MapPanel.checkStories()`）：
-   * 条件满足的击杀 / 购买任务**当场登记**，纯剧情脚本推给前端**自动播放**。
-   *
-   * 幂等（登记过的不会再命中），因此 `start()` 与 `enterMap()` 都调用它是安全的。
-   */
-  private advanceStoriesOnMapEntry(
-    userId: number,
-    session: WorldSession,
-    map: string,
-    extras: AccountExtras,
-  ): void {
-    const player = session.world.player as Player | null;
-    if (!player) return;
-    const outcome = opAdvanceStoriesOnMapEntry(this.tables, player, extras, map);
-    if (outcome.tasks.length === 0 && outcome.scripts.length === 0) return;
-    this.playerContext.markAccountDirty(userId);
-    for (const task of outcome.tasks) {
-      pushStoryUnlock(this.batcher, userId, {
-        key: task.key,
-        name: task.name,
-        taskType: task.taskType,
-        autoPlay: false,
-      });
-    }
-    for (const script of outcome.scripts) {
-      pushStoryUnlock(this.batcher, userId, {
-        key: script.key,
-        name: script.name,
-        taskType: 'script',
-        autoPlay: true,
-      });
-    }
-  }
-
   /**
    * 面板域改动了**战斗相关**状态后调用：装备/卸下、切换职业、选/取消技能与强化、
    * 附魔与重铸（词缀变化）。
@@ -645,7 +593,8 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       session.world.map = mapKey;
       await this.persistPosition(session);
       // 进图剧情推进必须在 flush 之前：击杀任务登记落在 extras 里，要一起落库。
-      this.advanceStoriesOnMapEntry(userId, session, mapKey, extras);
+      // 由 quest 服务订阅 `MapEntered` 同步处理（08 §2.3 解环）。
+      this.events.emit({ type: 'MapEntered', userId, characterId, map: mapKey });
       player.timestamp = this.now();
       this.playerContext.markDirty(userId, characterId);
       await this.playerContext.flush(userId, characterId);

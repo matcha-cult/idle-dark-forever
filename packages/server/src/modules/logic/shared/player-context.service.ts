@@ -224,6 +224,16 @@ export class PlayerContextService {
     return (await this.accountEntryOf(userId)).extras;
   }
 
+  /**
+   * 同步取已缓存的账号级扩展状态（未加载返回 `null`，**不触发 IO**）。
+   *
+   * 供**同步事件订阅方**使用（如 battle 击杀 → quest 递减击杀任务，发生在仿真热路径内，
+   * 不能 await）。调用方必须保证该账号此前已 `load`/`extrasOf` 过。
+   */
+  peekExtras(userId: number): AccountExtras | null {
+    return this.accounts.get(userId)?.extras ?? null;
+  }
+
   markAccountDirty(userId: number): void {
     const entry = this.accounts.get(userId);
     if (entry) entry.dirty = true;

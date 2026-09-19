@@ -13,8 +13,7 @@ import { RateLimiterService } from '../../../common/services/rate-limiter.servic
 import { OpIdempotencyService } from '../../game/op-idempotency.service.js';
 import { NOTIFICATION_BATCHER } from '../../game/notification-batcher.provider.js';
 import type { NotificationBatcher } from '../../game/notification-batcher.js';
-import { GAME_CLOCK, PlayerContextService, type NowSource } from '../shared/index.js';
-import { WorldService } from '../world/world.service.js';
+import { EVENT_BUS, GAME_CLOCK, PlayerContextService, type EventBus, type NowSource } from '../shared/index.js';
 import { PanelCharacterService } from '../shared/panel-character.service.js';
 import { withOperation } from '../shared/idempotency.js';
 import { OpError, toFailOrThrow } from '../shared/op-error.js';
@@ -56,10 +55,10 @@ export class InventoryLogicService {
     @Inject(NOTIFICATION_BATCHER) private readonly batcher: NotificationBatcher,
     @Inject(GAME_CLOCK) private readonly now: NowSource,
     /**
-     * 放在末位且可选：单测手工 `new` 时不必造世界替身（`markCombatDirty` 走可选链 no-op）。
-     * Nest DI 仍会注入真实的 `WorldService`（`WorldLogicModule` 是 `@Global`）。
+     * 跨服事件总线（08 §2.3 解环）：改装备 / 词缀后发布 `CombatHooksDirty`，
+     * 由 battle 订阅重绑 hook —— 本域不再 import `WorldService`。
      */
-    private readonly world?: WorldService,
+    @Inject(EVENT_BUS) private readonly events: EventBus,
   ) {}
 
   async list(userId: number, characterId?: string): Promise<ActionResult<InventorySlotDto[]>> {
@@ -199,8 +198,8 @@ export class InventoryLogicService {
       this.contexts.markDirty(userId, cid);
       await this.contexts.flush(userId, cid);
       // 装备/词缀变化会让 PlayerUnit 的 hook 过期（去 MobX 后不再自动追踪）。
-      // 置脏标记，下一次 tick 统一重绑；对没有活跃会话的角色是 no-op。
-      this.world?.markCombatDirty(userId, cid);
+      // 发布事件，battle 订阅后在下一次 tick 统一重绑；对没有活跃会话的角色是 no-op。
+      this.events.emit({ type: 'CombatHooksDirty', userId, characterId: cid });
       const slots = listPanelSlots(this.contexts.tables, player);
       pushInventoryChanged(this.batcher, userId, slots);
       return ok(slots);
