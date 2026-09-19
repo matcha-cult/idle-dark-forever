@@ -25,11 +25,6 @@ import { PlayerAction } from '../modules/logic/player/player.action.js';
 import { WorldAction } from '../modules/logic/world/world.action.js';
 import { BattleAction } from '../modules/logic/battle/battle.action.js';
 import { IdleAction } from '../modules/logic/idle/idle.action.js';
-import { InventoryAction } from '../modules/logic/inventory/inventory.action.js';
-import { BankAction } from '../modules/logic/bank/bank.action.js';
-import { LootRuleAction } from '../modules/logic/lootrule/lootrule.action.js';
-import { CareerAction } from '../modules/logic/career/career.action.js';
-import { ProduceAction } from '../modules/logic/produce/produce.action.js';
 import { HealthModule } from '../modules/health/health.module.js';
 import { AuthModule } from '../modules/auth/auth.module.js';
 import { LogicSharedModule } from '../modules/logic/shared/logic-shared.module.js';
@@ -37,14 +32,11 @@ import { PlayerLogicModule } from '../modules/logic/player/player-logic.module.j
 import { WorldLogicModule } from '../modules/logic/world/world-logic.module.js';
 import { BattleLogicModule } from '../modules/logic/battle/battle-logic.module.js';
 import { IdleLogicModule } from '../modules/logic/idle/idle-logic.module.js';
-import { InventoryLogicModule } from '../modules/logic/inventory/inventory-logic.module.js';
-import { BankLogicModule } from '../modules/logic/bank/bank-logic.module.js';
-import { LootRuleLogicModule } from '../modules/logic/lootrule/lootrule-logic.module.js';
-import { CareerLogicModule } from '../modules/logic/career/career-logic.module.js';
-import { ProduceLogicModule } from '../modules/logic/produce/produce-logic.module.js';
-import { PanelCharacterModule } from '../modules/logic/inventory/internal/panel-character.module.js';
+// 面板域（inventory/bank/lootrule/career/produce/story/shop）的登记片段由面板域维护，
+// 集成方只做组合 —— 避免两处各写一份清单而漂移。
+import { PANEL_ACTION_CLASSES, PANEL_LOGIC_MODULES } from '../modules/logic/panel-actions.js';
 
-/** 已登记的 Action 类（`actions` 列表；后续任务在此追加）。 */
+/** 已登记的 Action 类（`actions` 列表）。 */
 export const GAME_ACTION_CLASSES = [
   HealthAction,
   AuthAction,
@@ -52,24 +44,19 @@ export const GAME_ACTION_CLASSES = [
   WorldAction,
   BattleAction,
   IdleAction,
-  InventoryAction,
-  BankAction,
-  LootRuleAction,
-  CareerAction,
-  ProduceAction,
+  ...PANEL_ACTION_CLASSES,
 ] as const;
 
 /**
- * 提供上述 Action 的 Nest 模块（app.module.ts 导入；后续任务在此追加）。
+ * 提供上述 Action 的 Nest 模块（app.module.ts 导入）。
  *
  * 顺序：共享件 → 世界（`@Global`，仍须导入一次）→ 依赖世界的域 → 面板域。
  *
- * ⚠️ `PanelCharacterModule` 是 `@Global()`，但 `@Global()` **不等于自动注册** ——
- * 全局模块必须由根模块导入一次，其 exports 才对整个应用可见
- * （否则面板域注入 `PanelCharacterService` 会 `Nest can't resolve dependencies`）。
+ * ⚠️ `PanelCharacterModule` 由 `PANEL_LOGIC_MODULES` 带入：它是 `@Global()`，但
+ * `@Global()` **不等于自动注册** —— 全局模块必须由根模块导入一次，其 exports 才对
+ * 整个应用可见（否则面板域注入 `PanelCharacterService` 会 `Nest can't resolve dependencies`）。
  */
 export const GAME_ACTION_MODULES = [
-  PanelCharacterModule,
   HealthModule,
   AuthModule,
   LogicSharedModule,
@@ -77,11 +64,7 @@ export const GAME_ACTION_MODULES = [
   PlayerLogicModule,
   BattleLogicModule,
   IdleLogicModule,
-  InventoryLogicModule,
-  BankLogicModule,
-  LootRuleLogicModule,
-  CareerLogicModule,
-  ProduceLogicModule,
+  ...PANEL_LOGIC_MODULES,
 ] as const;
 
 

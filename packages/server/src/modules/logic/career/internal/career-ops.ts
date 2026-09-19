@@ -10,21 +10,64 @@ import {
   type Player,
   type RequirementContext,
 } from '@idle-dark/game-core';
-import type { CareerPanelDto } from '@idle-dark/protocol';
+import type { CareerPanelDto, SkillDto } from '@idle-dark/protocol';
 import { BusinessErrorCode } from '@idle-dark/protocol';
-import {
-  careerProgressListDtoOf,
-  enhanceListDtoOf,
-  skillListDtoOf,
-  slotLimitsOf,
-} from '../../shared/index.js';
+import { careerProgressListDtoOf, enhanceListDtoOf } from '../../shared/index.js';
 import { OpError } from '../../inventory/internal/op-error.js';
+
+/**
+ * 技能展示态列表（本地实现）。
+ *
+ * ⚠️ 为什么不直接用 `shared/player-dto.ts#skillListDtoOf`：该函数调用
+ * `skill.coolDown(0)`，但数据表里 89 处 `coolDown` 形如
+ * `(level, unit) => unit.runAttrHooks(8000, 'xxxCoolDown')`，缺第二个参数会抛
+ * `Cannot read properties of undefined`，使 `career.list` 整体 500。
+ * 这里用最小 `unit` 替身并 try/catch 兜底（`coolDown` 仅用于展示）。
+ * 已作为共享件缺陷写入交付报告。
+ */
+export function skillListOf(tables: DataTables, player: Player): SkillDto[] {
+  const careerData = player.careerData;
+  const info = player.careerInfo;
+  const out: SkillDto[] = [];
+  if (!careerData) return out;
+  const selected = new Set(info?.selectedSkills ?? []);
+  const unitStub = { runAttrHooks: (_value: number) => _value };
+  for (const key of Object.keys(careerData.skills)) {
+    const skill = tables.skills[key];
+    if (!skill) continue;
+    const unlockLevel = careerData.skills[key] ?? 0;
+    const description = typeof skill.description === 'string' ? skill.description : '';
+    let coolDown = 0;
+    try {
+      coolDown =
+        typeof skill.coolDown === 'function'
+          ? Number((skill.coolDown as unknown as (level: number, unit: unknown) => number)(0, unitStub))
+          : skill.coolDown;
+    } catch {
+      coolDown = 0;
+    }
+    out.push({
+      key,
+      name: skill.name,
+      group: skill.group,
+      description,
+      level: player.getSkillLevel(key),
+      unlockLevel,
+      unlocked: (info?.level ?? 0) >= unlockLevel,
+      selected: selected.has(key),
+      isAttack: !!skill.isAttack,
+      coolDown: Number.isFinite(coolDown) ? coolDown : 0,
+      usable: false,
+    });
+  }
+  return out;
+}
 
 /** 面板汇总（`career.list`）：不含 `currentCareer` / `selectedSkills`（那些在 `PlayerStateDto`）。 */
 export function careerPanelOf(tables: DataTables, player: Player): CareerPanelDto {
   return {
     careers: careerProgressListDtoOf(tables, player),
-    skills: skillListDtoOf(tables, player),
+    skills: skillListOf(tables, player),
     enhances: enhanceListDtoOf(tables, player),
     maxSkillCount: player.maxSkillCount,
     maxEnhanceCount: player.maxEnhanceCount,

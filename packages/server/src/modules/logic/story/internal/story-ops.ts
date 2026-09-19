@@ -207,8 +207,9 @@ export function opPlayStory(
 }
 
 function grantAwards(player: Player, tables: DataTables, story: StoryData): void {
-  for (const key of Object.keys(story.awards)) {
-    const award = story.awards[key];
+  const awards = story.awards ?? {};
+  for (const key of Object.keys(awards)) {
+    const award = awards[key];
     if (key === 'purchaseRate') {
       // ⚠️ `purchaseRate` 在 game-core 的账号状态里没有字段（内购已废弃），跳过并记录。
       continue;

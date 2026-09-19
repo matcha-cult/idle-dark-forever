@@ -172,7 +172,7 @@ describe('InventoryLogicService（限流 / 幂等 / 落库）', () => {
 
   it('装备成功返回最新扁平数组', async () => {
     const fixture = makeFixture();
-    giveWeapon(fixture, { level: 10 }, 0);
+    giveWeapon(fixture, {}, 0);
     const { service } = makeService(fixture);
     const result = await service.equip(1, 'inventory:0');
     expect(result.success).toBe(true);
