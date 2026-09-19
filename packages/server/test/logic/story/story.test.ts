@@ -3,9 +3,11 @@ import { BusinessErrorCode } from '@idle-dark/protocol';
 import { OpError } from '../../../src/modules/logic/inventory/internal/op-error.js';
 import {
   listStories,
+  opAdvanceStoriesOnMapEntry,
   opFinishStory,
   opPlayStory,
   parseStoryScript,
+  registerStoryTask,
   requirementMet,
   taskTypeOf,
 } from '../../../src/modules/logic/story/internal/story-ops.js';
@@ -174,5 +176,113 @@ describe('story 列表 / 完成', () => {
     expect(
       codeOf(() => opFinishStory(f.tables, f.player, f.extras, 'eyer-stories-1', 'home')),
     ).toBe(BusinessErrorCode.STORY_ALREADY_DONE);
+  });
+});
+
+describe('进图剧情推进（原版 MapPanel.checkStories）', () => {
+  it('home：纯剧情脚本只上报自动播放，不改状态、不登记击杀任务', () => {
+    const f = makeFixture();
+    const outcome = opAdvanceStoriesOnMapEntry(f.tables, f.player, f.extras, 'home');
+
+    expect(outcome.scripts.map((s) => s.key)).toContain('eyer-stories-1');
+    expect(outcome.tasks).toEqual([]);
+    // 纯剧情脚本保持 none —— 打开（play）时才置 task，服务端不替玩家完成
+    expect(f.extras.storiesMap['eyer-stories-1']).toBeUndefined();
+    expect(f.extras.enemyTasks).toEqual({});
+  });
+
+  it('town.street（剧情 1 已完成）：上报剧情 2 自动播放，不登记剧情 3', () => {
+    const f = makeFixture();
+    f.extras.storiesMap['eyer-stories-1'] = 'done';
+
+    const outcome = opAdvanceStoriesOnMapEntry(f.tables, f.player, f.extras, 'town.street');
+
+    expect(outcome.scripts.map((s) => s.key)).toEqual(['eyer-stories-2']);
+    // 剧情 3 还依赖剧情 2 完成 → 不在本次推进范围
+    expect(outcome.tasks).toEqual([]);
+  });
+
+  it('town.street（剧情 2 已完成）：击杀任务当场登记并挂上剩余击杀数', () => {
+    const f = makeFixture();
+    f.extras.storiesMap['eyer-stories-1'] = 'done';
+    f.extras.storiesMap['eyer-stories-2'] = 'done';
+
+    const outcome = opAdvanceStoriesOnMapEntry(f.tables, f.player, f.extras, 'town.street');
+
+    expect(outcome.scripts).toEqual([]);
+    expect(outcome.tasks).toEqual([
+      { key: 'eyer-stories-3', name: storyOf(f, 'eyer-stories-3').name, taskType: 'kill' },
+    ]);
+    expect(f.extras.storiesMap['eyer-stories-3']).toBe('task');
+    expect(f.extras.enemyTasks['slime.minimal']?.['eyer-stories-3']).toBe(10);
+  });
+
+  it('幂等：重复调用不会重置已登记的击杀进度，也不会重复上报', () => {
+    const f = makeFixture();
+    f.extras.storiesMap['eyer-stories-1'] = 'done';
+    f.extras.storiesMap['eyer-stories-2'] = 'done';
+    opAdvanceStoriesOnMapEntry(f.tables, f.player, f.extras, 'town.street');
+    f.extras.enemyTasks['slime.minimal']!['eyer-stories-3'] = 4;
+
+    const second = opAdvanceStoriesOnMapEntry(f.tables, f.player, f.extras, 'town.street');
+
+    expect(second.tasks).toEqual([]);
+    expect(second.scripts).toEqual([]);
+    // ⚠️ 进度必须保留（重复进图不能把任务重置回 10）
+    expect(f.extras.enemyTasks['slime.minimal']?.['eyer-stories-3']).toBe(4);
+  });
+
+  it('地图不匹配 / 无地图上下文 → 什么都不上报', () => {
+    const f = makeFixture();
+    expect(opAdvanceStoriesOnMapEntry(f.tables, f.player, f.extras, 'town.cave')).toEqual({
+      scripts: [],
+      tasks: [],
+    });
+    expect(opAdvanceStoriesOnMapEntry(f.tables, f.player, f.extras, null)).toEqual({
+      scripts: [],
+      tasks: [],
+    });
+  });
+
+  it('已完成的剧情不会再上报', () => {
+    const f = makeFixture();
+    f.extras.storiesMap['eyer-stories-1'] = 'done';
+    const outcome = opAdvanceStoriesOnMapEntry(f.tables, f.player, f.extras, 'home');
+    expect(outcome.scripts.map((s) => s.key)).not.toContain('eyer-stories-1');
+  });
+
+  it('registerStoryTask：纯剧情脚本只置 task，不产生击杀任务', () => {
+    const f = makeFixture();
+    registerStoryTask(f.extras, storyOf(f, 'eyer-stories-1'));
+    expect(f.extras.storiesMap['eyer-stories-1']).toBe('task');
+    expect(f.extras.enemyTasks).toEqual({});
+  });
+});
+
+describe('完成剧情后的解锁上报（供 (story, unlock) 推送）', () => {
+  it('纯剧情脚本解锁 → autoPlay=true', () => {
+    const f = makeFixture();
+    opPlayStory(f.tables, f.player, f.extras, 'eyer-stories-1', 'home');
+    const outcome = opFinishStory(f.tables, f.player, f.extras, 'eyer-stories-1', 'home');
+    // home 上其余剧情都未满足条件 → 本次没有可上报项
+    expect(outcome.unlocked).toEqual([]);
+  });
+
+  it('完成剧情 2 → 剧情 3 上报为 kill 且 autoPlay=false，并当场登记击杀任务', () => {
+    const f = makeFixture();
+    f.extras.storiesMap['eyer-stories-1'] = 'done';
+    opPlayStory(f.tables, f.player, f.extras, 'eyer-stories-2', 'town.street');
+
+    const outcome = opFinishStory(f.tables, f.player, f.extras, 'eyer-stories-2', 'town.street');
+
+    const entry = outcome.unlocked.find((item) => item.key === 'eyer-stories-3');
+    expect(entry).toEqual({
+      key: 'eyer-stories-3',
+      name: storyOf(f, 'eyer-stories-3').name,
+      taskType: 'kill',
+      autoPlay: false,
+    });
+    expect(f.extras.storiesMap['eyer-stories-3']).toBe('task');
+    expect(f.extras.enemyTasks['slime.minimal']?.['eyer-stories-3']).toBe(10);
   });
 });

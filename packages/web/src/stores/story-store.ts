@@ -6,7 +6,7 @@
  * 不推导任何任务数值；`finish` 的奖励以服务端返回为准。
  */
 import { makeAutoObservable, observable, runInAction } from 'mobx';
-import { STORY_CMD, type StoryDto, type StoryPlayDto } from '@idle-dark/protocol';
+import { STORY_CMD, type StoryDto, type StoryPlayDto, type StoryUnlockDto } from '@idle-dark/protocol';
 import { toastFailure } from '../services/game-client.js';
 import { LoadGuard } from './load-guard.js';
 import type { StoreContext } from './store-context.js';
@@ -153,12 +153,33 @@ export class StoryStore {
     }
   }
 
-  /** `(story, unlock)` 推送：有新剧情可开启 → 提示 + 刷新列表。 */
+  /**
+   * `(story, unlock)` 推送。
+   *
+   * 载荷是 `StoryUnlockDto`：`autoPlay` 为真（纯剧情脚本刚可开启、或击杀任务刚达成）
+   * 时按原版语义**自动打开剧本**并跳到「故事」面板；否则（击杀 / 购买任务刚被登记）
+   * 只提示 + 刷新列表，等玩家去打 / 去买。
+   *
+   * 服务端**不会**替玩家 `finish` —— 剧本要人读，读完后由面板上的按钮结算。
+   */
   handleNotification(frame: unknown): void {
     const notification = frame as { cmd?: number; subCmd?: number; data?: unknown };
     if (notification.cmd !== STORY_CMD.cmd || notification.subCmd !== STORY_CMD.unlock) return;
-    const data = notification.data as { name?: string; key?: string } | undefined;
+    const data = notification.data as Partial<StoryUnlockDto> | undefined;
     this.ctx.toast.info('有新剧情可开启', data?.name);
-    void this.load();
+    void this.afterUnlock(data);
+  }
+
+  private async afterUnlock(data: Partial<StoryUnlockDto> | undefined): Promise<void> {
+    await this.load();
+    if (data?.autoPlay !== true) return;
+    const key = typeof data.key === 'string' ? data.key : '';
+    if (key === '') return;
+    const entry = this.stories.find((story) => story.key === key);
+    if (entry === undefined || entry.status === 'done') return;
+    // 玩家可能正在读另一段剧情 —— 不打断。
+    if (this.play !== null) return;
+    this.ctx.root().ui.setActivePanel('stories');
+    await this.open(key);
   }
 }

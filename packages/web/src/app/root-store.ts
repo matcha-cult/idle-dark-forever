@@ -34,6 +34,7 @@ import { SessionStore } from '../stores/session-store.js';
 import { ShopStore } from '../stores/shop-store.js';
 import { StoryStore } from '../stores/story-store.js';
 import { ToastStore } from '../stores/toast-store.js';
+import { UiStore } from '../stores/ui-store.js';
 import { WorldStore } from '../stores/world-store.js';
 import type { StoreContext } from '../stores/store-context.js';
 import { ThemeStore } from '../theme/theme-store.js';
@@ -62,6 +63,7 @@ export interface RootStoreOptions {
 export class RootStore {
   readonly toast: ToastStore;
   readonly theme: ThemeStore;
+  readonly ui: UiStore;
   readonly session: SessionStore;
   readonly connection: ConnectionStore;
   readonly client: GameClient;
@@ -81,6 +83,7 @@ export class RootStore {
 
   constructor(options: RootStoreOptions = {}) {
     this.toast = new ToastStore();
+    this.ui = new UiStore();
 
     // 回调闭包在连接/请求发生时才读取 this.*，因此此处先建 client 再建各 Store 是安全的。
     this.client = new GameClient({
@@ -189,6 +192,7 @@ export class RootStore {
     }
     this.session.logout();
     this.player.reset();
+    this.ui.reset();
     this.stopMetricsPolling();
   }
 

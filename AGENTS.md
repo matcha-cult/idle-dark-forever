@@ -182,6 +182,7 @@ antd-zh token Menu --format markdown
 | 路由探针 20/20 | 需要数据库（Action 会打到持久化层） |
 | **完整游戏流程冒烟 22/22** | `scripts/game-flow-smoke.mjs`，**已在本地实跑通过** |
 | **拾取规则冒烟 18/18** | `scripts/loot-rule-smoke.mjs`（真实战斗掉落 → `(battle,loot)` 推送；本地以 `LOOT_WINDOW_MS=300000` 实跑通过） |
+| **进图剧情冒烟 14/14** | `scripts/story-entry-smoke.mjs`（进图自动播放 + 击杀任务静默登记，已本地实跑通过） |
 
 > 无数据库时的行为：`/api/health` 返回 `503 degraded`（正确降级），协议层断言仍可通过；
 > 但依赖 `users`/`characters` 的 Action 会返回 `INTERNAL`。
@@ -269,6 +270,7 @@ node dist/main.js &                        # 需先 pnpm run build；会读 .env
 node scripts/route-probe.mjs 3000 "$JWT_SECRET"    # 20/20 域 Action 是否都注册
 node scripts/game-flow-smoke.mjs 3000              # 完整流程（22 项断言）
 LOOT_WINDOW_MS=300000 node scripts/loot-rule-smoke.mjs 3000   # 拾取规则 → 真实掉落（18 项）
+node scripts/story-entry-smoke.mjs 3000                       # 进图自动触发剧情（14 项）
 ```
 
 > ⚠️ **不要占用 3000 端口做验证前先确认它是不是 xiuxian 的服务端**：
@@ -306,3 +308,28 @@ LOOT_WINDOW_MS=300000 node scripts/loot-rule-smoke.mjs 3000   # 拾取规则 →
 `dto.gold` 也会因 `slot.key !== 'gold'` 丢失。
 因此 `internal/player-like.ts` 先 `InventorySlot.fromJSON(...)` 复制一份再调用 `player.loot`。
 新增任何"落地后记录"的回调都要遵守这条。
+
+---
+
+## 12. 剧情推进：进图自动触发（原版 `MapPanel.checkStories()`）
+
+**服务端**：判定与登记的唯一实现在 `server/.../story/internal/story-ops.ts#opAdvanceStoriesOnMapEntry`，
+由 `WorldService.start()`（会话首次落地在该图）与 `WorldService.enterMap()` 调用。
+对**当前地图上条件已满足且尚未开启**的每条剧情：
+
+| 剧情类型 | 服务端行为 | 推送 `StoryUnlockDto` |
+|---|---|---|
+| `kill` / `purchase` | **静默登记**为进行中；击杀任务同时挂上剩余数（原版 `addKillTask`） | `autoPlay: false`（等玩家去打 / 去买） |
+| 纯剧情脚本（数据里无 `taskType`） | **不改状态** | `autoPlay: true`（前端自动播放） |
+
+- `opFinishStory` 也用同一套分类：新就绪的 `kill`/`purchase` 当场登记，纯剧情脚本上报 `autoPlay: true`
+  —— 对应原版 `checkStories()` 的 `while (dirty)` 循环。
+- 击杀任务剩余数降到 0 时，`WorldService.onEnemyKilled` 推 `autoPlay: true`（原版 `checkKill()` 当场弹剧本）。
+- ⚠️ **服务端绝不替玩家 `finish`**：剧本要人读，`finish` 只能由前端在玩家读完/关闭后调用。
+- 该函数**幂等**：登记过的条目因 `status !== 'none'` 直接跳过，重复进图不会重置击杀进度。
+
+**前端**：`story-store.handleNotification` 按 `autoPlay` 分流 —— 为真则 `story.load()` 后
+`ui.setActivePanel('stories')` 并 `open(key)`；为假只提示 + 刷新列表。
+玩家正在读另一段剧情时（`play !== null`）**不打断**。
+
+⚠️ 面板 key 是 **`UiStore` 状态**（不是 `GameShellPage` 的局部 state），否则推送驱动的跳转无法发起。

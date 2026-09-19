@@ -111,7 +111,7 @@ export class StoryLogicService {
     await this.contexts.flush(userId, cid);
     pushInventoryChanged(this.batcher, userId, listPanelSlots(this.contexts.tables, player));
     for (const unlocked of outcome.unlocked) {
-      pushStoryUnlock(this.batcher, userId, unlocked.key, unlocked.name);
+      pushStoryUnlock(this.batcher, userId, unlocked);
     }
     return ok(outcome.dto);
   }

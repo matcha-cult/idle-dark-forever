@@ -11,8 +11,36 @@ import { NotificationBus } from '../src/services/notification-bus.js';
 import { createMemoryStorage, safeGet, resolveStorage, safeRemove, safeSet } from '../src/services/storage.js';
 import { LoadGuard } from '../src/stores/load-guard.js';
 import { ToastStore } from '../src/stores/toast-store.js';
+import { UiStore } from '../src/stores/ui-store.js';
 import { appendEvents, type BattleLogEntry } from '../src/stores/world-store.js';
 import { THEME_STORAGE_KEY, ThemeStore, parseThemeMode } from '../src/theme/theme-store.js';
+
+describe('UiStore', () => {
+  it('默认无面板；设置后生效；reset 回到默认', () => {
+    const ui = new UiStore();
+    expect(ui.activePanelKey).toBeNull();
+    ui.setActivePanel('stories');
+    expect(ui.activePanelKey).toBe('stories');
+    ui.reset();
+    expect(ui.activePanelKey).toBeNull();
+  });
+
+  it('空 key / 非字符串一律忽略（越界入参不抛）', () => {
+    const ui = new UiStore();
+    ui.setActivePanel('battle');
+    for (const bad of ['', undefined, null, 0, Number.NaN, {}, []]) {
+      ui.setActivePanel(bad as unknown as string);
+    }
+    expect(ui.activePanelKey).toBe('battle');
+  });
+
+  it('autoBind：解构出去的方法仍能改到实例（推送侧直接传引用）', () => {
+    const ui = new UiStore();
+    const { setActivePanel } = ui;
+    setActivePanel('stories');
+    expect(ui.activePanelKey).toBe('stories');
+  });
+});
 
 describe('LoadGuard', () => {
   it('只有最后一次 next 的令牌是 current', () => {

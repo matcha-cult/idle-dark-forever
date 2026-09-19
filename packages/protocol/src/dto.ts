@@ -356,6 +356,28 @@ export interface StoryPlayDto {
   awards: Record<string, unknown>;
 }
 
+/**
+ * `(story, unlock)` 推送载荷。
+ *
+ * 触发时机（服务端判定，前端只按 `autoPlay` 决定是否自动打开）：
+ * - **进入地图**时该图条件满足的剧情（原版 `MapPanel.checkStories()`）；
+ * - 完成一段剧情后新解锁的剧情；
+ * - 击杀任务恰好达成时（`taskType='kill'` 且剩余 0）。
+ */
+export interface StoryUnlockDto {
+  key: string;
+  name: string;
+  /** 该条剧情的类型（`'script'` = 纯剧情脚本，无任务目标）。 */
+  taskType: 'kill' | 'purchase' | 'script';
+  /**
+   * 是否应当**自动播放**（原版进入满足条件的地图即弹剧本）。
+   *
+   * - `true`：纯剧情脚本刚可开启，或击杀任务刚达成 —— 前端应直接打开剧本；
+   * - `false`：击杀 / 购买类任务刚被登记 —— 只提示 + 刷新列表，等玩家去打 / 去买。
+   */
+  autoPlay: boolean;
+}
+
 export interface ShopStateDto {
   playerSlotCount: number;
   playerSlotMax: number;

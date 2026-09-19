@@ -10,11 +10,12 @@
  */
 import { describe, expect, it, beforeEach } from 'vitest';
 import { createDefaultTables, type DataTables } from '@idle-dark/game-core';
-import type { WorldTickDto } from '@idle-dark/protocol';
+import { STORY_CMD, type StoryUnlockDto, type WorldTickDto } from '@idle-dark/protocol';
 import type { NotificationBatcher, PushFrame } from '../src/modules/game/notification-batcher.js';
 import { OpIdempotencyService } from '../src/modules/game/op-idempotency.service.js';
 import type { OnlineSessionService } from '../src/modules/online/online-session.service.js';
 import { PlayerContextService } from '../src/modules/logic/shared/player-context.service.js';
+import type { AccountExtras } from '../src/modules/logic/shared/index.js';
 import { WorldService } from '../src/modules/logic/world/world.service.js';
 import { FakeDatabase } from './helpers/fake-database.js';
 
@@ -181,5 +182,125 @@ describe('WorldService', () => {
     expect(result.data.gainedExp).toBe(0);
     expect(result.data.kills).toBe(0);
     expect(service.pendingOfflineMs(1, 'c1')).toBe(0);
+  });
+});
+
+describe('WorldService · 进图自动触发剧情（原版 MapPanel.checkStories）', () => {
+  let db: FakeDatabase;
+  let context: PlayerContextService;
+  let service: WorldService;
+  let frames: CapturedFrame[];
+  let now: number;
+
+  beforeEach(() => {
+    db = new FakeDatabase();
+    db.seedAccount(1);
+    db.seedCharacter({ id: 'c1', user_id: 1, role: 'Eyer', career: 'warrior' });
+    now = 1_700_000_000_000;
+    context = new PlayerContextService(db.asService(), () => now, tables);
+    frames = [];
+    const batcher = {
+      enqueue: (userId: number, frame: PushFrame) => {
+        frames.push({ userId, ...frame });
+        return true;
+      },
+      registerMerger: () => undefined,
+    } as unknown as NotificationBatcher;
+    const onlineSessions = { isOnline: () => true } as unknown as OnlineSessionService;
+    service = new WorldService(
+      context,
+      onlineSessions,
+      new OpIdempotencyService(),
+      batcher,
+      () => now,
+      tables,
+    );
+  });
+
+  function storyUnlocks(): StoryUnlockDto[] {
+    return frames
+      .filter((frame) => frame.cmd === STORY_CMD.cmd && frame.subCmd === STORY_CMD.unlock)
+      .map((frame) => frame.data as StoryUnlockDto);
+  }
+
+  it('会话落地在 home → 推 eyer-stories-1 且 autoPlay=true（进游戏即自动播放）', async () => {
+    await service.start(1, 'c1');
+    expect(storyUnlocks()).toEqual([
+      {
+        key: 'eyer-stories-1',
+        name: tables.stories['eyer-stories-1']?.name,
+        taskType: 'script',
+        autoPlay: true,
+      },
+    ]);
+  });
+
+  it('完成剧情 1 后进 town.street → 推剧情 2（纯剧情脚本，autoPlay=true）', async () => {
+    const extras = await context.extrasOf(1);
+    extras.storiesMap['eyer-stories-1'] = 'done';
+    await service.start(1, 'c1');
+    frames.length = 0;
+
+    const result = await service.enterMap(1, 'c1', 'town.street');
+    expect(result.success).toBe(true);
+    expect(storyUnlocks()).toEqual([
+      {
+        key: 'eyer-stories-2',
+        name: tables.stories['eyer-stories-2']?.name,
+        taskType: 'script',
+        autoPlay: true,
+      },
+    ]);
+    // 服务端不替玩家 finish：剧本仍是未开启状态
+    expect(extras.storiesMap['eyer-stories-2']).toBeUndefined();
+  });
+
+  it('剧情 2 完成后进 town.street → 静默登记剧情 3 并推 autoPlay=false', async () => {
+    const extras = await context.extrasOf(1);
+    extras.storiesMap['eyer-stories-1'] = 'done';
+    extras.storiesMap['eyer-stories-2'] = 'done';
+    await service.start(1, 'c1');
+    frames.length = 0;
+
+    const result = await service.enterMap(1, 'c1', 'town.street');
+    expect(result.success).toBe(true);
+    expect(storyUnlocks()).toEqual([
+      {
+        key: 'eyer-stories-3',
+        name: tables.stories['eyer-stories-3']?.name,
+        taskType: 'kill',
+        autoPlay: false,
+      },
+    ]);
+    expect(extras.storiesMap['eyer-stories-3']).toBe('task');
+    expect(extras.enemyTasks['slime.minimal']?.['eyer-stories-3']).toBe(10);
+  });
+
+  it('击杀任务达成 → 推 autoPlay=true（原版 checkKill 当场弹剧本）', async () => {
+    const extras = await context.extrasOf(1);
+    extras.storiesMap['eyer-stories-3'] = 'task';
+    extras.enemyTasks['slime.minimal'] = { 'eyer-stories-3': 1 };
+    await service.start(1, 'c1');
+    frames.length = 0;
+
+    // 直接调用击杀回调（`WorldService` 把它注入给战斗内核，单测里跳过真实战斗）。
+    const hook = service as unknown as {
+      onEnemyKilled: (userId: number, extras: AccountExtras, type: string, count: number) => void;
+    };
+    hook.onEnemyKilled(1, extras, 'slime.minimal', 1);
+    expect(extras.enemyTasks['slime.minimal']?.['eyer-stories-3']).toBe(0);
+    expect(storyUnlocks()).toEqual([
+      {
+        key: 'eyer-stories-3',
+        name: tables.stories['eyer-stories-3']?.name,
+        taskType: 'script',
+        autoPlay: true,
+      },
+    ]);
+
+    // 已经为 0 的任务不会重复推送
+    frames.length = 0;
+    hook.onEnemyKilled(1, extras, 'slime.minimal', 1);
+    expect(storyUnlocks()).toEqual([]);
   });
 });

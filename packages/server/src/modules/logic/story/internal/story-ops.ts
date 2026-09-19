@@ -14,7 +14,7 @@ import {
   type RequirementContext,
   type StoryData,
 } from '@idle-dark/game-core';
-import type { StoryDto, StoryPlayDto } from '@idle-dark/protocol';
+import type { StoryDto, StoryPlayDto, StoryUnlockDto } from '@idle-dark/protocol';
 import { BusinessErrorCode } from '@idle-dark/protocol';
 import type { AccountExtras } from '../../shared/index.js';
 import { OpError } from '../../inventory/internal/op-error.js';
@@ -165,6 +165,60 @@ export function startableKeys(
 }
 
 /**
+ * 把剧情登记为「进行中」并挂上击杀任务（原版 `storiesMap.set(key,'task')` + `game.addKillTask`）。
+ *
+ * 幂等：已在 `storiesMap` 里登记过时不会覆盖任务进度（避免重复进入地图把剩余击杀数重置）。
+ */
+export function registerStoryTask(extras: AccountExtras, story: StoryData): void {
+  extras.storiesMap[story.key] = 'task';
+  if (taskTypeOf(story) === 'kill' && story.enemy) {
+    const bucket = extras.enemyTasks[story.enemy] ?? {};
+    if (typeof bucket[story.key] !== 'number') bucket[story.key] = story.killCount ?? 0;
+    extras.enemyTasks[story.enemy] = bucket;
+  }
+}
+
+export interface StoryMapEntryOutcome {
+  /** 需要前端**自动播放**的纯剧情脚本（原版 `showModal(<Player …/>)` 分支）。 */
+  scripts: Array<{ key: string; name: string }>;
+  /** 已被**静默登记**的击杀 / 购买任务（原版只登记、不弹窗）。 */
+  tasks: Array<{ key: string; name: string; taskType: 'kill' | 'purchase' }>;
+}
+
+/**
+ * 进入地图时的剧情推进 —— 原版 `MapPanel.checkStories()` 的服务端部分。
+ *
+ * 对**当前地图上条件已满足且尚未开启**的每条剧情：
+ * - `kill` / `purchase`：登记为进行中（击杀任务同时挂进度），**不弹窗**；
+ * - 纯剧情脚本：不在这里改状态，交给前端自动播放（`story.play` 时才置 `task`），
+ *   服务端**绝不替玩家 `finish`** —— 剧情要人读。
+ *
+ * 幂等：登记过的条目下次调用因 `status !== 'none'` 直接跳过。
+ */
+export function opAdvanceStoriesOnMapEntry(
+  tables: DataTables,
+  player: Player,
+  extras: AccountExtras,
+  map: string | null,
+): StoryMapEntryOutcome {
+  const out: StoryMapEntryOutcome = { scripts: [], tasks: [] };
+  for (const key of Object.keys(tables.stories)) {
+    const story = tables.stories[key];
+    if (!story) continue;
+    if (statusOf(extras, key) !== 'none') continue;
+    if (!requirementMet(tables, player, extras, story, map)) continue;
+    const taskType = taskTypeOf(story);
+    if (taskType === 'kill' || taskType === 'purchase') {
+      registerStoryTask(extras, story);
+      out.tasks.push({ key, name: story.name, taskType });
+    } else {
+      out.scripts.push({ key, name: story.name });
+    }
+  }
+  return out;
+}
+
+/**
  * 打开剧本：返回 DSL 节点。
  *
  * 若剧情尚未开始（`none`）且条件满足，则本次打开同时把它置为 `task`
@@ -185,13 +239,7 @@ export function opPlayStory(
     if (!requirementMet(tables, player, extras, story, map)) {
       throw new OpError(BusinessErrorCode.STORY_LOCKED);
     }
-    extras.storiesMap[key] = 'task';
-    if (taskTypeOf(story) === 'kill' && story.enemy) {
-      const enemy = story.enemy;
-      const bucket = extras.enemyTasks[enemy] ?? {};
-      bucket[key] = story.killCount ?? 0;
-      extras.enemyTasks[enemy] = bucket;
-    }
+    registerStoryTask(extras, story);
   }
 
   return {
@@ -233,7 +281,7 @@ function grantAwards(player: Player, tables: DataTables, story: StoryData): void
 export interface FinishStoryOutcome {
   dto: StoryDto;
   /** 本次结算后新解锁的剧情（供 `(story, unlock)` 推送）。 */
-  unlocked: Array<{ key: string; name: string }>;
+  unlocked: StoryUnlockDto[];
 }
 
 /** 完成剧情：校验任务进度 / 支付购买价格 → 标记 done → 发奖 → 计算新解锁。 */
@@ -277,11 +325,21 @@ export function opFinishStory(
   grantAwards(player, tables, story);
 
   const after = startableKeys(tables, player, extras, map);
-  const unlocked: Array<{ key: string; name: string }> = [];
+  const unlocked: StoryUnlockDto[] = [];
   for (const candidate of after) {
     if (before.has(candidate)) continue;
     const data = tables.stories[candidate];
-    if (data) unlocked.push({ key: candidate, name: data.name });
+    if (!data) continue;
+    const taskType = taskTypeOf(data);
+    // 与原版 `checkStories()` 的 `while (dirty)` 一致：新就绪的击杀/购买任务**当场登记**，
+    // 新就绪的纯剧情脚本交给前端自动播放。
+    if (taskType === 'kill' || taskType === 'purchase') registerStoryTask(extras, data);
+    unlocked.push({
+      key: candidate,
+      name: data.name,
+      taskType: taskType ?? 'script',
+      autoPlay: taskType === undefined,
+    });
   }
 
   return { dto: storyDtoOf(tables, player, extras, story, map), unlocked };

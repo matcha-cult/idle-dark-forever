@@ -39,6 +39,8 @@ import { NOTIFICATION_BATCHER } from '../../game/notification-batcher.provider.j
 import { OpIdempotencyService } from '../../game/op-idempotency.service.js';
 import { OnlineSessionService } from '../../online/online-session.service.js';
 import { DATA_TABLES, GAME_CLOCK, PlayerContextService, type AccountExtras, type NowSource, slotDtoOf } from '../shared/index.js';
+import { pushStoryUnlock } from '../inventory/internal/notify.js';
+import { opAdvanceStoriesOnMapEntry } from '../story/internal/story-ops.js';
 import { BattleCollector } from './internal/battle-collector.js';
 import { buildBattleWorld, nextWorldSeed } from './internal/headless.js';
 import { mapListDtoOf, pendingOfflineMsOf, requirementContextOf } from './internal/map-dto.js';
@@ -369,6 +371,9 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
 
     this.sessions.set(key, session);
     this.activeByUser.set(userId, characterId);
+    // 会话首次落地在该地图 = 「进入地图」：补一次剧情推进，否则
+    // `enterMap(当前图)` 会走 early-return 分支，剧情永远不会自动触发。
+    this.advanceStoriesOnMapEntry(userId, session, position.map, extras);
     return session;
   }
 
@@ -421,13 +426,64 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     if (!tasks) return;
     let changed = false;
     const dec = Math.max(1, Math.trunc(count));
+    const justFinished: string[] = [];
     for (const storyKey of Object.keys(tasks)) {
       const remaining = tasks[storyKey];
       if (remaining === undefined || remaining <= 0) continue;
-      tasks[storyKey] = Math.max(0, remaining - dec);
+      const next = Math.max(0, remaining - dec);
+      tasks[storyKey] = next;
       changed = true;
+      if (next === 0) justFinished.push(storyKey);
     }
-    if (changed) this.playerContext.markAccountDirty(userId);
+    if (!changed) return;
+    this.playerContext.markAccountDirty(userId);
+    // 原版 `checkKill()`：击杀任务达成且有剧本时**当场弹剧本**（前端据此自动打开）。
+    for (const key of justFinished) {
+      const story = this.tables.stories[key];
+      if (story?.script) {
+        pushStoryUnlock(this.batcher, userId, {
+          key,
+          name: story.name,
+          taskType: 'script',
+          autoPlay: true,
+        });
+      }
+    }
+  }
+
+  /**
+   * 进入地图时的剧情推进（原版 `MapPanel.checkStories()`）：
+   * 条件满足的击杀 / 购买任务**当场登记**，纯剧情脚本推给前端**自动播放**。
+   *
+   * 幂等（登记过的不会再命中），因此 `start()` 与 `enterMap()` 都调用它是安全的。
+   */
+  private advanceStoriesOnMapEntry(
+    userId: number,
+    session: WorldSession,
+    map: string,
+    extras: AccountExtras,
+  ): void {
+    const player = session.world.player as Player | null;
+    if (!player) return;
+    const outcome = opAdvanceStoriesOnMapEntry(this.tables, player, extras, map);
+    if (outcome.tasks.length === 0 && outcome.scripts.length === 0) return;
+    this.playerContext.markAccountDirty(userId);
+    for (const task of outcome.tasks) {
+      pushStoryUnlock(this.batcher, userId, {
+        key: task.key,
+        name: task.name,
+        taskType: task.taskType,
+        autoPlay: false,
+      });
+    }
+    for (const script of outcome.scripts) {
+      pushStoryUnlock(this.batcher, userId, {
+        key: script.key,
+        name: script.name,
+        taskType: 'script',
+        autoPlay: true,
+      });
+    }
   }
 
   /**
@@ -513,6 +569,8 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
 
       session.world.map = mapKey;
       await this.persistPosition(session);
+      // 进图剧情推进必须在 flush 之前：击杀任务登记落在 extras 里，要一起落库。
+      this.advanceStoriesOnMapEntry(userId, session, mapKey, extras);
       player.timestamp = this.now();
       this.playerContext.markDirty(userId, characterId);
       await this.playerContext.flush(userId, characterId);
