@@ -80,7 +80,8 @@ describe('VirtualClock', () => {
     const seen: number[] = [];
     clock.setRate(3);
     clock.setTimeout(() => seen.push(clock.getTime()), 300);
-    clock.advanceBy(100);
+    // `advanceBy(ms)` 的 ms 是**虚拟**毫秒，与 rate 无关
+    clock.advanceBy(300);
     expect(seen).toEqual([300]);
     expect(clock.getTime()).toBe(300);
   });
@@ -96,7 +97,7 @@ describe('VirtualClock', () => {
     expect(rest).toBe(80);
     rest = clock.advanceBy(rest, 2);
     expect(fired).toEqual([1, 2, 3, 4]);
-    expect(rest).toBe(40);
+    expect(rest).toBe(60);
     rest = clock.advanceBy(rest);
     expect(fired).toEqual([1, 2, 3, 4, 5]);
     expect(rest).toBe(0);
@@ -154,7 +155,9 @@ describe('RealClock', () => {
     expect(fired).toEqual([]);
     host.advance(0.01);
     expect(fired).toHaveLength(1);
-    expect(fired[0]).toBeCloseTo(100.01, 6);
+    // 回调执行期间「现在」= 该定时器的到期时刻（离散事件语义）
+    expect(fired[0]).toBe(100);
+    expect(clock.getTime()).toBeCloseTo(100.01, 6);
   });
 
   it('rate 缩放：rate=2 时 50 真实毫秒推进 100 虚拟毫秒', () => {
@@ -181,7 +184,8 @@ describe('RealClock', () => {
     clock.resume();
     host.advance(100 + 0.01);
     expect(fired).toEqual(['a']);
-    expect(clock.getTime()).toBeCloseTo(1000 + 100.01, 5);
+    // 虚拟时间从冻结处（0）继续，而不是墙钟绝对时间
+    expect(clock.getTime()).toBeCloseTo(100.01, 5);
   });
 
   it('stepPaused 在暂停态按预算快进', () => {

@@ -91,7 +91,7 @@ export function HudBar(props: HudBarProps) {
             size={{ width: 120, height: 8 }}
             showInfo={false}
             strokeColor={token.colorPrimary}
-            trailColor={token.colorFillSecondary}
+            railColor={token.colorFillSecondary}
             style={{ marginBottom: 0 }}
           />
           <Typography.Text style={{ fontSize: token.fontSizeSM, color: token.colorTextSecondary }}>

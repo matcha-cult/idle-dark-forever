@@ -126,7 +126,36 @@ send(ws, { cmd: 1, subCmd: 1, reqId: 'r-b' });
 const [ra, rb] = await Promise.all([pa, pb]);
 check('§4.1 并发在途请求各自精确配对', ra.errorCode === 404 && (rb.errorCode === undefined || rb.errorCode === 0));
 
-// ---------- 鉴权已生效：需要鉴权的 Action 必须已进入业务层 ----------
+// ---------- 业务约定：ActionResult + 两级错误判定（本工程硬契约） ----------
+// system.ping 必须遵循 `ActionResult<T>`：信封 data = { success:true, data:{...} }
+check(
+  '约定 ActionResult：system.ping 的 data 为 { success:true, data:{...} }',
+  res1.data !== undefined &&
+    res1.data.success === true &&
+    typeof res1.data.data === 'object' &&
+    res1.data.data !== null,
+  JSON.stringify(res1.data),
+);
+check(
+  '约定 serverTime：时钟对齐字段名固定为 serverTime（extractServerTime 只认它）',
+  typeof res1.data?.data?.serverTime === 'number',
+  `serverTime=${res1.data?.data?.serverTime}`,
+);
+
+// system.version 同样遵循 ActionResult，且带 protocolVersion
+const pv = waitFrame(ws, (f) => f.reqId === 'r-ver');
+send(ws, { cmd: 1, subCmd: 2, reqId: 'r-ver' });
+const resVer = await pv;
+check(
+  '约定 ActionResult：system.version 含 protocolVersion / serverTime / wsPath',
+  resVer.data?.success === true &&
+    typeof resVer.data?.data?.protocolVersion === 'number' &&
+    typeof resVer.data?.data?.serverTime === 'number' &&
+    resVer.data?.data?.wsPath === '/ws',
+  JSON.stringify(resVer.data),
+);
+
+// ---------- 鉴权已生效 + 业务失败走 data.success=false（而非裸 500） ----------
 const p6 = waitFrame(ws, (f) => f.reqId === 'r-me');
 send(ws, { cmd: 10, subCmd: 3, reqId: 'r-me' });
 const res6 = await p6;
@@ -134,6 +163,13 @@ check(
   '鉴权链路：带 token 时 auth.me 已进入业务层（非 401/404）',
   res6.errorCode !== 401 && res6.errorCode !== 404,
   JSON.stringify(res6),
+);
+check(
+  '两级错误判定：业务失败为 errorCode=0 + data.success=false + data.data.code',
+  res6.errorCode === undefined &&
+    res6.data?.success === false &&
+    typeof res6.data?.data?.code === 'string',
+  JSON.stringify(res6.data),
 );
 
 ws.close();

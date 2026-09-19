@@ -97,21 +97,23 @@ export function UnitCard(props: UnitCardProps) {
         />
       )}
 
-      {buffs.length === 0 ? null : (
+      {unit.buffs.length === 0 ? null : (
         <Flex align="center" gap={token.marginXXS} wrap data-testid="unit-card-buffs">
           {buffs.map((buff) => (
             <Tooltip key={buff.key} title={`${buff.name} ×${buff.stack}（${formatDuration(buff.remainMs)}）`}>
-              <Avatar
-                size={20}
-                shape="square"
-                style={{
-                  background: token.colorFillSecondary,
-                  color: token.colorText,
-                  fontSize: token.fontSizeSM,
-                }}
-              >
-                {buff.name.slice(0, 1)}
-              </Avatar>
+              <span data-testid="unit-buff" data-buff-key={buff.key}>
+                <Avatar
+                  size={20}
+                  shape="square"
+                  style={{
+                    background: token.colorFillSecondary,
+                    color: token.colorText,
+                    fontSize: token.fontSizeSM,
+                  }}
+                >
+                  {buff.name.slice(0, 1)}
+                </Avatar>
+              </span>
             </Tooltip>
           ))}
           {hiddenBuffs > 0 ? (

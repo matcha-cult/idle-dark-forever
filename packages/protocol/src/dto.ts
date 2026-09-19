@@ -388,3 +388,85 @@ export interface MeDto {
   playerSlotCount: number;
   highestEndlessLevel: number;
 }
+
+// ────────────────────────────── 系统 ──────────────────────────────
+
+/**
+ * 心跳响应（`system.ping`）。
+ *
+ * ⚠️ 字段名固定为 `serverTime`：客户端 `extractServerTime()` 只识别
+ * `serverTime` / `serverTimeMs`（含 `data.*` 嵌套），用于计算与服务端的时钟偏移。
+ * 服务端若改用 `timestamp` 等别名，时钟对齐会**静默失效**。
+ */
+export interface SystemPingDto {
+  status: 'ok';
+  service: string;
+  /** 服务端当前时间戳（ms）。 */
+  serverTime: number;
+}
+
+/** 版本信息（`system.version`）。 */
+export interface SystemVersionDto {
+  /** 服务端构建版本（如 `0.1.0`），仅用于展示与排查。 */
+  serverVersion: string;
+  /**
+   * 服务端线协议版本。客户端应与 `PROTOCOL_VERSION` 比对，
+   * 不一致时提示刷新（避免新旧字段语义错位）。
+   */
+  protocolVersion: number;
+  /** 服务端当前时间戳（ms）。 */
+  serverTime: number;
+  /** WS 挂载路径（PROTOCOL §1）。 */
+  wsPath: string;
+  /** 公告版本（用于判断是否需要弹更新公告）。 */
+  noticeVersion?: number;
+}
+
+/** 系统公告（`system.notice` 推送载荷）。 */
+export interface SystemNoticeDto {
+  id: string;
+  title: string;
+  body: string;
+  /** 发布时间（服务端 ms）。 */
+  at: number;
+}
+
+// ────────────────────────────── 拾取规则 ──────────────────────────────
+
+/** 单条拾取规则。 */
+export interface LootRuleEntryDto {
+  /** 规则 id。 */
+  id: string;
+  /** 品质下限 0..6。 */
+  minQuality: number;
+  /** 等级下限。 */
+  minLevel: number;
+  /** 0 拾取 / 1 出售 / 2 分解。 */
+  action: LootRuleAction;
+  enabled: boolean;
+}
+
+/** 拾取规则面板。 */
+export interface LootRuleStateDto {
+  enabled: boolean;
+  minLevel: number;
+  rules: LootRuleEntryDto[];
+}
+
+export interface LootRuleUpdateInput {
+  enabled?: boolean;
+  rules?: LootRuleEntryDto[];
+}
+
+// ────────────────────────────── 职业面板汇总 ──────────────────────────────
+
+/** 职业面板汇总（`career.list` 一次下发，前端不做推导）。 */
+export interface CareerPanelDto {
+  careers: CareerProgressDto[];
+  skills: SkillDto[];
+  enhances: EnhanceDto[];
+  /** 技能 / 强化槽位上限（服务端算好下发）。 */
+  maxSkillCount: number;
+  maxEnhanceCount: number;
+}
+

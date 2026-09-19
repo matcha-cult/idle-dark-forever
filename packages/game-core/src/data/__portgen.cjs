@@ -30,24 +30,30 @@ const HEADER = `/**
 
 /** @type {Record<string, Array<[RegExp, string]>>} */
 const COMMON = [
-  // 词缀 / 传奇：随机源改为注入的 Rng
-  [/Math\.random\(\)/g, 'rng.next()'],
+  // 词缀 / 传奇：generate 的签名按冻结契约改为注入 Rng
   [/generate\(level\)\s*\{/g, 'generate(level, rng) {'],
 ];
 
 /** @type {Record<string, Array<[RegExp, string]>>} */
 const PATCHES = {
+  // Math.random() 只在本文件里全部位于 generate(level, rng) 内部，可安全改用注入的 rng.next()。
+  'affixes/base.js': [[/Math\.random\(\)/g, 'rng.next()']],
+  'affixes/level2.js': [[/Math\.random\(\)/g, 'rng.next()']],
   'buffs/sorceress.js': [
     // 该 buff 把 arg 当作 [rate, remain] 数组使用（原版 arg 是多态载荷）
-    [/this\.arg\[0\]/g, '(this.arg as unknown as number[])[0]'],
-    [/this\.arg\[1\]/g, '(this.arg as unknown as number[])[1]'],
+    [/this\.arg\[0\]/g, '(this.arg as unknown as [number, number])[0]'],
+    [/this\.arg\[1\]/g, '(this.arg as unknown as [number, number])[1]'],
     [/function addColdAir\(target\)/g, 'function addColdAir(target: UnitLike)'],
+    // 原版把布尔 hook 当数值参与 `<` 比较（false→0/true→1），保持语义等价。
+    [/Math\.random\(\) < unit\.runAttrHooks\(false, 'soCold'\)/g, "Math.random() < Number(unit.runAttrHooks(false, 'soCold'))"],
   ],
   'buffs/knight.js': [
     [/function addCombo\(self, count = 1\)/g, 'function addCombo(self: UnitLike, count = 1)'],
   ],
   'enhances/knight.js': [
     [/function addCombo\(self, count = 1\)/g, 'function addCombo(self: UnitLike, count = 1)'],
+    // this.skills 与 this 在视图类型里是两套接口，这里按原版语义显式松绑。
+    [/if \(skillState !== this\) \{/g, 'if ((skillState as unknown) !== this) {'],
   ],
   'skills/knight.js': [
     [/function addCombo\(self, count = 1\)/g, 'function addCombo(self: UnitLike, count = 1)'],
@@ -248,6 +254,14 @@ const CATEGORIES = {
     constName: 'skills',
     entry: 'SkillEntry',
     dir: 'skills/',
+    preamble: `
+/**
+ * 原版 \`data/skills/enemy.js\` 里三处引用了**从未定义**的全局 \`UNIT_LEVEL_RATE\`
+ * （原版执行到那三行会直接 ReferenceError）。这里用 ambient 声明保持引用可编译、
+ * 且运行期行为与原版一致（访问即 ReferenceError），**不臆造数值**。
+ */
+declare const UNIT_LEVEL_RATE: number;
+`,
     files: [
       ['base.js', ARRAY], ['warrior.js', ARRAY], ['sorceress.js', ARRAY], ['assassin.js', ARRAY],
       ['knight.js', ARRAY], ['elementSummoner.js', ARRAY], ['enemy.js', ARRAY],
@@ -260,27 +274,27 @@ const CATEGORIES = {
     dir: 'maps/',
     files: [
       ['home.js', OBJECT],
-      ['town/street.js', ARRAY], ['town/cave.js', ARRAY], ['town/cave2.js', ARRAY],
-      ['town/valley.js', ARRAY], ['town/woods.js', ARRAY], ['town/mine-1.js', ARRAY],
-      ['town/mine-2.js', ARRAY], ['town/mine-3.js', ARRAY], ['town/neighbourTown.js', ARRAY],
-      ['town/neighbourTown-1.js', ARRAY], ['town/neighbourTown-2.js', ARRAY],
-      ['chapter3/road.js', ARRAY], ['chapter3/shelter773.js', ARRAY], ['chapter3/wood.js', ARRAY],
-      ['chapter3/wood1.js', ARRAY], ['chapter3/auran.js', ARRAY], ['chapter3/auran1.js', ARRAY],
-      ['chapter3/auran2.js', ARRAY], ['chapter3/tower1.js', ARRAY], ['chapter3/tower2.js', ARRAY],
-      ['chapter3/auran3.js', ARRAY], ['chapter3/auran4.js', ARRAY],
-      ['chapter4/westRolan.js', ARRAY], ['chapter4/westRolan1.js', ARRAY], ['chapter4/westRolan2.js', ARRAY],
-      ['chapter4/sanAnthony.js', ARRAY], ['chapter4/sanAnthony1.js', ARRAY], ['chapter4/sanAnthony2.js', ARRAY],
-      ['silver/warrior.js', ARRAY], ['silver/assassin.js', ARRAY], ['silver/sorceress.js', ARRAY],
-      ['silver/summoner.js', ARRAY], ['silver/knight.js', ARRAY],
-      ['chapter5/byer1.js', ARRAY], ['chapter5/byer2.js', ARRAY], ['chapter5/byer3.js', ARRAY],
-      ['chapter5/byer4.js', ARRAY], ['chapter5/byer5.js', ARRAY], ['chapter5/byer6.js', ARRAY],
+      ['town/street.js', OBJECT], ['town/cave.js', OBJECT], ['town/cave2.js', OBJECT],
+      ['town/valley.js', OBJECT], ['town/woods.js', OBJECT], ['town/mine-1.js', OBJECT],
+      ['town/mine-2.js', OBJECT], ['town/mine-3.js', OBJECT], ['town/neighbourTown.js', OBJECT],
+      ['town/neighbourTown-1.js', OBJECT], ['town/neighbourTown-2.js', OBJECT],
+      ['chapter3/road.js', OBJECT], ['chapter3/shelter773.js', OBJECT], ['chapter3/wood.js', OBJECT],
+      ['chapter3/wood1.js', OBJECT], ['chapter3/auran.js', OBJECT], ['chapter3/auran1.js', OBJECT],
+      ['chapter3/auran2.js', OBJECT], ['chapter3/tower1.js', OBJECT], ['chapter3/tower2.js', OBJECT],
+      ['chapter3/auran3.js', OBJECT], ['chapter3/auran4.js', OBJECT],
+      ['chapter4/westRolan.js', OBJECT], ['chapter4/westRolan1.js', OBJECT], ['chapter4/westRolan2.js', OBJECT],
+      ['chapter4/sanAnthony.js', OBJECT], ['chapter4/sanAnthony1.js', OBJECT], ['chapter4/sanAnthony2.js', OBJECT],
+      ['silver/warrior.js', OBJECT], ['silver/assassin.js', OBJECT], ['silver/sorceress.js', OBJECT],
+      ['silver/summoner.js', OBJECT], ['silver/knight.js', OBJECT],
+      ['chapter5/byer1.js', OBJECT], ['chapter5/byer2.js', OBJECT], ['chapter5/byer3.js', OBJECT],
+      ['chapter5/byer4.js', OBJECT], ['chapter5/byer5.js', OBJECT], ['chapter5/byer6.js', OBJECT],
     ],
   },
 };
 
 const PLAIN_FILES = {
   upgrades: { out: 'upgrades.ts', constName: 'upgrades', type: 'UpgradesData', src: 'upgrades.js', dir: '' },
-  announcement: { out: 'announcement.ts', constName: 'announcement', type: 'AnnouncementData', src: 'annoucement.js', dir: '' },
+  announcement: { out: 'announcement.ts', constName: 'announcement', type: 'AnnouncementEntry', src: 'annoucement.js', dir: '' },
 };
 
 function emitCategory(key) {
@@ -305,7 +319,7 @@ function emitCategory(key) {
   const content = `${HEADER.replace('{DIR}', cfg.dir || '.')}
 import type { ${[...imports].sort().join(', ')} } from './_shapes.js';
 import { arrayToMap } from './_util.js';
-
+${cfg.preamble || ''}
 ${chunks.join('\n')}
 export const ${cfg.constName}: Record<string, ${cfg.entry}> = arrayToMap([
   ${spread},
@@ -318,8 +332,9 @@ export const ${cfg.constName}: Record<string, ${cfg.entry}> = arrayToMap([
 function emitPlain(key) {
   const cfg = PLAIN_FILES[key];
   const body = transpile(cfg.src, null);
+  const from = cfg.type === 'UpgradesData' || cfg.type === 'AnnouncementData' ? '../contracts/data.js' : './_shapes.js';
   const content = `${HEADER.replace('{DIR}', '.')}
-import type { ${cfg.type} } from '../contracts/data.js';
+import type { ${cfg.type} } from '${from}';
 
 const __value = ((): ${cfg.type} => {
 ${body}

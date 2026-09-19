@@ -52,7 +52,8 @@ export function CostList(props: CostListProps) {
       key: `m:${material.key}`,
       label: materialNames?.[material.key] ?? material.key,
       need: material.count,
-      have: owned?.materials?.[material.key],
+      // `owned.materials` 一旦提供即视为权威清单：缺 key = 真的没有（0），而不是「未知」
+      have: owned?.materials === undefined ? undefined : (owned.materials[material.key] ?? 0),
       tone: token.cyan,
     });
   }

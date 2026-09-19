@@ -101,7 +101,7 @@ export function ResourceBar(props: ResourceBarProps) {
           ? { success: { percent: shieldPercent, strokeColor: token.colorTextTertiary } }
           : {})}
         strokeColor={color}
-        trailColor={token.colorFillSecondary}
+        railColor={token.colorFillSecondary}
         size={{ width, height }}
         showInfo={false}
         style={{ marginBottom: 0 }}

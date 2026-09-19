@@ -365,7 +365,7 @@ return  [
     hooks: {
       holyCombo(world, value) {
         for (const skillState of this.skills) {
-          if (skillState !== this) {
+          if ((skillState as unknown) !== this) {
             skillState.reduceCoolDown(value * 1000);
           }
         }
@@ -379,7 +379,7 @@ return  [
     description: '每消耗1点圣能，有15%几率为你补充3点圣能',
     hooks: {
       postCostComboPoint(world, value)  {
-        if (rng.next() < 0.15 * value) {
+        if (Math.random() < 0.15 * value) {
           addCombo(this, 3);
         }
         return value;

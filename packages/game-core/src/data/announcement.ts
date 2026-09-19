@@ -7,9 +7,9 @@
  *  - 词缀 / 传奇的 `generate(level)` 改为 `generate(level, rng)`，内部 `Math.random()` → `rng()`。
  */
 
-import type { AnnouncementData } from '../contracts/data.js';
+import type { AnnouncementEntry } from './_shapes.js';
 
-const __value = ((): AnnouncementData => {
+const __value = ((): AnnouncementEntry => {
 /**
  * Created by tdzl2003 on 06/08/2017.
  */
@@ -225,4 +225,4 @@ return  {
 
 })();
 
-export const announcement: AnnouncementData = __value;
+export const announcement: AnnouncementEntry = __value;

@@ -12,6 +12,8 @@ export const BusinessErrorCode = {
   UNAUTHORIZED: 'UNAUTHORIZED',
   /** 参数非法 */
   INVALID_PARAM: 'INVALID_PARAM',
+  /** 通用：资源不存在（领域无关；领域专用码优先，如 PLAYER_NOT_FOUND） */
+  NOT_FOUND: 'NOT_FOUND',
   /** 通用：服务端内部业务异常 */
   INTERNAL: 'INTERNAL',
 
@@ -66,6 +68,7 @@ export type BusinessErrorCode = (typeof BusinessErrorCode)[keyof typeof Business
 export const BUSINESS_ERROR_MESSAGE: Record<string, string> = {
   UNAUTHORIZED: '登录已失效，请重新登录',
   INVALID_PARAM: '参数不合法',
+  NOT_FOUND: '请求的资源不存在',
   INTERNAL: '服务器开小差了，请稍后再试',
   PLAYER_NOT_FOUND: '角色不存在',
   PLAYER_SLOT_FULL: '角色栏位已满',

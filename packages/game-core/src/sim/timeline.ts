@@ -102,8 +102,18 @@ export abstract class ClockBase implements Clock {
 
   // ───────────────────────── Clock 实现 ─────────────────────────
 
+  /**
+   * 当前虚拟时间。
+   *
+   * 两处特例（都与原版 `Timeline.now` 的实际行为对齐）：
+   * - **暂停态**返回冻结的 `current`；
+   * - **回调执行期间**（`updating`）返回当前正在执行的定时器时刻 `current`。
+   *   这是离散事件仿真的标准语义：事件派发时「现在」就是该事件的时刻。
+   *   原版子时钟读 `parent.getTime()`（= `parent.current`）正是这个值，
+   *   因此这也保证了「回调内 `getTime()` = 该回调的到期时刻」这一可重放性质。
+   */
   getTime(): number {
-    if (this.paused) {
+    if (this.paused || this.updating) {
       return this.current;
     }
     return this.current + (this.getSource().getTime() - this.initSource()) * this.rate;

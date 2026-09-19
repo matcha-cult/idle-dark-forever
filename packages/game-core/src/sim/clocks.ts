@@ -140,16 +140,22 @@ export class VirtualClock extends ClockBase {
     if (!(ms >= 0)) {
       return 0;
     }
+    const rate = this.getRate();
+    const startAxis = this.axis.value;
     const end = this.getTime() + ms;
-    // 让源轴与虚拟轴的换算关系保持自洽（rate 缩放推进速度）
-    this.axis.value += ms / this.getRate();
+    const endAxis = startAxis + ms / rate;
+    this.axis.value = endAxis;
     const limit =
       budget === undefined
         ? null
         : Number.isFinite(budget) && budget >= 0
           ? Math.floor(budget)
           : null;
-    return this.runDue(end, this.axis.value, limit);
+    const remaining = this.runDue(end, endAxis, limit);
+    // 预算提前退出时，源轴必须回退到与 `current` 对应的位置，
+    // 否则 `getTime()` 会先于实际执行进度跳到 `end`（破坏 current ↔ axis 不变量）。
+    this.axis.value = startAxis + (ms - remaining) / rate;
+    return remaining;
   }
 }
 

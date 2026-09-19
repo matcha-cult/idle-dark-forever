@@ -4,8 +4,7 @@
  * 设计约束：
  * - 路由 `(cmd, subCmd)` **只引用 `@idle-dark/protocol` 的 `*_CMD` 常量**，
  *   禁止字面量数字、禁止在本包手工镜像 `cmd.ts`（唯一真相在后端共享包）。
- * - 结果类型一律来自 `@idle-dark/protocol` 的 `dto.ts`；协议尚未声明的那几个请求/响应形状
- *   在本文件就地声明并标注「待迁移」。
+ * - 结果类型一律来自 `@idle-dark/protocol` 的 `dto.ts`（**唯一真相**，本文件不再就地声明）。
  * - **业务失败不抛**：所有方法强制 `allowBusinessFailure: true`，业务失败作为
  *   `ActionResult` 的 `success: false` 分支**返回**（预期分支）；传输层失败
  *   （`errorCode !== 0` / 连接 / 超时）仍抛 `TransportError` 等异常。
@@ -13,6 +12,7 @@
  */
 import type {
   ActionResult,
+  CareerPanelDto,
   CareerProgressDto,
   DecomposeResultDto,
   EnchantCostsDto,
@@ -20,6 +20,9 @@ import type {
   InventorySlotDto,
   LoginRequestDto,
   LoginResponseDto,
+  LootRuleEntryDto,
+  LootRuleStateDto,
+  LootRuleUpdateInput,
   MeDto,
   MedicineStateDto,
   OfflineReportDto,
@@ -30,6 +33,9 @@ import type {
   SkillDto,
   StoryDto,
   StoryPlayDto,
+  SystemNoticeDto,
+  SystemPingDto,
+  SystemVersionDto,
   WorldSnapshotDto,
 } from '@idle-dark/protocol';
 import {
@@ -93,27 +99,17 @@ abstract class SegmentApi {
 
 // ===== system =====
 
-/** 心跳响应（`system.ping`）。 */
-export interface SystemPingDto {
-  serverTime: number;
-}
-
-/** 版本与公告版本（`system.version`）。 */
-export interface SystemVersionDto {
-  version: number;
-  protocolVersion: number;
-  serverTime: number;
-  noticeVersion?: number;
-}
-
-/** 系统公告（`system.notice` 推送载荷）。 */
-export interface SystemNoticeDto {
-  id: string;
-  title: string;
-  body: string;
-  /** 发布时间（服务端 ms）。 */
-  at: number;
-}
+// system / lootrule / career 的响应形状已归位到 `@idle-dark/protocol`（唯一真相）。
+// 这里 re-export 以保持 `@idle-dark/ionet-transport` 既有公共出口不变。
+export type {
+  SystemNoticeDto,
+  SystemPingDto,
+  SystemVersionDto,
+  LootRuleEntryDto,
+  LootRuleStateDto,
+  LootRuleUpdateInput,
+  CareerPanelDto,
+};
 
 export class SystemApi extends SegmentApi {
   /** 应用层心跳（PROTOCOL §7）。 */
@@ -327,30 +323,8 @@ export class BankApi extends SegmentApi {
 
 // ===== lootrule =====
 
-/** 单条拾取规则（**待迁移**：后端 `dto.ts` 补齐后应移入 `@idle-dark/protocol`）。 */
-export interface LootRuleEntryDto {
-  /** 规则 id。 */
-  id: string;
-  /** 品质下限 0..6。 */
-  minQuality: number;
-  /** 等级下限。 */
-  minLevel: number;
-  /** 0 拾取 / 1 出售 / 2 分解。 */
-  action: 0 | 1 | 2;
-  enabled: boolean;
-}
-
-/** 拾取规则面板（**待迁移**）。 */
-export interface LootRuleStateDto {
-  enabled: boolean;
-  minLevel: number;
-  rules: LootRuleEntryDto[];
-}
-
-export interface LootRuleUpdateInput {
-  enabled?: boolean;
-  rules?: LootRuleEntryDto[];
-}
+// LootRuleEntryDto / LootRuleStateDto / LootRuleUpdateInput 已归位到 `@idle-dark/protocol`
+// （见本文件顶部的 re-export）。
 
 export class LootRuleApi extends SegmentApi {
   get(options?: GameApiRequestOptions): Promise<ActionResult<LootRuleStateDto>> {
@@ -374,15 +348,7 @@ export class LootRuleApi extends SegmentApi {
 
 // ===== career =====
 
-/** 职业面板汇总（**待迁移**：由协议侧补齐）。 */
-export interface CareerPanelDto {
-  careers: CareerProgressDto[];
-  skills: SkillDto[];
-  enhances: EnhanceDto[];
-  /** 技能/强化槽位上限（服务端算好下发）。 */
-  maxSkillCount: number;
-  maxEnhanceCount: number;
-}
+// CareerPanelDto 已归位到 `@idle-dark/protocol`（见本文件顶部的 re-export）。
 
 export class CareerApi extends SegmentApi {
   list(options?: GameApiRequestOptions): Promise<ActionResult<CareerPanelDto>> {
