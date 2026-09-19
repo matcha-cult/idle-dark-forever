@@ -58,18 +58,18 @@ export function QuantityInput(props: QuantityInputProps) {
       />
       <Space.Compact>
         <Button
-          disabled={disabled || safeMax === 0}
-          data-testid="quantity-input-step"
-          onClick={() => onChange(clamp(value + step))}
-        >
-          {stepLabel ?? `+${step}`}
-        </Button>
-        <Button
-          disabled={disabled || safeMax === 0 || value >= safeMax}
-          data-testid="quantity-input-first"
+          disabled={disabled || safeMax === 0 || value === clamp(1)}
+          data-testid="quantity-input-one"
           onClick={() => onChange(clamp(1))}
         >
           1
+        </Button>
+        <Button
+          disabled={disabled || safeMax === 0 || value === clamp(step)}
+          data-testid="quantity-input-step"
+          onClick={() => onChange(clamp(step))}
+        >
+          {stepLabel ?? formatAmount(step)}
         </Button>
         <Button
           disabled={disabled || safeMax === 0 || value === safeMax}
