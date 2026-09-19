@@ -11,7 +11,7 @@ import type { DataTables, Player, Rng } from '@idle-dark/game-core';
 import type { ShopStateDto } from '@idle-dark/protocol';
 import { BusinessErrorCode } from '@idle-dark/protocol';
 import type { AccountExtras } from '../../shared/index.js';
-import { OpError } from '../../inventory/internal/op-error.js';
+import { OpError } from '../../shared/op-error.js';
 import { grantMedicineExp, maxMedicineExp, totalMedicineLevel } from '../../produce/internal/medicine.js';
 
 /** 角色栏位上限（原版无上限；本工程用于 UI 与越界拒绝）。 */

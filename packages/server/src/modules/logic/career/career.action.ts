@@ -9,7 +9,7 @@ import { type ActionResult, CAREER_CMD, type CareerPanelDto } from '@idle-dark/p
 import { dataOf, requireUserId } from '../../../ionet/action-support.js';
 import { guardAction } from '../../../common/kernel/result.js';
 import { CareerLogicService } from './career.logic.service.js';
-import { parseCharacterId, parseRequiredString } from '../inventory/internal/action-parse.js';
+import { parseCharacterId, parseRequiredString } from '../shared/action-parse.js';
 
 @Injectable()
 @ActionController(CAREER_CMD.cmd)

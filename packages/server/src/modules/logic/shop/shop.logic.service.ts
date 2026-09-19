@@ -14,10 +14,10 @@ import { RateLimiterService } from '../../../common/services/rate-limiter.servic
 import { GameDatabaseService } from '../../game/game-database.service.js';
 import { OpIdempotencyService } from '../../game/op-idempotency.service.js';
 import { GAME_CLOCK, PlayerContextService, type NowSource } from '../shared/index.js';
-import { PanelCharacterService } from '../inventory/internal/panel-character.service.js';
-import { withOperation } from '../inventory/internal/idempotency.js';
-import { toFailOrThrow } from '../inventory/internal/op-error.js';
-import { rngFromText, seedTextOf } from '../inventory/internal/rng.js';
+import { PanelCharacterService } from '../shared/panel-character.service.js';
+import { withOperation } from '../shared/idempotency.js';
+import { toFailOrThrow } from '../shared/op-error.js';
+import { rngFromText, seedTextOf } from '../shared/rng.js';
 import { opBuyPlayerSlot, opExchange, shopStateOf } from './internal/shop-ops.js';
 
 const RATE_LIMITS = {

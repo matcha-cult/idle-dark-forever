@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BusinessErrorCode } from '@idle-dark/protocol';
 import { SeededRngFactory } from '@idle-dark/game-core';
-import { OpError } from '../../../src/modules/logic/inventory/internal/op-error.js';
+import { OpError } from '../../../src/modules/logic/shared/op-error.js';
 import {
   PLAYER_SLOT_MAX,
   opBuyPlayerSlot,

@@ -26,7 +26,7 @@ import {
   parseOpId,
   parseOptionalStringArray,
   parseRequiredString,
-} from '../inventory/internal/action-parse.js';
+} from '../shared/action-parse.js';
 
 @Injectable()
 @ActionController(PRODUCE_CMD.cmd)

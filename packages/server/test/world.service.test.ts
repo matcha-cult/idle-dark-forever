@@ -14,7 +14,7 @@ import { STORY_CMD, type StoryUnlockDto, type WorldTickDto } from '@idle-dark/pr
 import type { NotificationBatcher, PushFrame } from '../src/modules/game/notification-batcher.js';
 import { OpIdempotencyService } from '../src/modules/game/op-idempotency.service.js';
 import type { OnlineSessionService } from '../src/modules/online/online-session.service.js';
-import { PanelCharacterService } from '../src/modules/logic/inventory/internal/panel-character.service.js';
+import { PanelCharacterService } from '../src/modules/logic/shared/panel-character.service.js';
 import { PlayerContextService } from '../src/modules/logic/shared/player-context.service.js';
 import type { AccountExtras } from '../src/modules/logic/shared/index.js';
 import { WorldService } from '../src/modules/logic/world/world.service.js';

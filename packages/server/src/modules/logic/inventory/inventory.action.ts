@@ -18,7 +18,7 @@ import {
   parseCharacterId,
   parseOpId,
   parseRequiredString,
-} from './internal/action-parse.js';
+} from '../shared/action-parse.js';
 
 @Injectable()
 @ActionController(INVENTORY_CMD.cmd)

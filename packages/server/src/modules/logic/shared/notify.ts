@@ -9,7 +9,7 @@
  */
 import type { InventorySlotDto, StoryUnlockDto } from '@idle-dark/protocol';
 import { CAREER_CMD, INVENTORY_CMD, STORY_CMD } from '@idle-dark/protocol';
-import type { NotificationBatcher } from '../../../game/notification-batcher.js';
+import type { NotificationBatcher } from '../../game/notification-batcher.js';
 
 export function pushInventoryChanged(
   batcher: NotificationBatcher,

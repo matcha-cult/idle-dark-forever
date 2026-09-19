@@ -13,7 +13,7 @@
  *    否则多角色账号会一直操作「最近创建」的那个角色。
  */
 import { Inject, Injectable } from '@nestjs/common';
-import { GameDatabaseService } from '../../../game/game-database.service.js';
+import { GameDatabaseService } from '../../game/game-database.service.js';
 
 interface CharacterRow {
   id: string;

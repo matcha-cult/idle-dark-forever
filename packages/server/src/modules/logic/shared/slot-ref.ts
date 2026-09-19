@@ -19,7 +19,7 @@ import {
   type EquipSlot,
   type Player,
 } from '@idle-dark/game-core';
-import { slotDtoOf } from '../../shared/index.js';
+import { slotDtoOf } from './player-dto.js';
 
 export interface ResolvedPanelSlot {
   position: ItemPosition;

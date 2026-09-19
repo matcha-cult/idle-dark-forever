@@ -4,7 +4,7 @@
  * 线协议只保证 `data` 是调用方给的任意 JSON，因此所有取值必须防御式。
  */
 import type { ActionFail } from '@idle-dark/protocol';
-import { ActionError, toNonEmptyString } from '../../../../ionet/action-support.js';
+import { ActionError, toNonEmptyString } from '../../../ionet/action-support.js';
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; fail: ActionFail };
 

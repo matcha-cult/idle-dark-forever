@@ -27,7 +27,7 @@ import {
   lootRuleKeyOf,
   parseLootRuleKey,
 } from '@idle-dark/game-core';
-import { OpError } from '../../inventory/internal/op-error.js';
+import { OpError } from '../../shared/op-error.js';
 
 
 /** 规则矩阵的品质维度（原版 UI 为 5 格：普通..传说）。 */

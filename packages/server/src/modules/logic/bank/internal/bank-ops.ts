@@ -12,7 +12,7 @@ import {
 import type { InventorySlotDto } from '@idle-dark/protocol';
 import { BusinessErrorCode } from '@idle-dark/protocol';
 import { slotDtoOf } from '../../shared/index.js';
-import { OpError } from '../../inventory/internal/op-error.js';
+import { OpError } from '../../shared/op-error.js';
 
 export interface ResolvedBankSlot {
   slot: InventorySlot;

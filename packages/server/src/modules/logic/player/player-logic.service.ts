@@ -29,7 +29,7 @@ import {
   playerStateDtoOf,
 } from '../shared/index.js';
 import { WorldService } from '../world/world.service.js';
-import { PanelCharacterService } from '../inventory/internal/panel-character.service.js';
+import { PanelCharacterService } from '../shared/panel-character.service.js';
 import { parseLegacyPlayerSave } from './internal/save-import.js';
 
 /** `exportSave` 的返回形状（与 `@idle-dark/ionet-transport` 的 `PlayerExportSaveDto` 对齐）。 */

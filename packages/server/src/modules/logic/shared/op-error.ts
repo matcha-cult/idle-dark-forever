@@ -6,7 +6,7 @@
  */
 import type { ActionFail, BusinessErrorCode } from '@idle-dark/protocol';
 import { businessErrorMessage } from '@idle-dark/protocol';
-import { failOf } from '../../../../common/kernel/result.js';
+import { failOf } from '../../../common/kernel/result.js';
 
 export class OpError extends Error {
   readonly code: BusinessErrorCode | string;

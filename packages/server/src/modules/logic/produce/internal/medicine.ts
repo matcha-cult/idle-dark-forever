@@ -13,7 +13,7 @@
 import { type DataTables, type Player, type Rng } from '@idle-dark/game-core';
 import { BusinessErrorCode, type MedicineStateDto } from '@idle-dark/protocol';
 import type { AccountExtras } from '../../shared/index.js';
-import { OpError } from '../../inventory/internal/op-error.js';
+import { OpError } from '../../shared/op-error.js';
 
 export const DEFAULT_BOWEL_LEVEL = 0;
 

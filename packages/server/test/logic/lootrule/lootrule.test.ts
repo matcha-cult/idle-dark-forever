@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BusinessErrorCode } from '@idle-dark/protocol';
 import { RateLimiterService } from '../../../src/common/services/rate-limiter.service.js';
 import { LootRuleLogicService } from '../../../src/modules/logic/lootrule/lootrule.logic.service.js';
-import { OpError } from '../../../src/modules/logic/inventory/internal/op-error.js';
+import { OpError } from '../../../src/modules/logic/shared/op-error.js';
 import {
   RULE_QUALITY_COUNT,
   equipmentClasses,

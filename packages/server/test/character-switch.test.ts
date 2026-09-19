@@ -21,7 +21,7 @@ import { CharacterService } from '../src/modules/character/character.service.js'
 import type { NotificationBatcher, PushFrame } from '../src/modules/game/notification-batcher.js';
 import { OpIdempotencyService } from '../src/modules/game/op-idempotency.service.js';
 import type { OnlineSessionService } from '../src/modules/online/online-session.service.js';
-import { PanelCharacterService } from '../src/modules/logic/inventory/internal/panel-character.service.js';
+import { PanelCharacterService } from '../src/modules/logic/shared/panel-character.service.js';
 import { PlayerLogicService } from '../src/modules/logic/player/player-logic.service.js';
 import { PlayerContextService } from '../src/modules/logic/shared/player-context.service.js';
 import { WorldService } from '../src/modules/logic/world/world.service.js';

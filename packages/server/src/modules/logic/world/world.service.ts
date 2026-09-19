@@ -39,8 +39,8 @@ import { NOTIFICATION_BATCHER } from '../../game/notification-batcher.provider.j
 import { OpIdempotencyService } from '../../game/op-idempotency.service.js';
 import { OnlineSessionService } from '../../online/online-session.service.js';
 import { DATA_TABLES, GAME_CLOCK, PlayerContextService, type AccountExtras, type NowSource, slotDtoOf } from '../shared/index.js';
-import { PanelCharacterService } from '../inventory/internal/panel-character.service.js';
-import { pushStoryUnlock } from '../inventory/internal/notify.js';
+import { PanelCharacterService } from '../shared/panel-character.service.js';
+import { pushStoryUnlock } from '../shared/notify.js';
 import { opAdvanceStoriesOnMapEntry } from '../story/internal/story-ops.js';
 import { BattleCollector } from './internal/battle-collector.js';
 import { buildBattleWorld, nextWorldSeed } from './internal/headless.js';

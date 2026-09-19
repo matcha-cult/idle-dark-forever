@@ -13,7 +13,7 @@ import {
   type Rng,
 } from '@idle-dark/game-core';
 import { BusinessErrorCode } from '@idle-dark/protocol';
-import { OpError } from './op-error.js';
+import { OpError } from '../../shared/op-error.js';
 import { rollLoots } from './loots.js';
 
 /** 装备需求校验（原版 `PlayerUnit.canEquip`）。 */

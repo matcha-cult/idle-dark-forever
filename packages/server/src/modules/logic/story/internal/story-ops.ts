@@ -17,7 +17,7 @@ import {
 import type { StoryDto, StoryPlayDto, StoryUnlockDto } from '@idle-dark/protocol';
 import { BusinessErrorCode } from '@idle-dark/protocol';
 import type { AccountExtras } from '../../shared/index.js';
-import { OpError } from '../../inventory/internal/op-error.js';
+import { OpError } from '../../shared/op-error.js';
 
 export interface StoryNode {
   type: string;

@@ -4,7 +4,7 @@ import { InventorySlot } from '@idle-dark/game-core';
 import { OpIdempotencyService } from '../../../src/modules/game/op-idempotency.service.js';
 import { RateLimiterService } from '../../../src/common/services/rate-limiter.service.js';
 import { BankLogicService } from '../../../src/modules/logic/bank/bank.logic.service.js';
-import { OpError } from '../../../src/modules/logic/inventory/internal/op-error.js';
+import { OpError } from '../../../src/modules/logic/shared/op-error.js';
 import { canAccept, listBankSlots, opBankExpand, resolveBankSlot } from '../../../src/modules/logic/bank/internal/bank-ops.js';
 import { giveInventory, makeFakeBatcher, makeFakeCharacters, makeFakeContexts, makeFixture } from '../_helpers.js';
 

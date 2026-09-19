@@ -22,7 +22,7 @@ import { ProduceAction } from './produce/produce.action.js';
 import { StoryAction } from './story/story.action.js';
 import { ShopAction } from './shop/shop.action.js';
 
-import { PanelCharacterModule } from './inventory/internal/panel-character.module.js';
+import { PanelCharacterModule } from './shared/panel-character.module.js';
 import { InventoryLogicModule } from './inventory/inventory-logic.module.js';
 import { BankLogicModule } from './bank/bank-logic.module.js';
 import { LootRuleLogicModule } from './lootrule/lootrule-logic.module.js';

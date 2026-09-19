@@ -24,7 +24,7 @@ import {
   type Rng,
 } from '@idle-dark/game-core';
 import { BusinessErrorCode, type CostDto, type DecomposeResultDto, type EnchantCostsDto } from '@idle-dark/protocol';
-import { OpError } from '../../inventory/internal/op-error.js';
+import { OpError } from '../../shared/op-error.js';
 import { MATERIAL_KEY } from '@idle-dark/game-core';
 
 export interface MaterialCost {

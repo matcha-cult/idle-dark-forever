@@ -13,11 +13,11 @@ import { RateLimiterService } from '../../../common/services/rate-limiter.servic
 import { NOTIFICATION_BATCHER } from '../../game/notification-batcher.provider.js';
 import type { NotificationBatcher } from '../../game/notification-batcher.js';
 import { PlayerContextService } from '../shared/index.js';
-import { PanelCharacterService } from '../inventory/internal/panel-character.service.js';
+import { PanelCharacterService } from '../shared/panel-character.service.js';
 import { WorldService } from '../world/world.service.js';
-import { toFailOrThrow } from '../inventory/internal/op-error.js';
-import { pushInventoryChanged, pushStoryUnlock } from '../inventory/internal/notify.js';
-import { listPanelSlots } from '../inventory/internal/slot-ref.js';
+import { toFailOrThrow } from '../shared/op-error.js';
+import { pushInventoryChanged, pushStoryUnlock } from '../shared/notify.js';
+import { listPanelSlots } from '../shared/slot-ref.js';
 import {
   listStories,
   opFinishStory,

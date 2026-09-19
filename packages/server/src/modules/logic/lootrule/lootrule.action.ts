@@ -15,7 +15,7 @@ import {
 import { ActionError, dataOf, requireUserId, toBoolean, toFiniteInt } from '../../../ionet/action-support.js';
 import { guardAction } from '../../../common/kernel/result.js';
 import { LootRuleLogicService } from './lootrule.logic.service.js';
-import { parseCharacterId } from '../inventory/internal/action-parse.js';
+import { parseCharacterId } from '../shared/action-parse.js';
 
 @Injectable()
 @ActionController(LOOTRULE_CMD.cmd)

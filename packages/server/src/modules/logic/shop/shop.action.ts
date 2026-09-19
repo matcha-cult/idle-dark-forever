@@ -13,7 +13,7 @@ import {
   parseCharacterId,
   parseOpId,
   parseRequiredString,
-} from '../inventory/internal/action-parse.js';
+} from '../shared/action-parse.js';
 
 @Injectable()
 @ActionController(SHOP_CMD.cmd)

@@ -4,7 +4,7 @@ import { AffixInfo, SeededRngFactory, generateEquip, type DataTables } from '@id
 import { OpIdempotencyService } from '../../../src/modules/game/op-idempotency.service.js';
 import { RateLimiterService } from '../../../src/common/services/rate-limiter.service.js';
 import { ProduceLogicService } from '../../../src/modules/logic/produce/produce.logic.service.js';
-import { OpError } from '../../../src/modules/logic/inventory/internal/op-error.js';
+import { OpError } from '../../../src/modules/logic/shared/op-error.js';
 import {
   enchantCostParts,
   enchantCostsOf,

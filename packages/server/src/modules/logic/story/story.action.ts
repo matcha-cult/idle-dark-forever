@@ -9,7 +9,7 @@ import { type ActionResult, STORY_CMD, type StoryDto, type StoryPlayDto } from '
 import { dataOf, requireUserId } from '../../../ionet/action-support.js';
 import { guardAction } from '../../../common/kernel/result.js';
 import { StoryLogicService } from './story.logic.service.js';
-import { parseCharacterId, parseRequiredString } from '../inventory/internal/action-parse.js';
+import { parseCharacterId, parseRequiredString } from '../shared/action-parse.js';
 
 @Injectable()
 @ActionController(STORY_CMD.cmd)

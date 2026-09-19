@@ -16,10 +16,10 @@ import { RateLimiterService } from '../../../common/services/rate-limiter.servic
 import { NOTIFICATION_BATCHER } from '../../game/notification-batcher.provider.js';
 import type { NotificationBatcher } from '../../game/notification-batcher.js';
 import { PlayerContextService } from '../shared/index.js';
-import { PanelCharacterService } from '../inventory/internal/panel-character.service.js';
+import { PanelCharacterService } from '../shared/panel-character.service.js';
 import { WorldService } from '../world/world.service.js';
-import { toFailOrThrow } from '../inventory/internal/op-error.js';
-import { pushCareerLevelup } from '../inventory/internal/notify.js';
+import { toFailOrThrow } from '../shared/op-error.js';
+import { pushCareerLevelup } from '../shared/notify.js';
 import {
   careerPanelOf,
   opSelectEnhance,

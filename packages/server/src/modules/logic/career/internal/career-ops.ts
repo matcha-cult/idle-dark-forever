@@ -13,7 +13,7 @@ import {
 import type { CareerPanelDto, SkillDto } from '@idle-dark/protocol';
 import { BusinessErrorCode } from '@idle-dark/protocol';
 import { careerProgressListDtoOf, enhanceListDtoOf } from '../../shared/index.js';
-import { OpError } from '../../inventory/internal/op-error.js';
+import { OpError } from '../../shared/op-error.js';
 
 /**
  * 技能展示态列表（本地实现）。

@@ -17,7 +17,7 @@ import {
   createAccountExtras,
   type AccountExtras,
 } from '../../src/modules/logic/shared/player-dto.js';
-import type { PanelCharacterService } from '../../src/modules/logic/inventory/internal/panel-character.service.js';
+import type { PanelCharacterService } from '../../src/modules/logic/shared/panel-character.service.js';
 import type { NotificationBatcher } from '../../src/modules/game/notification-batcher.js';
 
 export const FIXED_NOW = 1_700_000_000_000;

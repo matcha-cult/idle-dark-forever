@@ -15,8 +15,8 @@ import { failOf } from '../../../common/kernel/result.js';
 import type { Player } from '@idle-dark/game-core';
 import { RateLimiterService } from '../../../common/services/rate-limiter.service.js';
 import { PlayerContextService } from '../shared/index.js';
-import { PanelCharacterService } from '../inventory/internal/panel-character.service.js';
-import { toFailOrThrow } from '../inventory/internal/op-error.js';
+import { PanelCharacterService } from '../shared/panel-character.service.js';
+import { toFailOrThrow } from '../shared/op-error.js';
 import { opSetMinLevel, opUpdateLootRule, lootRuleStateOf } from './internal/loot-rule-ops.js';
 
 const RATE_LIMITS = {

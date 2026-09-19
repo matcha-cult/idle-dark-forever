@@ -14,8 +14,8 @@ import {
   type ActionResult,
   type ActionFail,
 } from '@idle-dark/protocol';
-import { failOf } from '../../../../common/kernel/result.js';
-import type { OpIdempotencyService } from '../../../game/op-idempotency.service.js';
+import { failOf } from '../../../common/kernel/result.js';
+import type { OpIdempotencyService } from '../../game/op-idempotency.service.js';
 
 export type OperationOutcome<T> = ActionResult<T> | ActionFail;
 

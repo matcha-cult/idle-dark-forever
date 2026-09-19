@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BusinessErrorCode } from '@idle-dark/protocol';
-import { OpError } from '../../../src/modules/logic/inventory/internal/op-error.js';
+import { OpError } from '../../../src/modules/logic/shared/op-error.js';
 import {
   careerPanelOf,
   opSelectEnhance,

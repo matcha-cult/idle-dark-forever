@@ -15,12 +15,12 @@ import { NOTIFICATION_BATCHER } from '../../game/notification-batcher.provider.j
 import type { NotificationBatcher } from '../../game/notification-batcher.js';
 import { GAME_CLOCK, PlayerContextService, type NowSource } from '../shared/index.js';
 import { WorldService } from '../world/world.service.js';
-import { PanelCharacterService } from './internal/panel-character.service.js';
-import { withOperation } from './internal/idempotency.js';
-import { OpError, toFailOrThrow } from './internal/op-error.js';
-import { listPanelSlots, resolvePanelSlot } from './internal/slot-ref.js';
-import { rngFromText, seedTextOf } from './internal/rng.js';
-import { pushInventoryChanged } from './internal/notify.js';
+import { PanelCharacterService } from '../shared/panel-character.service.js';
+import { withOperation } from '../shared/idempotency.js';
+import { OpError, toFailOrThrow } from '../shared/op-error.js';
+import { listPanelSlots, resolvePanelSlot } from '../shared/slot-ref.js';
+import { rngFromText, seedTextOf } from '../shared/rng.js';
+import { pushInventoryChanged } from '../shared/notify.js';
 import {
   opEquip,
   opExpand,

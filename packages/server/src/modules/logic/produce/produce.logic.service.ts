@@ -22,13 +22,13 @@ import { OpIdempotencyService } from '../../game/op-idempotency.service.js';
 import { NOTIFICATION_BATCHER } from '../../game/notification-batcher.provider.js';
 import type { NotificationBatcher } from '../../game/notification-batcher.js';
 import { GAME_CLOCK, PlayerContextService, type NowSource } from '../shared/index.js';
-import { PanelCharacterService } from '../inventory/internal/panel-character.service.js';
+import { PanelCharacterService } from '../shared/panel-character.service.js';
 import { WorldService } from '../world/world.service.js';
-import { withOperation } from '../inventory/internal/idempotency.js';
-import { OpError, toFailOrThrow } from '../inventory/internal/op-error.js';
-import { dtoOfResolved, listPanelSlots, resolvePanelSlot } from '../inventory/internal/slot-ref.js';
-import { pushInventoryChanged } from '../inventory/internal/notify.js';
-import { rngFromText, seedTextOf } from '../inventory/internal/rng.js';
+import { withOperation } from '../shared/idempotency.js';
+import { OpError, toFailOrThrow } from '../shared/op-error.js';
+import { dtoOfResolved, listPanelSlots, resolvePanelSlot } from '../shared/slot-ref.js';
+import { pushInventoryChanged } from '../shared/notify.js';
+import { rngFromText, seedTextOf } from '../shared/rng.js';
 import {
   type DecomposeTarget,
   enchantCostsOf,
