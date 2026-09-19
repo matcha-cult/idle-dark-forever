@@ -4,7 +4,7 @@
  * 同一 `(cmd, subCmd)` 只能注册一个 Action；重复即启动期失败
  * （否则框架后注册者覆盖先注册者，且没有任何提示）。
  */
-import { cmdMerge } from './cmd.js';
+import { PUBLIC_ACTION_KEYS, cmdMerge } from './cmd.js';
 
 export interface RouteEntry {
   cmd: number;
@@ -41,4 +41,27 @@ export function assertNoDuplicateRoutes(entries: readonly RouteEntry[]): void {
     .map((item) => `cmd=${item.cmd} subCmd=${item.subCmd}（${item.labels.join(', ')}）`)
     .join('；');
   throw new Error('[ionet] 重复路由：' + detail);
+}
+
+function describeKey(key: number): string {
+  return `cmd=${key >>> 16} subCmd=${key & 0xffff}`;
+}
+
+/**
+ * 免鉴权白名单（协议 `PUBLIC_ACTION_KEYS`）中**没有**对应已注册 Action 的路由键。
+ *
+ * 防的是「协议登记了 public 路由（如 system.ping / system.version / auth.login），
+ * 服务端改段位或漏注册」的静默漂移——这类漂移不会报错，只会让客户端拿到 404 或
+ * 让本该免鉴权的探测被握手 401 拒掉。
+ */
+export function findUnregisteredPublicActions(entries: readonly RouteEntry[]): number[] {
+  const registered = new Set(entries.map((item) => cmdMerge(item.cmd, item.subCmd)));
+  return [...PUBLIC_ACTION_KEYS].filter((key) => !registered.has(key));
+}
+
+/** 白名单漂移即 throw（启动期兜底断言）。 */
+export function assertPublicActionsRegistered(entries: readonly RouteEntry[]): void {
+  const missing = findUnregisteredPublicActions(entries);
+  if (missing.length === 0) return;
+  throw new Error('[ionet] 免鉴权白名单存在未注册路由：' + missing.map(describeKey).join('；'));
 }

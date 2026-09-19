@@ -8,12 +8,15 @@
  */
 import { makeAutoObservable, observable, runInAction } from 'mobx';
 import {
+  BATTLE_CMD,
   WORLD_CMD,
   type BattleEventDto,
+  type LootDto,
   type WorldSnapshotDto,
   type WorldTickDto,
 } from '@idle-dark/protocol';
 import { LoadGuard } from './load-guard.js';
+import { toastFailure } from '../services/game-client.js';
 import type { StoreContext } from './store-context.js';
 
 /** 一条战斗日志（服务端事件 + 本地序号，序号只用于 React key）。 */
@@ -82,9 +85,7 @@ export class WorldStore {
       const result = await this.ctx.api.world.snapshot();
       if (!this.guard.isCurrent(token)) return;
       if (result.success === false) {
-        const code = typeof result.data?.code === 'string' ? result.data.code : undefined;
-        const message = typeof result.message === 'string' ? result.message : undefined;
-        this.ctx.toast.fromFailure(code, message, '世界快照加载失败');
+        toastFailure(this.ctx.toast, result, '世界快照加载失败');
         return;
       }
       const data = result.data;
@@ -107,7 +108,7 @@ export class WorldStore {
     }
   }
 
-  /** 进入地图（含挑战队列项）。成功后刷新快照。 */
+  /** 进入地图（含挑战队列项）。成功后以服务端返回的快照为准并再刷新一次。 */
   async enterMap(map: string, endlessLevel?: number): Promise<boolean> {
     try {
       const result = await this.ctx.api.world.enterMap({
@@ -115,14 +116,12 @@ export class WorldStore {
         ...(endlessLevel === undefined ? {} : { endlessLevel }),
       });
       if (result.success === false) {
-        const code = typeof result.data?.code === 'string' ? result.data.code : undefined;
-        const message = typeof result.message === 'string' ? result.message : undefined;
-        this.ctx.toast.fromFailure(code, message, '进入地图失败');
+        toastFailure(this.ctx.toast, result, '进入地图失败');
         return false;
       }
-      if (result.data?.snapshot !== undefined) {
+      if (result.data !== undefined) {
         runInAction(() => {
-          this.applySnapshot(result.data!.snapshot!);
+          this.applySnapshot(result.data as WorldSnapshotDto);
         });
       }
       await this.load();
@@ -138,9 +137,7 @@ export class WorldStore {
     try {
       const result = await this.ctx.api.world.leave();
       if (result.success === false) {
-        const code = typeof result.data?.code === 'string' ? result.data.code : undefined;
-        const message = typeof result.message === 'string' ? result.message : undefined;
-        this.ctx.toast.fromFailure(code, message, '离开地图失败');
+        toastFailure(this.ctx.toast, result, '离开地图失败');
         return false;
       }
       await this.load();
@@ -156,9 +153,7 @@ export class WorldStore {
     try {
       const result = await this.ctx.api.world.skipOffline();
       if (result.success === false) {
-        const code = typeof result.data?.code === 'string' ? result.data.code : undefined;
-        const message = typeof result.message === 'string' ? result.message : undefined;
-        this.ctx.toast.fromFailure(code, message, '跳过离线收益失败');
+        toastFailure(this.ctx.toast, result, '跳过离线收益失败');
         return false;
       }
       await this.ctx.root().player.load();
@@ -169,14 +164,12 @@ export class WorldStore {
     }
   }
 
-  /** 切换攻击目标（服务端判定合法性）。 */
-  async focus(unitId: string, targetId: string | null): Promise<void> {
+  /** 切换攻击目标（服务端判定合法性；`targetId: null` 表示取消目标）。 */
+  async focus(targetId: string | null): Promise<void> {
     try {
-      const result = await this.ctx.api.battle.focus({ unitId, targetId });
+      const result = await this.ctx.api.battle.focus({ targetId });
       if (result.success === false) {
-        const code = typeof result.data?.code === 'string' ? result.data.code : undefined;
-        const message = typeof result.message === 'string' ? result.message : undefined;
-        this.ctx.toast.fromFailure(code, message, '切换目标失败');
+        toastFailure(this.ctx.toast, result, '切换目标失败');
       }
     } catch (error) {
       this.ctx.toast.fromError(error, '切换目标失败');
@@ -191,21 +184,40 @@ export class WorldStore {
   }
 
   /**
-   * 推送入口：`(world, tick)`。
-   * **只存帧**：整体替换单位、追加事件、转发增量角标；不做任何本地推进。
+   * 推送入口：**只存帧**，不做任何本地推进。
+   * - `(world, tick)`：整体替换单位、追加事件、转发增量角标；
+   * - `(battle, log)`：追加战斗日志；
+   * - `(battle, loot)`：一次性提示 + 刷新背包（掉落已被服务端写库）。
    */
   handleNotification(frame: unknown): void {
     const notification = frame as { cmd?: number; subCmd?: number; data?: unknown };
-    if (notification.cmd !== WORLD_CMD.cmd || notification.subCmd !== WORLD_CMD.tick) return;
-    const tick = notification.data as WorldTickDto | undefined;
-    if (tick === undefined || !Array.isArray(tick.units)) return;
-
-    runInAction(() => {
-      this.units = tick.units;
-      const appended = appendEvents(this.log, tick.events ?? [], tick.serverTime, () => (this.logSeq += 1));
-      this.log = appended;
-    });
-    this.ctx.root().player.noteTickGain(tick.gainedExp ?? 0, tick.gainedGold ?? 0, tick.serverTime);
+    if (notification.cmd === WORLD_CMD.cmd && notification.subCmd === WORLD_CMD.tick) {
+      const tick = notification.data as WorldTickDto | undefined;
+      if (tick === undefined || !Array.isArray(tick.units)) return;
+      runInAction(() => {
+        this.units = tick.units;
+        this.log = appendEvents(this.log, tick.events ?? [], tick.serverTime, () => (this.logSeq += 1));
+      });
+      this.ctx.root().player.noteTickGain(tick.gainedExp ?? 0, tick.gainedGold ?? 0, tick.serverTime);
+      return;
+    }
+    if (notification.cmd === BATTLE_CMD.cmd && notification.subCmd === BATTLE_CMD.log) {
+      const payload = notification.data as { serverTime?: number; events?: BattleEventDto[] } | undefined;
+      const events = payload?.events;
+      if (!Array.isArray(events)) return;
+      runInAction(() => {
+        this.log = appendEvents(this.log, events, payload?.serverTime ?? Date.now(), () => (this.logSeq += 1));
+      });
+      return;
+    }
+    if (notification.cmd === BATTLE_CMD.cmd && notification.subCmd === BATTLE_CMD.loot) {
+      const loot = notification.data as LootDto | undefined;
+      if (loot?.slot === undefined) return;
+      if (loot.handled === 'pickup') this.ctx.toast.info('获得战利品', loot.slot.name);
+      else if (loot.handled === 'sell') this.ctx.toast.info('自动出售', `${loot.slot.name} +${loot.gold ?? 0} 金币`);
+      else this.ctx.toast.info('自动分解', loot.slot.name);
+      void this.ctx.root().inventory.load();
+    }
   }
 
   /** 应用世界快照（同时接管单位列表与地图列表）。 */

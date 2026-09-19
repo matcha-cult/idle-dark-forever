@@ -248,7 +248,10 @@ export abstract class ClockBase implements Clock {
    *
    * @returns 剩余虚拟毫秒（0 = 推完）
    */
-  private runDue(end: number, sourceEnd: number, budget: number | null): number {
+  protected runDue(end: number, sourceEnd: number, budget: number | null): number {
+    const startCurrent = this.current;
+    const startSource = this.initSource();
+    const rate = this.rate;
     this.updating = true;
     try {
       let executed = 0;
@@ -261,9 +264,13 @@ export abstract class ClockBase implements Clock {
         }
         if (budget !== null && executed >= budget) {
           // 预算耗尽：停在最后一个已执行回调的 at 上，剩余时间交给下一次调用。
+          // 此时 current / sourceAt 仍是线性一致的，因此 getTime() 不会提前跳到 end。
           return end - this.current;
         }
         this.current = min.at;
+        // 关键不变量：`current ↔ sourceAt` 必须始终满足线性映射，
+        // 否则回调内部（以及子时钟）读到的 `getTime()` 会把当前这一段重复计一次。
+        this.sourceAt = rate > 0 ? startSource + (min.at - startCurrent) / rate : sourceEnd;
         this.tree.removeMin();
         if (!min.removed) {
           min.removed = true;
@@ -277,6 +284,17 @@ export abstract class ClockBase implements Clock {
   }
 
   // ───────────────────────── 内部 ─────────────────────────
+
+  /**
+   * 在子类构造末尾调用，把「虚拟时间基准」对齐到构造时刻的源时间。
+   *
+   * 原版在构造函数里就写 `this.parentCurrent = parent.getTime()`；这一点**必须**保留：
+   * 若延迟到第一次使用才对齐，则「构造后源时间已经走了 T」会被当成 0，
+   * 表现为 `pause()` 时虚拟时间倒退（原版不会）。
+   */
+  protected captureSource(): void {
+    this.sourceAt = this.getSource().getTime();
+  }
 
   private initSource(): number {
     if (this.sourceAt === null) {
@@ -323,6 +341,7 @@ export class Timeline extends ClockBase {
   constructor(parent: Clock) {
     super();
     this.parent = parent;
+    this.captureSource();
   }
 
   protected override getSource(): TimeAxis {

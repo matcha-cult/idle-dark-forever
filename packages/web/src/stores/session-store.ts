@@ -2,8 +2,8 @@
  * SessionStore —— JWT / 账号 / 角色列表（会话生命周期）。
  *
  * 职责边界：
- * - REST 通道只做「登录 / me」（后端职责划分：REST = auth + 角色基础）；
- * - 角色列表 / 创建 / 选择走 WS typed API（`player` 段），选择结果（`PlayerStateDto`）
+ * - **REST** 只做「登录 / me」（后端职责划分：REST = auth + 账号信息）；
+ * - 角色列表 / 创建 / 选择走 WS typed API（`player` 段）；选择结果（`PlayerStateDto`）
  *   交给 `PlayerStore` 持有 —— 本 Store 只记「当前选中的角色 key」与元数据；
  * - token 落 `localStorage`；`?token=` 由 transport 在握手时拼接（本 Store 不碰连接）。
  *
@@ -11,7 +11,13 @@
  */
 import { makeAutoObservable, observable, runInAction } from 'mobx';
 import type { MeDto, PlayerMetaDto, PlayerStateDto } from '@idle-dark/protocol';
-import type { GameApi, RestClient } from '../services/game-client.js';
+import {
+  failureCodeOf,
+  failureMessageOf,
+  toastFailure,
+  type GameApi,
+  type RestClient,
+} from '../services/game-client.js';
 import { safeGet, safeRemove, safeSet, type StorageLike } from '../services/storage.js';
 import { LoadGuard } from './load-guard.js';
 import type { ToastStore } from './toast-store.js';
@@ -98,13 +104,13 @@ export class SessionStore {
     try {
       const result = await this.rest.login({ username, password });
       if (result.success === false) {
-        const code = typeof result.data?.code === 'string' ? result.data.code : undefined;
-        const message = typeof result.message === 'string' ? result.message : undefined;
+        const code = failureCodeOf(result);
+        const message = failureMessageOf(result);
         runInAction(() => {
           this.status = 'anonymous';
           this.errorMessage = message ?? code ?? '登录失败';
         });
-        this.toast.fromFailure(code, message, '登录失败');
+        toastFailure(this.toast, result, '登录失败');
         return false;
       }
       const data = result.data;
@@ -152,28 +158,26 @@ export class SessionStore {
     safeRemove(this.storage, ME_STORAGE_KEY);
   }
 
-  /** WS 401 / REST 401 兜底：token 失效时清会话并提示。 */
+  /** WS / REST 401 兜底：token 失效时清会话并提示。 */
   handleUnauthorized(): void {
     if (this.token === null) return;
     this.logout();
     this.toast.error('登录状态已失效', '请重新登录');
   }
 
-  /** 拉取账号信息（WS `(auth, me)`）。 */
+  /** 拉取账号信息（WS `(auth, me)`）。失败静默（不打断主流程）。 */
   async loadMe(): Promise<boolean> {
     if (this.token === null) return false;
     try {
-      const result = await this.api.me();
-      if (result.success === false) return false;
+      const result = await this.api.auth.me();
+      if (result.success === false || result.data === undefined) return false;
       const data = result.data;
-      if (data === undefined) return false;
       runInAction(() => {
         this.me = data;
       });
       safeSet(this.storage, ME_STORAGE_KEY, JSON.stringify(data));
       return true;
     } catch {
-      // me 失败不致命：REST 登录已有兜底数据
       return false;
     }
   }
@@ -189,12 +193,10 @@ export class SessionStore {
       const result = await this.api.player.list();
       if (!this.guard.isCurrent(token)) return;
       if (result.success === false) {
-        const code = typeof result.data?.code === 'string' ? result.data.code : undefined;
-        const message = typeof result.message === 'string' ? result.message : undefined;
-        this.toast.fromFailure(code, message, '角色列表加载失败');
+        toastFailure(this.toast, result, '角色列表加载失败');
         return;
       }
-      const players = result.data?.players ?? [];
+      const players = result.data ?? [];
       runInAction(() => {
         this.players = players;
         // 选中的角色被删掉时回落
@@ -223,15 +225,15 @@ export class SessionStore {
     try {
       const result = await this.api.player.create({ name, role });
       if (result.success === false) {
-        const code = typeof result.data?.code === 'string' ? result.data.code : undefined;
-        const message = typeof result.message === 'string' ? result.message : undefined;
+        const code = failureCodeOf(result);
+        const message = failureMessageOf(result);
         runInAction(() => {
           this.errorMessage = message ?? code ?? '创建角色失败';
         });
-        this.toast.fromFailure(code, message, '创建角色失败');
+        toastFailure(this.toast, result, '创建角色失败');
         return null;
       }
-      const player = result.data?.player ?? null;
+      const player = result.data ?? null;
       if (player !== null) {
         runInAction(() => {
           this.players = [...this.players, player];
@@ -263,12 +265,10 @@ export class SessionStore {
       this.errorMessage = null;
     });
     try {
-      const result = await this.api.player.select(key);
+      const result = await this.api.player.select({ key });
       if (!this.guard.isCurrent(token)) return null;
       if (result.success === false) {
-        const code = typeof result.data?.code === 'string' ? result.data.code : undefined;
-        const message = typeof result.message === 'string' ? result.message : undefined;
-        this.toast.fromFailure(code, message, '进入角色失败');
+        toastFailure(this.toast, result, '进入角色失败');
         return null;
       }
       const state = result.data;
@@ -293,11 +293,9 @@ export class SessionStore {
   /** 删除角色（WS `(player, remove)`）。 */
   async removePlayer(key: string): Promise<boolean> {
     try {
-      const result = await this.api.player.remove(key);
+      const result = await this.api.player.remove({ key });
       if (result.success === false) {
-        const code = typeof result.data?.code === 'string' ? result.data.code : undefined;
-        const message = typeof result.message === 'string' ? result.message : undefined;
-        this.toast.fromFailure(code, message, '删除角色失败');
+        toastFailure(this.toast, result, '删除角色失败');
         return false;
       }
       runInAction(() => {

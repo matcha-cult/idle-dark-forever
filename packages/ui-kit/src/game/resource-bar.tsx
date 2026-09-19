@@ -25,14 +25,17 @@ export const RESOURCE_LABELS: Readonly<Record<ResourceKind, string>> = {
   combo: '连击',
 };
 
-/** 资源 → antd 色 token 名。 */
-export const RESOURCE_COLOR_TOKEN_NAMES: Readonly<Record<ResourceKind, string>> = {
+/** 资源 → antd 色 token 名（`as const` 保证可安全索引 `token`）。 */
+export const RESOURCE_COLOR_TOKEN_NAMES = {
   hp: 'colorError',
   mp: 'colorInfo',
   rp: 'colorWarning',
   ep: 'purple',
   combo: 'colorSuccess',
-};
+} as const;
+
+/** 资源色 token 名联合类型。 */
+export type ResourceColorTokenName = (typeof RESOURCE_COLOR_TOKEN_NAMES)[ResourceKind];
 
 export interface ResourceBarProps {
   kind: ResourceKind;
@@ -54,8 +57,8 @@ export interface ResourceBarProps {
   suffix?: ReactNode;
 }
 
-/** 任意入参 → 有限数。 */
-function toFinite(value: number): number {
+/** 任意入参（含 undefined / null / NaN / Infinity）→ 有限数。 */
+function toFinite(value: number | null | undefined): number {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : 0;
 }

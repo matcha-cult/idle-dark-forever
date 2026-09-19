@@ -29,7 +29,7 @@ import { IONET_BAR_SKELETON, IonetModule } from '@nbb-ionet/extension-nestjs';
 import { type BarSkeleton } from '@nbb-ionet/core-framework';
 import { AppModule } from './app.module.js';
 import { appRef } from './ionet/app-ref.js';
-import { assertNoDuplicateRoutes } from './ionet/route-check.js';
+import { assertNoDuplicateRoutes, assertPublicActionsRegistered } from './ionet/route-check.js';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
@@ -51,13 +51,14 @@ async function bootstrap(): Promise<void> {
 
   // 注册完成后做全局重复路由断言（同一 cmd/subCmd 只能有一个 Action）
   const skeleton = app.get<BarSkeleton>(IONET_BAR_SKELETON);
-  assertNoDuplicateRoutes(
-    skeleton.actionCommandRegions.getAllActionCommands().map((command) => ({
-      cmd: command.cmdInfo.cmd,
-      subCmd: command.cmdInfo.subCmd,
-      label: `${command.actionControllerClass.name}.${command.methodName}`,
-    })),
-  );
+  const routes = skeleton.actionCommandRegions.getAllActionCommands().map((command) => ({
+    cmd: command.cmdInfo.cmd,
+    subCmd: command.cmdInfo.subCmd,
+    label: `${command.actionControllerClass.name}.${command.methodName}`,
+  }));
+  assertNoDuplicateRoutes(routes);
+  // 免鉴权白名单（协议 PUBLIC_ACTION_KEYS）必须都已注册，防段位漂移
+  assertPublicActionsRegistered(routes);
 
   const port = Number(process.env.PORT ?? 3000);
   await app.listen(port);

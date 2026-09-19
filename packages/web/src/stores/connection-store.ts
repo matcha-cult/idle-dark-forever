@@ -6,7 +6,7 @@
  */
 import { makeAutoObservable, runInAction } from 'mobx';
 import type { ConnectionState } from '@idle-dark/ionet-transport';
-import type { GameClient, ServerTimeInfo } from '../services/game-client.js';
+import type { GameClient } from '../services/game-client.js';
 
 export class ConnectionStore {
   /** 连接状态机当前态（idle/connecting/online/reconnecting/closed/failed）。 */
@@ -42,14 +42,6 @@ export class ConnectionStore {
     });
   }
 
-  /** 由 `GameClient` 的 onServerTime 回调驱动。 */
-  handleServerTime(info: ServerTimeInfo): void {
-    runInAction(() => {
-      this.serverTimeOffsetMs = info.offsetMs;
-      this.lastServerTimeMs = info.serverTimeMs;
-    });
-  }
-
   /**
    * 轮询 transport 的实时指标（心跳 ack / RTT）。
    *
@@ -57,14 +49,13 @@ export class ConnectionStore {
    * 缺失时保持上一次的值而不是报错。
    */
   refreshMetrics(): void {
-    const ionet = this.client.ionet as unknown as {
-      heartbeatAcks?: number;
-      lastHeartbeatAckAt?: number;
-      latencyMs?: number;
-    };
+    const ionet = this.client.ionet;
     runInAction(() => {
-      if (typeof ionet.heartbeatAcks === 'number') this.heartbeatAcks = ionet.heartbeatAcks;
-      if (typeof ionet.latencyMs === 'number') this.latencyMs = ionet.latencyMs;
+      this.heartbeatAcks = ionet.heartbeatAcks;
+      this.lastHeartbeatAckAt = ionet.lastHeartbeatAckAt;
+      this.latencyMs = ionet.latencyMs;
+      // transport 从任意响应体里提取服务端时间（`extractServerTime`），未采样时为 null。
+      this.serverTimeOffsetMs = ionet.serverTimeOffsetMs;
     });
   }
 

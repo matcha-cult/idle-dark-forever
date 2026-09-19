@@ -9,7 +9,7 @@
  */
 import { Tag, theme } from 'antd';
 import type { Quality } from '@idle-dark/protocol';
-import { qualityColorTokenName, qualityLabel } from './quality.js';
+import { clampQuality, qualityColorTokenName, qualityLabel } from './quality.js';
 
 export interface RarityTagProps {
   /** 品质档位（0..6，越界自动夹取）。 */
@@ -27,8 +27,10 @@ export interface RarityTagProps {
 export function RarityTag(props: RarityTagProps) {
   const { quality, labels, showLabel = true, variant = 'filled', tooltip } = props;
   const { token } = theme.useToken();
-  const color = token[qualityColorTokenName(quality)];
-  const text = showLabel ? qualityLabel(quality, labels) : `Q${Number(quality) + 1}`;
+  // 夹取一次，色 / 文案 / data 属性全部基于同一个值，避免「显示普通但 data 是 99」
+  const safeQuality = clampQuality(quality);
+  const color = token[qualityColorTokenName(safeQuality)];
+  const text = showLabel ? qualityLabel(safeQuality, labels) : `Q${safeQuality + 1}`;
 
   return (
     <Tag
@@ -36,7 +38,7 @@ export function RarityTag(props: RarityTagProps) {
       variant={variant}
       title={tooltip}
       data-testid="rarity-tag"
-      data-quality={Number(quality)}
+      data-quality={safeQuality}
       style={{ marginInlineEnd: 0 }}
     >
       {text}

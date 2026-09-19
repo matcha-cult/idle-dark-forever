@@ -9,9 +9,11 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "db:init": "node scripts/init-db.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "smoke:ws": "node scripts/ws-protocol-smoke.mjs"
   },
   "dependencies": {
     "@idle-dark/game-core": "workspace:*",

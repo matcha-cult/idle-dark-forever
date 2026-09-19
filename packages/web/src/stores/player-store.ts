@@ -11,6 +11,7 @@
  */
 import { makeAutoObservable, runInAction } from 'mobx';
 import type { PlayerStateDto } from '@idle-dark/protocol';
+import { toastFailure } from '../services/game-client.js';
 import { LoadGuard } from './load-guard.js';
 import type { StoreContext } from './store-context.js';
 
@@ -109,6 +110,15 @@ export class PlayerStore {
     });
   }
 
+  /** 退出角色 / 登出：清空权威态（下一次 `select` 会重建）。 */
+  reset(): void {
+    runInAction(() => {
+      this.state = null;
+      this.lastGain = null;
+      this.error = null;
+    });
+  }
+
   /** 重新拉取当前角色全量状态（服务端权威，唯一刷新通道）。 */
   async load(): Promise<void> {
     const key = this.ctx.session.activePlayerKey;
@@ -119,12 +129,10 @@ export class PlayerStore {
       this.error = null;
     });
     try {
-      const result = await this.ctx.api.player.select(key);
+      const result = await this.ctx.api.player.select({ key });
       if (!this.guard.isCurrent(token)) return;
       if (result.success === false) {
-        const code = typeof result.data?.code === 'string' ? result.data.code : undefined;
-        const message = typeof result.message === 'string' ? result.message : undefined;
-        this.ctx.toast.fromFailure(code, message, '角色状态刷新失败');
+        toastFailure(this.ctx.toast, result, '角色状态刷新失败');
         return;
       }
       const data = result.data;

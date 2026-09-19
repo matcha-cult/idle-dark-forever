@@ -50,9 +50,9 @@ export function ConnectionBadge(props: ConnectionBadgeProps) {
   const { status, text, showText = true, tooltip, lastError, onClick } = props;
   const { token } = theme.useToken();
 
-  const raw: ConnectionStatus = status;
+  // 运行期防御：类型之外的字符串（外部 SDK / 旧代码回传）一律当作 idle，避免渲染空白
   const safeStatus: ConnectionStatus =
-    raw === 'connecting' || raw === 'online' || raw === 'reconnecting' || raw === 'failed' ? raw : 'idle';
+    (CONNECTION_LABELS as Partial<Record<string, string>>)[status] === undefined ? 'idle' : status;
 
   const title = tooltip ?? (safeStatus === 'failed' || safeStatus === 'reconnecting' ? lastError : undefined);
   const label = text ?? CONNECTION_LABELS[safeStatus];
