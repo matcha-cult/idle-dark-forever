@@ -25,5 +25,6 @@ export * from './career-info.js';
 export * from './goods.js';
 export * from './loot-rule.js';
 export * from './check.js';
+export * from './combat-area.js';
 export * from './dungeon.js';
 export * from './player.js';

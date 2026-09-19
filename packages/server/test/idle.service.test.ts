@@ -7,6 +7,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { createDefaultTables } from '@idle-dark/game-core';
 import type { OfflineReportDto } from '@idle-dark/protocol';
 import { PlayerContextService } from '../src/modules/logic/shared/player-context.service.js';
+import { InProcessEventBus } from '../src/modules/logic/shared/event-bus.js';
 import {
   IdleService,
   MAX_OFFLINE_MS,
@@ -30,7 +31,7 @@ describe('IdleService 离线结算', () => {
     db.seedCharacter({ id: 'c1', user_id: 1, role: 'Eyer', career: 'warrior' });
     now = 1_700_000_000_000;
     context = new PlayerContextService(db.asService(), () => now, tables);
-    service = new IdleService(context, () => now, tables);
+    service = new IdleService(context, () => now, tables, new InProcessEventBus());
 
     const player = await context.create(1, 'c1', 'Eyer', 'warrior');
     const extras = await context.extrasOf(1);
@@ -125,5 +126,82 @@ describe('IdleService 离线结算', () => {
     expect(report.kills).toBeGreaterThanOrEqual(0);
     expect(Array.isArray(report.loots)).toBe(true);
     expect(Array.isArray(report.materials)).toBe(true);
+  });
+});
+
+describe('IdleService · R5 离线结算编排（RD1/RD2/RD7 + 幂等）', () => {
+  let db: FakeDatabase;
+  let context: PlayerContextService;
+  let now: number;
+
+  beforeEach(async () => {
+    db = new FakeDatabase();
+    db.seedAccount(1);
+    db.seedCharacter({ id: 'c1', user_id: 1, role: 'Eyer', career: 'warrior' });
+    now = 1_700_000_000_000;
+    context = new PlayerContextService(db.asService(), () => now, tables);
+    await context.create(1, 'c1', 'Eyer', 'warrior');
+  });
+
+  async function setPosition(map: string): Promise<void> {
+    const extras = await context.extrasOf(1);
+    extras.worldMaps['c1'] = { map, endlessLevel: 0 };
+    context.markAccountDirty(1);
+    const player = await context.load(1, 'c1');
+    if (player) player.timestamp = now;
+    context.markDirty(1, 'c1');
+    await context.flush(1, 'c1');
+  }
+
+  it('RD1：安全区（home，无怪）离线 → 零收益，且时间锚点照常推进', async () => {
+    await setPosition('home');
+    now += 10 * HOUR;
+    const service = new IdleService(context, () => now, tables, new InProcessEventBus());
+    const result = await service.report(1, 'c1');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.simulatedMs).toBe(0);
+    expect(result.data.extrapolatedMs).toBe(0);
+    expect(result.data.gainedExp).toBe(0);
+    expect(result.data.kills).toBe(0);
+    expect(context.peek(1, 'c1')?.timestamp).toBe(now);
+  });
+
+  it('RD2：战斗区离线击杀 → 发布 EnemyKilled（quest 唯一写者），且 report 幂等不重复发布', async () => {
+    await setPosition('town.street');
+    const bus = new InProcessEventBus();
+    const seen: Array<{ enemyType: string; count: number }> = [];
+    bus.on('EnemyKilled', (event) => seen.push({ enemyType: event.enemyType, count: event.count }));
+    const service = new IdleService(context, () => now, tables, bus);
+
+    now += 2 * HOUR;
+    const first = await service.report(1, 'c1');
+    expect(first.success).toBe(true);
+    const afterFirst = seen.length;
+    expect(afterFirst).toBeGreaterThan(0);
+    expect(seen.reduce((sum, k) => sum + k.count, 0)).toBeGreaterThan(0);
+
+    // 重复 report 命中缓存 → 不再发布（恰好一次）
+    const second = await service.report(1, 'c1');
+    expect(second.success).toBe(true);
+    expect(seen.length).toBe(afterFirst);
+
+    // claim 后缓存清空，此时再 report 会重新结算（离线时长为 0 → 无击杀）
+    await service.claim(1, 'c1');
+    const third = await service.report(1, 'c1');
+    expect(third.success).toBe(true);
+    expect(seen.length).toBe(afterFirst);
+  });
+
+  it('RD7：秘境离线**不做速率外推**（cappedMs 仍按 72h 上限，extrapolatedMs=0）', async () => {
+    await setPosition('town.cave2');
+    now += 100 * HOUR;
+    const service = new IdleService(context, () => now, tables, new InProcessEventBus());
+    const result = await service.report(1, 'c1');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.cappedMs).toBe(MAX_OFFLINE_MS);
+    expect(result.data.extrapolatedMs).toBe(0);
+    expect(result.data.pausedByMaxOffline).toBe(true);
   });
 });

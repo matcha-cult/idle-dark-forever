@@ -19,10 +19,10 @@ import {
   type DataTables,
   type LootRuleAction,
 } from '@idle-dark/game-core';
-import { BattleCollector } from '../src/modules/logic/world/internal/battle-collector.js';
-import { buildBattleWorld } from '../src/modules/logic/world/internal/headless.js';
+import { BattleCollector } from '../src/modules/logic/shared/battle-collector.js';
+import { buildBattleWorld } from '../src/modules/logic/shared/headless.js';
 import { equipmentClasses, opUpdateLootRule } from '../src/modules/logic/lootrule/internal/loot-rule-ops.js';
-import type { LootRecorder } from '../src/modules/logic/world/internal/player-like.js';
+import type { LootRecorder } from '../src/modules/logic/shared/player-like.js';
 
 const tables: DataTables = createDefaultTables();
 const NOW = 1_700_000_000_000;

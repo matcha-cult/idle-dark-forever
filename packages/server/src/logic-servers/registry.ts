@@ -111,11 +111,5 @@ export const ALL_SERVER_DEFINITIONS: readonly LogicServerDefinition[] = Object.v
  * 因此任何新增跨服深路径都会立刻失败。
  */
 export const TRANSITIONAL_DEEP_IMPORTS: readonly { readonly from: string; readonly to: string; readonly reason: string }[] = [
-  {
-    from: 'dungeon',
-    to: 'battle',
-    reason:
-      'idle 离线仿真复用 battle 的装配（world/internal/headless、battle-collector）；R5 迁 idle 编排时把装配上移 shared',
-  },
   { from: 'dungeon', to: 'map', reason: 'RD3/RD4：队列耗尽 / 非秘境条目 → map.ContinueOpenWorld（09 §4.2 允许的方向）' },
 ];

@@ -18,6 +18,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   InventorySlot,
   VirtualClock,
+  isCombatArea,
   type DataTables,
   type Player,
 } from '@idle-dark/game-core';
@@ -31,13 +32,15 @@ import {
 } from '@idle-dark/protocol';
 import {
   DATA_TABLES,
+  EVENT_BUS,
   GAME_CLOCK,
   PlayerContextService,
   type AccountExtras,
+  type EventBus,
   type NowSource,
 } from '../shared/index.js';
-import { BattleCollector } from '../world/internal/battle-collector.js';
-import { buildBattleWorld, nextWorldSeed } from '../world/internal/headless.js';
+import { BattleCollector } from '../shared/battle-collector.js';
+import { buildBattleWorld, nextWorldSeed } from '../shared/headless.js';
 import { EXP_RATE, OFFLINE_MAX_MS, OFFLINE_PAUSE_AFTER_MS } from '../shared/index.js';
 
 /** 离线结算硬上限（保持原版 72h 语义）。 */
@@ -58,6 +61,8 @@ interface SimResult {
   gainedExp: number;
   gainedGold: number;
   kills: number;
+  /** 本次**真实模拟**击杀的按怪种计数（RD2：离线击杀计入剧情击杀任务）。 */
+  killsByType: Record<string, number>;
   loots: Array<{ key: string; count: number; quality: Quality }>;
   materials: Array<{ key: string; count: number }>;
 }
@@ -74,6 +79,7 @@ export class IdleService {
     private readonly playerContext: PlayerContextService,
     @Inject(GAME_CLOCK) now: NowSource,
     @Inject(DATA_TABLES) tables: DataTables,
+    @Inject(EVENT_BUS) private readonly events: EventBus,
   ) {
     this.now = now;
     this.tables = tables;
@@ -126,14 +132,32 @@ export class IdleService {
 
     const extras = await this.playerContext.extrasOf(userId);
     const position = resolvePosition(this.tables, extras.worldMaps[characterId]);
+    const mapData = this.tables.maps[position.map];
+    const inDungeon = mapData?.isDungeon === true;
+    const queueLength = (extras.challengeQueue[characterId] ?? []).length;
+
+    // RD1：安全区（无战斗）且没有挑战队列 → 不结算（时间锚点仍要推进，避免下次重复计时）。
+    if (!isCombatArea(mapData) && queueLength === 0) {
+      player.timestamp = now;
+      this.playerContext.markDirty(userId, characterId);
+      await this.playerContext.flush(userId, characterId);
+      return ok(emptyReport(rawMs, 0, pausedByMaxOffline));
+    }
+
     const seed = await this.seedOf(userId, characterId, extras);
 
     const simulated = Math.min(cappedMs, SIM_BUDGET_MS);
     const sim = this.runSimulation(player, extras, position, seed, simulated);
 
     // C2：按 C1 的速率外推剩余时长。
-    const extrapolatedMs = Math.max(0, cappedMs - sim.simulatedMs);
+    // RD7：**禁止对秘境做速率外推**（否则会把"打不过"直接推成"通关"）。
+    const extrapolatedMs = inDungeon ? 0 : Math.max(0, cappedMs - sim.simulatedMs);
     const extrap = extrapolate(sim, extrapolatedMs);
+
+    // RD2：离线击杀计入剧情击杀任务（quest 是唯一写者）。
+    // 只对**真实模拟**的击杀计数（外推是聚合估算、无按怪种拆分）；
+    // 同一份 report 只发一次 —— `settle` 结果进缓存，重复 `report` 直接返回缓存。
+    this.emitSimulatedKills(userId, characterId, sim.killsByType);
 
     // 落地 C2 的收益（C1 的收益已由 `Player.loot` / `addSkillExp` 在模拟中落地）。
     if (extrap.gold > 0) player.gold += extrap.gold;
@@ -172,6 +196,25 @@ export class IdleService {
     return seed;
   }
 
+  /** RD2：把离线模拟的按怪种击杀数发布为 `EnemyKilled`（quest 订阅后递减任务，恰好一次）。 */
+  private emitSimulatedKills(
+    userId: number,
+    characterId: string,
+    killsByType: Record<string, number>,
+  ): void {
+    for (const enemyType of Object.keys(killsByType)) {
+      const count = killsByType[enemyType];
+      if (typeof count !== 'number' || !Number.isFinite(count) || count <= 0) continue;
+      this.events.emit({
+        type: 'EnemyKilled',
+        userId,
+        characterId,
+        enemyType,
+        count: Math.trunc(count),
+      });
+    }
+  }
+
   /** C1：有界快进模拟（无 IO、无真实时间）。 */
   private runSimulation(
     player: Player,
@@ -182,6 +225,7 @@ export class IdleService {
   ): SimResult {
     const clock = new VirtualClock();
     const collector = new BattleCollector();
+    const killCounts: Record<string, number> = {};
     let world: ReturnType<typeof buildBattleWorld>['world'] | null = null;
     try {
       world = buildBattleWorld({
@@ -195,7 +239,12 @@ export class IdleService {
         updateRate: 1,
         expRate: EXP_RATE,
         medicineLevel: (type) => extras.medicineLevel[type] ?? 0,
-        // 离线结算不推送掉落，也不需要 LootDto 记录。
+        // RD2：按怪种累计真实击杀（离线 → 任务进度）。离线不推送掉落，也不需要 LootDto 记录。
+        onEnemyKilled: (type, count) => {
+          const n = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
+          if (n <= 0) return;
+          killCounts[type] = (killCounts[type] ?? 0) + n;
+        },
       }).world;
 
       let remaining = simulated;
@@ -216,6 +265,7 @@ export class IdleService {
         gainedExp: snapshot.gainedExp,
         gainedGold: snapshot.gainedGold,
         kills: snapshot.kills,
+        killsByType: killCounts,
         loots: snapshot.loots
           .filter((loot) => loot.handled === 'pickup')
           .map((loot) => ({ key: loot.key, count: loot.count, quality: clampQuality(loot.quality) })),
@@ -225,7 +275,15 @@ export class IdleService {
       this.logger.warn('离线快进模拟失败，回退为纯外推', {
         reason: error instanceof Error ? error.message : String(error),
       });
-      return { simulatedMs: 0, gainedExp: 0, gainedGold: 0, kills: 0, loots: [], materials: [] };
+      return {
+        simulatedMs: 0,
+        gainedExp: 0,
+        gainedGold: 0,
+        kills: 0,
+        killsByType: {},
+        loots: [],
+        materials: [],
+      };
     } finally {
       try {
         world?.dispose();

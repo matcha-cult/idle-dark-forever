@@ -48,8 +48,8 @@ import {
   slotDtoOf,
 } from '../shared/index.js';
 import { PanelCharacterService } from '../shared/panel-character.service.js';
-import { BattleCollector } from './internal/battle-collector.js';
-import { buildBattleWorld, nextWorldSeed } from './internal/headless.js';
+import { BattleCollector } from '../shared/battle-collector.js';
+import { buildBattleWorld, nextWorldSeed } from '../shared/headless.js';
 import {
   evaluateMapUnlock,
   mapListDtoOf,

@@ -13,8 +13,8 @@ import {
   VirtualClock,
   createDefaultTables,
 } from '@idle-dark/game-core';
-import { BattleCollector } from '../src/modules/logic/world/internal/battle-collector.js';
-import { buildBattleWorld, nextWorldSeed } from '../src/modules/logic/world/internal/headless.js';
+import { BattleCollector } from '../src/modules/logic/shared/battle-collector.js';
+import { buildBattleWorld, nextWorldSeed } from '../src/modules/logic/shared/headless.js';
 import { unitStateDtoOf } from '../src/modules/logic/world/internal/unit-state.js';
 
 const tables = createDefaultTables();
