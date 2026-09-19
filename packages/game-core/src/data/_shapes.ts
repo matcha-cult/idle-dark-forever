@@ -80,6 +80,19 @@ export type HookNumber = number & UnitLike;
  */
 export type HookExtra = UnitLike & WorldLike & string;
 
+/**
+ * 角色对象（`Unit.player`）。
+ *
+ * ⚠️ 内核里这是 `PlayerLike`（`combat/player-unit.ts`），**不是 `Unit`**；这里曾把它标成
+ * `player: UnitLike`，于是 `player.getSkillLevel(...)` 之所以能编过，是因为
+ * `getSkillLevel` 被顺带塞进了 `UnitLike` —— 而真实 `Unit` 上并没有这个方法。
+ * 拆出独立视图后，`_shapes.gate.ts` 能同时约束两者。
+ */
+export interface PlayerView {
+  level: number;
+  getSkillLevel(key: string): number;
+}
+
 /** 施法/读条中的技能（原版 `unit.casting` / `unit.reading`）。 */
 export interface CastingLike {
   notBreakable?: boolean;
@@ -93,27 +106,25 @@ export interface BuffStateLike {
   arg: number;
   group?: string;
   type?: string;
-  level?: number;
+  /**
+   * 数据层自己挂上去的动态字段（内核 `BuffState` 上没有），读写成对：
+   * `buffs.ts` 的 `summoned` 会在 `willRemove` 里读它、`skills.ts` 里写它。
+   */
   stopped?: boolean;
   skill?: unknown;
+  /** 同上：`buffs.ts#fishzilla.focus` 把自己的副目标 buff 挂在 `this` 上以便移除。 */
   targetBuff: BuffStateLike | null;
   unit: UnitLike;
   over(...extra: HookArg[]): void;
   resetTimer(ms?: number): void;
-  remove(): void;
 }
 
 /** 技能状态（`this` = SkillState 的场景）。 */
 export interface SkillStateLike {
   unit: UnitLike;
-  /** 施法者（召唤物的技能状态上才有）。 */
-  summoner: UnitLike;
   skillData: SkillDataLike;
   notBreakable?: boolean;
   reduceCoolDown(ms: number): void;
-  runAttrHooks(value: number, name: string, ...extra: HookArg[]): number;
-  runAttrHooks(value: boolean, name: string, ...extra: HookArg[]): boolean;
-  runAttrHooks<T>(value: T, name: string, ...extra: HookArg[]): T;
 }
 
 /** 单位（`this` = Unit / `self` / `world.units[*]` 的场景）。 */
@@ -123,8 +134,6 @@ export interface UnitLike {
   key?: string;
   name?: string;
   camp: string;
-  race?: string;
-  career?: string;
   level: number;
   // 属性
   hp: number;
@@ -149,21 +158,19 @@ export interface UnitLike {
   stunResist: number;
   coldAbsorb: number;
   fireAbsorb: number;
-  iceAbsorb: number;
   lightningAbsorb: number;
   darkAbsorb: number;
   allResist: number;
   // 施法 / 读条状态
   reading: CastingLike | null;
   casting: CastingLike | null;
-  stopped: boolean;
   // 关系
   /** 原版 `Unit` 上是 `readonly world: BattleWorld`，数据层用它取确定性子随机源。 */
   world: WorldLike;
   /** 原版 `self.target` 在函数体内被直接解引用（只在 `canUse` 里判空），因此这里不标 null。 */
   target: UnitLike;
   summoner: UnitLike;
-  player: UnitLike;
+  player: PlayerView;
   buffs: BuffStateLike[];
   skills: SkillStateLike[];
   /** 刺客连击（`combos`）由技能系统在运行时挂上。 */
@@ -173,7 +180,6 @@ export interface UnitLike {
   // 方法
   addBuff(type: string, duration?: number | null, arg?: HookArg, group?: string | null, ...extra: HookArg[]): BuffStateLike;
   removeBuff(buff: HookArg): void;
-  hasBuff(type: string): boolean;
   canAttack(unit: UnitLike): boolean;
   willAttack(unit: UnitLike): boolean;
   willAssist(unit: UnitLike): boolean;
@@ -188,7 +194,6 @@ export interface UnitLike {
   transformType(type: string): void;
   testCrit(rate?: number, ...extra: HookArg[]): boolean;
   getCritBonus(crit?: HookArg, bonus?: number): number;
-  getSkillLevel(key: string): number;
   /** 原版里 `summonSkill` 既是方法（`unit.summonSkill('x')`）又会被当成技能状态读 `.skillData`。 */
   summonSkill: ((key: string, level?: number) => void) & { skillData: SkillDataLike; notBreakable?: boolean };
   useExtraSkill(key: string): void;
@@ -233,7 +238,6 @@ export interface WorldLike {
   playerUnit: UnitLike;
   /** 当前地图 **key**（原版 `world.map` 是字符串，不是 MapData）。 */
   map: string;
-  time?: number;
   addEnemy(type: string, arg?: HookArg, level?: number, summoner?: UnitLike | null, ...extra: HookArg[]): UnitLike;
   removeUnit(unit: UnitLike): void;
   sendDamage(type: string, from: UnitLike | null | undefined, to: UnitLike | null | undefined, skill: unknown, value: number, crit?: boolean | number, ...extra: HookArg[]): void;

@@ -580,3 +580,38 @@ __IDLE_DARK__                   // 根 store（临时排查）
 - **I3**：禁止静默降级（一切降频/截断/丢弃都要有日志 + 指标 + 明确动作）；
 - **I4**：CPU 不是瓶颈，不得用「少 tick 几个角色」换吞吐；
 - **I5**：每个限额都要能在 `/api/metrics`（或 `system.stats`）看到当前值。
+
+---
+
+## 17. `src/data/**` 的视图类型是「对内核的断言」——已加编译期门禁
+
+`contracts/data.ts` 把数据表函数的 `this` / `world` / `self` 冻结成 `unknown`（正确：契约只描述
+「表里有什么」）。为了让 183 个原版数据文件**保持原样**能过 `strict`，`src/data/_shapes.ts` 声明了
+一层「视图接口」（`UnitLike` / `WorldLike` / `BuffStateLike` / `SkillStateLike` / `PlayerView`）。
+
+**风险**：视图类型比真实内核**多写一个成员**，`tsc` 只会更宽松 —— 缺陷被推迟到运行期，
+而数据层 hook 抛的错会被 tick / 离线结算的 `try/catch` 吞成一条 WARN，**静默失效**。
+
+已发生三次（同一根因，详见 `05` §2.3 / §2.4）：
+
+| 视图成员 | 内核真相 | 运行期后果 |
+|---|---|---|
+| `UnitLike.timeline` | 真实 `Unit` 只有 `clock`（原版 `this.timeline` 的移植名） | `undefined.pause()`；`freezed`/`stunned` 等 debuff 全部失效 |
+| `WorldLike.sendGeneralMsg` | `BattleWorld` 上**不存在**该方法 | 26 处机关提示 / BOSS 对话 `is not a function` |
+| `SkillStateLike.summoner` | `summoner` 只属于 `Unit`；hook 的 `this` 是 `SkillState` | `year2018.heal` 恒 `undefined` → 永远静默不生效 |
+
+**门禁**：`packages/game-core/src/data/_shapes.gate.ts` ——
+`type MissingOn<View, keyof Kernel>` + `AssertNoMissing<T extends never>` 为 7 组视图断言
+「视图的每个成员都真实存在于内核上」。视图再撒谎 → `pnpm run typecheck` 报 `TS2344` 并**点名成员**。
+
+- ⚠️ 该文件**不可**命名为 `*.test.ts`：`packages/game-core/tsconfig.json` 的 `exclude` 含
+  `src/**/*.test.ts`，放进测试文件就是**假门禁**（实测：塞回 `timeline` 后 typecheck 仍 exit 0）。
+- ⚠️ 多类目标要传**并集**：`keyof (A | B)` 是**交集**，写成 `keyof (Unit | PlayerUnit | EnemyUnit)`
+  会把子类独有的 `str` / `player` / `transformType` 全误报为缺失。
+- 加成员的处置顺序：**先在内核上补**（如 `BattleWorld.sendGeneralMsg` 转发到 `BattleSink.general`），
+  确实属于数据层动态挂载的才登记进 `BuffDynamicFields` 白名单并写明谁写谁读。
+
+**移植新数据时**：凡原版属性名在本仓被改名，视图里必须写**新名**；
+`sendSkillUsage` / `sendGeneralMsg` 这类「原版 `world.*` 但内核没有」的调用，
+一律在 `BattleWorld` 上加**适配器**，不要把数据层改成别的写法。
+

@@ -109,3 +109,89 @@ describe('buildBattleWorld（在线/离线共用装配）', () => {
     }
   });
 });
+
+/**
+ * `world.sendGeneralMsg` → `BattleSink.general` → `BattleCollector` → `WorldTickDto.events`。
+ *
+ * 数据层（`data/enemies.ts`）里 26 处机关提示 / BOSS 对话都走这条路径；内核补适配器之前，
+ * 它们一律抛 `world.sendGeneralMsg is not a function`，被 tick 的 try/catch 吞成一条 WARN，
+ * 客户端永远收不到这些文本。这里用**服务端真实的 `BattleCollector`** 把整段链路钉死。
+ */
+describe('sendGeneralMsg 出站链路（数据层 → 内核适配器 → 服务端采集器）', () => {
+  it('提示文本进入 collector 事件流，kind=general（即 tick 载荷格式）', () => {
+    const player = freshPlayer();
+    const clock = new VirtualClock();
+    const collector = new BattleCollector();
+    const { world } = buildBattleWorld({
+      tables,
+      player,
+      map: 'town.street',
+      seed: 5,
+      sink: collector,
+      clock,
+    });
+
+    world.sendGeneralMsg('科力克：年轻的战士，我已经看到了你的决心。');
+
+    const general = collector.snapshot().events.filter((event) => event.kind === 'general');
+    expect(general).toContainEqual({
+      kind: 'general',
+      text: '科力克：年轻的战士，我已经看到了你的决心。',
+    });
+
+    world.dispose();
+    clock.dispose();
+  });
+
+  it('与 enemy.appear 走同一条 general 通道（顺序即调用顺序）', () => {
+    const player = freshPlayer();
+    const clock = new VirtualClock();
+    const collector = new BattleCollector();
+    const { world } = buildBattleWorld({
+      tables,
+      player,
+      map: 'town.street',
+      seed: 6,
+      sink: collector,
+      clock,
+    });
+
+    const before = collector.snapshot().events.length;
+    world.sendGeneralMsg('机关被触动了。');
+    const added = collector.snapshot().events.slice(before);
+
+    expect(added).toEqual([{ kind: 'general', text: '机关被触动了。' }]);
+
+    world.dispose();
+    clock.dispose();
+  });
+
+  it('边界：空串 / 数字 / null 都能进事件流，不抛错', () => {
+    const player = freshPlayer();
+    const clock = new VirtualClock();
+    const collector = new BattleCollector();
+    const { world } = buildBattleWorld({
+      tables,
+      player,
+      map: 'town.street',
+      seed: 7,
+      sink: collector,
+      clock,
+    });
+
+    expect(() => {
+      world.sendGeneralMsg('');
+      world.sendGeneralMsg(0 as unknown as string);
+      world.sendGeneralMsg(null as unknown as string);
+    }).not.toThrow();
+
+    const texts = collector
+      .snapshot()
+      .events.filter((event) => event.kind === 'general')
+      .map((event) => (event as { text: string }).text);
+    expect(texts.slice(-3)).toEqual(['', '0', 'null']);
+
+    world.dispose();
+    clock.dispose();
+  });
+});

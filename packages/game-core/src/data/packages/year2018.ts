@@ -293,7 +293,12 @@ extend(tables, 'skills', 'year2018.heal', 'wolf.heal', {
   },
   effect() {
     return function (world, self, level) {
-      const target = this.summoner;
+      // ⚠️ 原版这里写的是 `this.summoner`，但引擎调用该 hook 时 `this` 是 **SkillState**
+      // （`skill-state.ts#effect` 的 `skillData.effect.call(this, ...)`），而 `summoner`
+      // 只存在于 `Unit` 上 ⇒ `this.summoner` 恒为 `undefined`，配合下面的 `if (!target) return;`
+      // 会让这个技能**永远静默不生效**。正确的取法是从第二参数（施法单位）上读。
+      // 与同条目 `canUse` 的 `self.summoner` 保持一致。
+      const target = self.summoner;
       if (!target) {
         return;
       }

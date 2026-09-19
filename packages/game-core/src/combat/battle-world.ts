@@ -490,6 +490,21 @@ export class BattleWorld {
     });
   }
 
+  /**
+   * 通用提示（原版 `world.sendGeneralMsg(msg)`；数据表 `enemies.ts` 的机关 trap 与
+   * BOSS 对话会调用，共 26 处）。
+   *
+   * ⚠️ 与 `sendSkillUsage` 同一类缺陷：本方法此前**缺失**，因此这 26 处一律抛
+   * `world.sendGeneralMsg is not a function` —— 在线被 tick 的 try/catch 吞成 WARN、
+   * 离线被结算的 catch 吞掉。补齐后转发到既有端口 `BattleSink.general`（与
+   * `enemy.appear` / `player.death` / `dungeon.failed` 同一条出站路径）。
+   *
+   * 数据层文风里提示文本自带说话人前缀（如 `'科力克：…'`），所以这里不做拼装、原样透传。
+   */
+  sendGeneralMsg(msg: string): void {
+    this.sink.general({ text: String(msg) });
+  }
+
   // ────────────────────────────── 伤害 / 治疗 / 经验 ──────────────────────────────
 
   testDodge(from: Unit | null, to: Unit, skill: SkillState | null): boolean {
