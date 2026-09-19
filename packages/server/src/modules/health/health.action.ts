@@ -15,7 +15,7 @@ import { Injectable } from '@nestjs/common';
 import { ActionController, ActionMethod, FlowContext } from '@nbb-ionet/core-framework';
 import { ok, type ActionResult, type SystemPingDto, type SystemVersionDto } from '@idle-dark/protocol';
 import { PROTOCOL_VERSION, SYSTEM_CMD, WS_PATH } from '../../ionet/cmd.js';
-import { userIdOf } from '../../ionet/action-support.js';
+import { userIdOf } from '../../common/kernel/action-support.js';
 import { OnlineSessionService } from '../online/online-session.service.js';
 
 /**

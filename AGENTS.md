@@ -389,7 +389,9 @@ node scripts/character-scope-smoke.mjs 3000                   # 角色归属 / �
 ## 12. 剧情推进：进图自动触发（原版 `MapPanel.checkStories()`）
 
 **服务端**：判定与登记的唯一实现在 `server/.../story/internal/story-ops.ts#opAdvanceStoriesOnMapEntry`，
-由 `WorldService.start()`（会话首次落地在该图）与 `WorldService.enterMap()` 调用。
+由 quest（`StoryLogicService`）**订阅 battle 发布的 `MapEntered` 事件**后调用
+（08 §2.3 解环；`WorldService.start()` 会话首次落地 / `enterMap()` 进图时发布该事件，
+battle 不再直接调用 story）。
 对**当前地图上条件已满足且尚未开启**的每条剧情：
 
 | 剧情类型 | 服务端行为 | 推送 `StoryUnlockDto` |
@@ -399,7 +401,8 @@ node scripts/character-scope-smoke.mjs 3000                   # 角色归属 / �
 
 - `opFinishStory` 也用同一套分类：新就绪的 `kill`/`purchase` 当场登记，纯剧情脚本上报 `autoPlay: true`
   —— 对应原版 `checkStories()` 的 `while (dirty)` 循环。
-- 击杀任务剩余数降到 0 时，`WorldService.onEnemyKilled` 推 `autoPlay: true`（原版 `checkKill()` 当场弹剧本）。
+- 击杀任务剩余数降到 0 时，`StoryLogicService` 订阅 `EnemyKilled` 事件并推 `autoPlay: true`
+  （原版 `checkKill()` 当场弹剧本）。
 - ⚠️ **服务端绝不替玩家 `finish`**：剧本要人读，`finish` 只能由前端在玩家读完/关闭后调用。
 - 该函数**幂等**：登记过的条目因 `status !== 'none'` 直接跳过，重复进图不会重置击杀进度。
 
@@ -526,3 +529,54 @@ __IDLE_DARK__                   // 根 store（临时排查）
 抢写 dist → `node --watch` 连续重启，期间**端口短暂不可用**（实测出现过
 `ECONNREFUSED` 与 `Cannot use a pool after calling end on the pool`）。
 要跑全量门禁就**先停 dev**，或跑完后再确认 `/api/health` 已恢复。
+
+---
+
+## 16. 逻辑服边界（硬约定，违反即不合格）
+
+> 来源：[`ai-docs/08-逻辑服迁移任务书.md`](ai-docs/08-逻辑服迁移任务书.md) §1、
+> [`ai-docs/09-地图与秘境逻辑服.md`](ai-docs/09-地图与秘境逻辑服.md) §4。
+> **A2 已拍板**：当前只做**单进程边界**；框架运行时（ionet-ts 逻辑服）由另一会话补齐，
+> 本仓不做跨进程，但边界与接口按可拆分设计。
+
+| # | 约定 |
+|---|---|
+| **C1** | 一个业务域 = 一个逻辑服模块：根下 `logic-server.ts`（`XxxLogicServer`，**仅 builder**）+ `<domain>.action.ts`（`@ActionController`）+ `protocol` 里的 cmd 段/DTO |
+| **C2** | 业务逻辑**禁止**写在 `*LogicServer`、对外服、启动/装配类里；业务只属于 `Action` |
+| **C3** | 跨逻辑服**只允许走通信契约**（`call`/`send`/事件/将来的 `OnExternal`）；禁止直接 import 另一个服的 service/internal |
+| **C4** | 共享层只放协议与配置，不放业务：`packages/protocol`、`modules/logic/shared`、`common/**` |
+| **C5** | 依赖图必须是**有向无环（DAG）**，由 `packages/server/test/logic-server-boundary.test.ts` 强制 |
+| **C6** | 每片状态只有一个写者（`characters.state` 分区、`account_state.data` 分键、在线/会话注册表归 external） |
+| **C7** | **战斗（伤害判定、经验获取、掉落判定）必须运行在 battle 逻辑服内**，不得散落在对外服或面板域 |
+
+### 16.1 边界登记表是唯一真相
+
+逻辑服的划分、源码根、cmd 段归属都写在
+`packages/server/src/logic-servers/registry.ts`（`SERVER_DEFINITIONS`）：
+`external / battle / item / quest / character / dungeon / map`（拓扑 B，09 §4.1）。
+
+**跨服事件**（08 §2.3 解环）定义在 `modules/logic/shared/events.ts`：
+`MapEntered`（battle→quest）、`EnemyKilled`（battle→quest）、`CombatHooksDirty`（item/character→battle）。
+总线 `EVENT_BUS` 是**进程内同步**实现，保持解环前的调用时序。
+
+### 16.2 架构门禁（会失败的测试）
+
+`pnpm --filter idle-dark-server exec vitest run test/logic-server-boundary.test.ts` 断言：
+
+1. **文件级 SCC = 0**，且**逻辑服级图无环**（含 `world/story/inventory` 三条已知环的回归）；
+2. **共享层不反向依赖任何逻辑服**；
+3. **跨服深路径 import 恰好等于** `TRANSITIONAL_DEEP_IMPORTS`（**过渡债务，禁止增长**）；
+   当前仅剩 `character → battle`、`dungeon → battle` 两条，由 R4 改为正式命令后删除；
+4. **cmd 段唯一归属**：`CMD_SEGMENTS` 每段恰好属于一个服；
+5. 每个逻辑服根下的 `logic-server.ts` 导出 `XxxLogicServer` 且**不得出现 `@ActionMethod`**。
+
+> 扫描器会**先剥注释**再解析：本仓多处 JSDoc 里有示例 `import`，不剥会把文档当真实依赖（实测过）。
+> 动态 `import(变量)` 与无法解析的相对 import 一律**显式报告**，不得静默通过。
+
+### 16.3 容量不变式（07 §0，与逻辑服调度绑定）
+
+- **I1**：世界时间 = 真实时间（`world_time_ratio ≥ 0.99`）；
+- **I2**：任何「每轮处理 N 个」的循环必须**同时**给出全局预算与超载行为；
+- **I3**：禁止静默降级（一切降频/截断/丢弃都要有日志 + 指标 + 明确动作）；
+- **I4**：CPU 不是瓶颈，不得用「少 tick 几个角色」换吞吐；
+- **I5**：每个限额都要能在 `/api/metrics`（或 `system.stats`）看到当前值。

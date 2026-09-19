@@ -6,7 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import { ActionController, ActionMethod, FlowContext } from '@nbb-ionet/core-framework';
 import { type ActionResult, BANK_CMD, type InventorySlotDto } from '@idle-dark/protocol';
-import { ActionError, dataOf, requireUserId, toFiniteInt } from '../../../ionet/action-support.js';
+import { ActionError, dataOf, requireUserId, toFiniteInt } from '../../../common/kernel/action-support.js';
 import { guardAction } from '../../../common/kernel/result.js';
 import { BankLogicService } from './bank.logic.service.js';
 import {

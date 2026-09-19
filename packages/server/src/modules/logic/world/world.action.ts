@@ -12,7 +12,7 @@ import {
   WORLD_CMD,
   type WorldSnapshotDto,
 } from '@idle-dark/protocol';
-import { ActionError, dataOf, requireUserId, toNonEmptyString } from '../../../ionet/action-support.js';
+import { ActionError, dataOf, requireUserId, toNonEmptyString } from '../../../common/kernel/action-support.js';
 import { guardAction } from '../../../common/kernel/result.js';
 import { RateLimiterService } from '../../../common/services/rate-limiter.service.js';
 import { WorldService } from './world.service.js';

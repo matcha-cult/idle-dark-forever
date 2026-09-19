@@ -10,7 +10,7 @@ import {
   toFiniteNumber,
   toNonEmptyString,
   userIdOf,
-} from '../src/ionet/action-support.js';
+} from '../src/common/kernel/action-support.js';
 
 function authed(userId: bigint): FlowContext {
   const ctx = new FlowContext();

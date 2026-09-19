@@ -12,7 +12,7 @@ import {
   type LootRuleUpdateInput,
   LOOTRULE_CMD,
 } from '@idle-dark/protocol';
-import { ActionError, dataOf, requireUserId, toBoolean, toFiniteInt } from '../../../ionet/action-support.js';
+import { ActionError, dataOf, requireUserId, toBoolean, toFiniteInt } from '../../../common/kernel/action-support.js';
 import { guardAction } from '../../../common/kernel/result.js';
 import { LootRuleLogicService } from './lootrule.logic.service.js';
 import { parseCharacterId } from '../shared/action-parse.js';

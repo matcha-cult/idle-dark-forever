@@ -11,7 +11,7 @@
  */
 import { type FlowContext } from '@nbb-ionet/core-framework';
 import { type ActionFail, BusinessErrorCode } from '@idle-dark/protocol';
-import { failOf } from '../common/kernel/result.js';
+import { failOf } from './result.js';
 
 export const ActionError = {
   /** 未携带合法 token / token 过期 / 会话无效 */

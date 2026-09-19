@@ -6,7 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import { ActionController, ActionMethod, FlowContext } from '@nbb-ionet/core-framework';
 import { type ActionResult, IDLE_CMD, type OfflineReportDto } from '@idle-dark/protocol';
-import { dataOf, requireUserId } from '../../../ionet/action-support.js';
+import { dataOf, requireUserId } from '../../../common/kernel/action-support.js';
 import { guardAction } from '../../../common/kernel/result.js';
 import { RateLimiterService } from '../../../common/services/rate-limiter.service.js';
 import { WorldService } from '../world/world.service.js';

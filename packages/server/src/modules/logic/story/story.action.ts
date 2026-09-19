@@ -6,7 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import { ActionController, ActionMethod, FlowContext } from '@nbb-ionet/core-framework';
 import { type ActionResult, STORY_CMD, type StoryDto, type StoryPlayDto } from '@idle-dark/protocol';
-import { dataOf, requireUserId } from '../../../ionet/action-support.js';
+import { dataOf, requireUserId } from '../../../common/kernel/action-support.js';
 import { guardAction } from '../../../common/kernel/result.js';
 import { StoryLogicService } from './story.logic.service.js';
 import { parseCharacterId, parseRequiredString } from '../shared/action-parse.js';
