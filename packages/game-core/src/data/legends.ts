@@ -60,7 +60,7 @@ return  [
     },
     hooks: {
       onSummonExploded(effect, unit) {
-        let cost = unit.summonSkill.skillData.cost.mp;
+        let cost = unit.summonSkill.skillData.cost.mp ?? 0;
         if (typeof cost === 'function') {
           cost = cost(this);
         }

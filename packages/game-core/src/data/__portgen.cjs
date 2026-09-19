@@ -14,7 +14,8 @@ const fs = require('fs');
 const path = require('path');
 
 const SRC = '/home/nbb/projects/dark-forever-memorize/data';
-const OUT = __dirname;
+const OUT = process.env.PORTGEN_OUT || __dirname;
+const NO_PATCH = process.env.PORTGEN_NO_PATCH === '1';
 
 const HEADER = `/**
  * ⚠️ 由原版 \`data/{DIR}\` 机械移植（数值 / 函数体 / 注释逐字保留，未臆造任何数据）。
@@ -62,6 +63,11 @@ const PATCHES = {
     // this.skills 与 this 在视图类型里是两套接口，这里按原版语义显式松绑。
     [/if \(skillState !== this\) \{/g, 'if ((skillState as unknown) !== this) {'],
   ],
+  'legends/s1.js': [
+    // skillData.cost 是索引签名（noUncheckedIndexedAccess 下可能为 undefined）；
+    // 原版 `effect * undefined || 0` === 0，这里 `?? 0` 语义等价。
+    [/let cost = unit\.summonSkill\.skillData\.cost\.mp;/g, 'let cost = unit.summonSkill.skillData.cost.mp ?? 0;'],
+  ],
   'skills/knight.js': [
     [/function addCombo\(self, count = 1\)/g, 'function addCombo(self: UnitLike, count = 1)'],
     [/function useCombo\(self, count\)/g, 'function useCombo(self: UnitLike, count: number)'],
@@ -87,6 +93,12 @@ const PATCHES = {
     [/^const elements = \[/m, 'const elements: EnemyEntry[] = ['],
     [/\.\.\.v\.v2Skills/g, '...(v.v2Skills ?? [])'],
     [/\.\.\.v\.skills/g, '...(v.skills ?? [])'],
+    // 原版这个 getLevelBonus 在 level > 70 时隐式返回 undefined；下游只会做乘法（undefined → NaN），
+    // 这里显式返回 NaN，既让 strict 编译通过，也与原版实际数值行为完全一致。
+    [
+      /(function getLevelBonus\(level: number\) \{[\s\S]*?return level \* 0\.5 \+ 1 - 6;\n  \})\n\}/,
+      '$1\n  return NaN;\n}',
+    ],
   ],
   'skills/assassin.js': [
     // 原版 `const atkInfo = { dmg, critRate, critBonus }` 随后被 clearCombo 写入 isCrit。
@@ -132,7 +144,7 @@ const SHAPE_TYPES = [
 
 function transpile(rel, extraPatches) {
   let text = fs.readFileSync(path.join(SRC, rel), 'utf8');
-  const patches = [...(extraPatches || []), ...(PATCHES[rel] || []), ...COMMON];
+  const patches = NO_PATCH ? [] : [...(extraPatches || []), ...(PATCHES[rel] || []), ...COMMON];
   for (const [re, rep] of patches) text = text.replace(re, rep);
   if (!/^module\.exports\s*=/m.test(text)) {
     throw new Error(`${rel}: 未找到 module.exports`);
@@ -367,9 +379,7 @@ function tsString(s) {
 function serialize(value, key) {
   if (value === null) return 'null';
   if (typeof value === 'string') {
-    if (key === 'script') {
-      return '`' + value.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${') + '`';
-    }
+    // 统一用 JSON 字符串字面量：保证值逐字节一致（模板字面量会被外层缩进改写）。
     return tsString(value);
   }
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
@@ -411,7 +421,7 @@ function transformPackage(rel, extra) {
   let text = fs.readFileSync(path.join(SRC, rel), 'utf8');
   text = text.replace(/^.*require\('\.\/base'\);\n/m, '');
   text = text.replace(/^const \{ define, extend \} = require\('\.\.\/util'\);\n/m, '');
-  for (const [re, rep] of extra || []) text = text.replace(re, rep);
+  for (const [re, rep] of (NO_PATCH ? [] : extra) || []) text = text.replace(re, rep);
   text = text.replace(/\bdefine\(/g, 'define(tables, ').replace(/\bextend\(/g, 'extend(tables, ');
   return text;
 }

@@ -66,7 +66,12 @@ export function extend<K extends DictTableName>(
   if (!(origin in table)) {
     throw new Error(`data extend: ${type}.${origin} 不存在（key=${key}）`);
   }
-  table[key] = mergeObject(table[origin], info) as DataEntryMap[K];
+  // 原版 `util.extend` 内部走的是 `define(type, key, merged)`，而 `define` 会把 `key` 覆写成新 key。
+  // `mergeObject` 只做浅拷贝，会把 origin 的 `key` 一起带过来，因此这里必须显式覆写。
+  table[key] = {
+    ...(mergeObject(table[origin], info) as Record<string, unknown>),
+    key,
+  } as DataEntryMap[K];
 }
 
 /**

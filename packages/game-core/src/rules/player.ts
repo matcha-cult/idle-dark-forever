@@ -1,0 +1,811 @@
+/**
+ * `Player` —— 原版 `src/logics/player.js:589-1367` 的移植。
+ *
+ * ## 去单例：`PlayerAccountState`
+ *
+ * 原版 `Player` 直接读写三个全局单例（`game.diamonds` / `game.highestEndlessLevel` /
+ * `game.bank` / `game.banned` / `world.updateRate`）。移植后这些账号级状态收敛成
+ * {@link PlayerAccountState}，**由调用方注入并共享同一个对象引用**——服务端把
+ * account 级别的单例挂在 `PlayerAccountState` 上，行为与原版一致（改动会互相可见）。
+ *
+ * ## 刻意不移植的部分（IO / 框架）
+ *
+ * | 原版 | 原因 |
+ * |---|---|
+ * | `Player.load()` / `Player.create()` | 依赖 `localStorage`、`game.checkCanCreate`、`Date.now()` 生成 key；服务端由存档仓库负责 |
+ * | `Player.save()` | 依赖 `localStorage` + `world.stop`；服务端只提供 `toJSON()`，编解码走 `serialize/` |
+ * | `constructor` 里的 `autorun(save, {delay: 30000})` | MobX 自动存档；服务端按关键节点显式落库 |
+ * | `dispose()` | 只为释放上面的 autorun |
+ * | `getInventory()` 里的 `this.save()` | 同上（保留领取逻辑本体） |
+ *
+ * ## 时间
+ *
+ * `timestamp` 的兜底原本是 `Date.now()`；移植后由构造参数 `now: () => number` 注入，
+ * 因此调用方（服务端 = 真实时钟；离线结算/测试 = 虚拟时钟）完全掌控。
+ */
+
+import type { DataTables, MapData } from '../contracts/data.js';
+import { CareerInfo, type CareerInfoJson, type EquipSlot } from './career-info.js';
+import { getGoodOrder } from './goods.js';
+import { InventorySlot, type InventorySlotJson } from './inventory-slot.js';
+import {
+  asArray,
+  asBoolean,
+  asNumber,
+  asRecord,
+  asStringOrNull,
+  asTruthyNumber,
+  entriesOf,
+  getEndlessLevel,
+  getEndlessMapLevel,
+  PlayerMeta,
+  type PlayerMetaJson,
+} from './player-meta.js';
+
+/** 原版 `MAX_TICKET_STACK`：钥石堆叠上限。 */
+export const MAX_TICKET_STACK = 50;
+
+/** 技能等级上限（原版 `fromJS` 里的 `Math.min(tmp.level, 70)`）。 */
+export const MAX_SKILL_LEVEL = 70;
+
+/** 玩家死亡/背包未满时的默认背包格数（原版 `postCreate` / `postLoad` 的 `while (< 4)`）。 */
+export const DEFAULT_INVENTORY_SIZE = 4;
+
+/** 原版 `game` / `world` 单例里被 `Player` 直接读写的那部分账号级状态。 */
+export interface PlayerAccountState {
+  /** 原版 `game.diamonds`（神力）。 */
+  diamonds: number;
+  /** 原版 `game.highestEndlessLevel`。 */
+  highestEndlessLevel: number;
+  /** 原版 `game.banned`。 */
+  banned: boolean;
+  /** 原版 `game.bank`（储藏箱；`countTicket` / `costTicket` 会读）。 */
+  bank: InventorySlot[];
+  /** 原版 `world.updateRate`（离线快进倍率；`addSkillExp` 会乘）。 */
+  updateRate: number;
+}
+
+export function createPlayerAccountState(): PlayerAccountState {
+  return { diamonds: 0, highestEndlessLevel: 0, banned: false, bank: [], updateRate: 1 };
+}
+
+/** 合同的 `MapData` 里没有 `isEndless`（原版数据表有）；这里按可选字段读取。 */
+type MapDataCompat = MapData & { isEndless?: boolean };
+
+/** TODO(port-uncertain): 冻结的 MapData 缺 `isEndless` 字段，暂按可选字段读取，等数据表补齐后收敛。 */
+function isEndlessMap(map: MapData | undefined): boolean {
+  return !!(map as MapDataCompat | undefined)?.isEndless;
+}
+
+export interface PlayerJson extends PlayerMetaJson {
+  timestamp: number;
+  timelineId: string | null;
+  banned: boolean;
+  careers: Record<string, CareerInfoJson>;
+  gold: number;
+  inventory: InventorySlotJson[];
+  inventoryDiamondLevel: number;
+  skillExp: Record<string, { level: number; exp: number }>;
+  buildInventory: InventorySlotJson[];
+  awardInventory: InventorySlotJson[];
+  migrateMap: Record<string, number>;
+  lootRule: Record<string, number>;
+  minLootLevel: number;
+  dungeonTickets: Record<string, number>;
+}
+
+/** 原版 `player.js:589-1367`。 */
+export class Player extends PlayerMeta {
+  /** 注入的时间源（原版这里是 `Date.now()`）。 */
+  readonly now: () => number;
+  /** 账号级共享状态（原版散落在 `game` / `world` 单例里）。 */
+  readonly account: PlayerAccountState;
+
+  timestamp: number;
+  timelineId: string | null = null;
+  banned = false;
+
+  careers = new Map<string, CareerInfo>();
+  gold = 0;
+  inventory: InventorySlot[] = [];
+  /** 通过神力升级背包的次数。 */
+  inventoryDiamondLevel = 0;
+  /** Map<expGroup, { level, exp }>。 */
+  skillExp = new Map<string, { level: number; exp: number }>();
+  /** 锻造/分解空格。 */
+  buildInventory: InventorySlot[] = [];
+  /** 任务/剧情奖励空格。 */
+  awardInventory: InventorySlot[] = [];
+  migrateMap = new Map<string, number>();
+  lootRule = new Map<string, number>();
+  minLootLevel = 0;
+  dungeonTickets = new Map<string, number>();
+
+  constructor(
+    tables: DataTables,
+    key: string,
+    now: () => number,
+    account?: PlayerAccountState,
+  ) {
+    super(tables, key);
+    this.now = now;
+    this.account = account ?? createPlayerAccountState();
+    this.timestamp = now();
+  }
+
+  static fromJSON(
+    tables: DataTables,
+    key: string,
+    now: () => number,
+    value: unknown,
+    account?: PlayerAccountState,
+  ): Player {
+    return new Player(tables, key, now, account).fromJSON(value);
+  }
+
+  // ───────────────────────── 便捷访问器（原版 @computed） ─────────────────────────
+
+  get isBanned(): boolean {
+    return this.banned || this.account.banned;
+  }
+
+  get careerInfo(): CareerInfo | undefined {
+    return this.currentCareer === null ? undefined : this.careers.get(this.currentCareer);
+  }
+
+  get level(): number {
+    return this.careerInfo?.level ?? 0;
+  }
+
+  set level(value: number) {
+    const info = this.careerInfo;
+    if (!info) {
+      // 原版会 TypeError；这里静默忽略（无当前职业时没有 level 可写）
+      return;
+    }
+    info.level = value;
+    this.currentCareerLevel = value;
+  }
+
+  get maxLevel(): number {
+    return this.careerInfo?.maxLevel ?? 0;
+  }
+
+  set maxLevel(value: number) {
+    const info = this.careerInfo;
+    if (info) {
+      info.maxLevel = value;
+    }
+  }
+
+  get peakLevel(): number {
+    return this.careerInfo?.peakLevel ?? 0;
+  }
+
+  set peakLevel(value: number) {
+    const info = this.careerInfo;
+    if (info) {
+      info.peakLevel = value;
+    }
+  }
+
+  get exp(): number {
+    return this.careerInfo?.exp ?? 0;
+  }
+
+  set exp(value: number) {
+    const info = this.careerInfo;
+    if (info) {
+      info.exp = value;
+    }
+  }
+
+  get peakExp(): number {
+    return this.careerInfo?.peakExp ?? 0;
+  }
+
+  set peakExp(value: number) {
+    const info = this.careerInfo;
+    if (info) {
+      info.peakExp = value;
+    }
+  }
+
+  get equipments(): Record<EquipSlot, InventorySlot> | undefined {
+    return this.careerInfo?.equipments;
+  }
+
+  /** 升级所需经验。 */
+  get maxExp(): number {
+    return this.careerInfo?.maxExp ?? 0;
+  }
+
+  get maxPeakExp(): number {
+    return this.careerInfo?.maxPeakExp ?? 0;
+  }
+
+  get maxSkillCount(): number {
+    const { level } = this;
+    if (level >= 60) {
+      return 6;
+    } else if (level >= 40) {
+      return 5;
+    } else if (level >= 20) {
+      return 4;
+    } else if (level >= 10) {
+      return 3;
+    }
+    return 2;
+  }
+
+  get nextSkillUnlockLevel(): number | null {
+    const { level } = this;
+    if (level >= 60) {
+      return null;
+    } else if (level >= 40) {
+      return 60;
+    } else if (level >= 20) {
+      return 40;
+    } else if (level >= 10) {
+      return 20;
+    }
+    return 10;
+  }
+
+  get maxEnhanceCount(): number {
+    const { level } = this;
+    if (level >= 60) {
+      return 4;
+    } else if (level >= 30) {
+      return 3;
+    } else if (level >= 20) {
+      return 2;
+    } else if (level >= 10) {
+      return 1;
+    }
+    return 0;
+  }
+
+  get nextEnhanceUnlockLevel(): number | null {
+    const { level } = this;
+    if (level >= 60) {
+      return null;
+    } else if (level >= 30) {
+      return 60;
+    } else if (level >= 20) {
+      return 30;
+    } else if (level >= 10) {
+      return 20;
+    }
+    return 10;
+  }
+
+  // ───────────────────────── 存档 ─────────────────────────
+
+  /** 原版 `Player.fromJS`（隐式兜底语义逐条保留）。 */
+  override fromJSON(value: unknown): this {
+    const raw = asRecord(value);
+    super.fromJSON(raw);
+
+    // 原版 `v.timestamp || Date.now()`：0 也要回落到「现在」
+    this.timestamp = asTruthyNumber(raw.timestamp, this.now());
+    this.timelineId = asStringOrNull(raw.timelineId);
+    this.minLootLevel = asNumber(raw.minLootLevel, 0);
+
+    this.gold = asNumber(raw.gold, 0);
+    this.inventoryDiamondLevel = asNumber(raw.inventoryDiamondLevel, 0);
+    // 原版：`this.banned = v.banned`（可能 undefined）；这里收敛为 boolean
+    this.banned = asBoolean(raw.banned, false);
+
+    this.skillExp = new Map();
+    for (const [key, item] of entriesOf(raw.skillExp)) {
+      const record = asRecord(item);
+      // 原版：`tmp.level = Math.min(tmp.level, 70)`（无下界；缺失时为 NaN）
+      this.skillExp.set(key, {
+        level: Math.min(asNumber(record.level, 0), MAX_SKILL_LEVEL),
+        exp: asNumber(record.exp, 0),
+      });
+    }
+
+    this.inventory = [];
+    for (const item of asArray(raw.inventory)) {
+      const slot = new InventorySlot(this.tables, 'inventory').fromJSON(item ?? {});
+      this.inventory.push(slot);
+      if (slot.key === 'ticket') {
+        const endlessLevel = getEndlessLevel(slot.dungeonKey);
+        if (endlessLevel && endlessLevel > this.account.highestEndlessLevel) {
+          this.account.highestEndlessLevel = endlessLevel;
+        }
+      }
+    }
+
+    this.buildInventory = [];
+    for (const item of asArray(raw.buildInventory)) {
+      const slot = new InventorySlot(this.tables, 'build').fromJSON(item ?? {});
+      if (!slot.empty) {
+        this.buildInventory.push(slot);
+      }
+    }
+
+    this.awardInventory = [];
+    for (const item of asArray(raw.awardInventory)) {
+      const slot = new InventorySlot(this.tables, 'award').fromJSON(item ?? {});
+      if (!slot.empty) {
+        this.awardInventory.push(slot);
+      }
+    }
+
+    this.careers = new Map();
+    for (const [key, item] of entriesOf(raw.careers)) {
+      this.careers.set(key, new CareerInfo(this.tables, key).fromJSON(item));
+    }
+
+    this.migrateMap = new Map();
+    for (const [key] of entriesOf(raw.migrateMap)) {
+      this.migrateMap.set(key, 1);
+    }
+
+    this.lootRule = new Map();
+    for (const [key, item] of entriesOf(raw.lootRule)) {
+      this.lootRule.set(key, asNumber(item, 0));
+    }
+
+    // dungeonTickets：缺失时按地图配置补齐（原版语义）
+    this.dungeonTickets = new Map();
+    for (const key of Object.keys(this.tables.maps)) {
+      const map = this.tables.maps[key];
+      if (!map || !map.isDungeon || isEndlessMap(map)) {
+        continue;
+      }
+      const defaultTickets = typeof map.defaultTicketCount === 'number' ? map.defaultTicketCount : 1;
+      const ticketKey = map.group || key;
+      const saved = lookupDungeonTicket(raw.dungeonTickets, ticketKey);
+      this.dungeonTickets.set(ticketKey, saved !== undefined ? saved : defaultTickets);
+    }
+
+    return this;
+  }
+
+  override toJSON(): PlayerJson {
+    const careers: Record<string, CareerInfoJson> = {};
+    for (const [key, info] of this.careers) {
+      careers[key] = info.toJSON();
+    }
+    const skillExp: Record<string, { level: number; exp: number }> = {};
+    for (const [key, record] of this.skillExp) {
+      skillExp[key] = { level: record.level, exp: record.exp };
+    }
+    const migrateMap: Record<string, number> = {};
+    for (const [key, item] of this.migrateMap) {
+      migrateMap[key] = item;
+    }
+    const lootRule: Record<string, number> = {};
+    for (const [key, item] of this.lootRule) {
+      lootRule[key] = item;
+    }
+    const dungeonTickets: Record<string, number> = {};
+    for (const [key, item] of this.dungeonTickets) {
+      dungeonTickets[key] = item;
+    }
+
+    return {
+      ...super.toJSON(),
+      timestamp: this.timestamp,
+      timelineId: this.timelineId,
+      banned: this.banned,
+      careers,
+      gold: this.gold,
+      inventory: this.inventory.map((slot) => slot.toJSON()),
+      inventoryDiamondLevel: this.inventoryDiamondLevel,
+      skillExp,
+      buildInventory: this.buildInventory.map((slot) => slot.toJSON()),
+      awardInventory: this.awardInventory.map((slot) => slot.toJSON()),
+      migrateMap,
+      lootRule,
+      minLootLevel: this.minLootLevel,
+      dungeonTickets,
+    };
+  }
+
+  // ───────────────────────── 职业 ─────────────────────────
+
+  /** 原版 `postCreate`：选默认职业 + 补满背包格 + 发放初始物资。 */
+  postCreate(): void {
+    this.selectCareer(this.roleData?.defaultCareer ?? '');
+    while (this.inventory.length < DEFAULT_INVENTORY_SIZE) {
+      this.inventory.push(new InventorySlot(this.tables, 'inventory'));
+    }
+
+    const startup = this.roleData?.startup ?? {};
+    for (const key of Object.keys(startup)) {
+      const entry = startup[key];
+      if (typeof entry === 'number') {
+        // 材料
+        const slot = this.awardInventory.find((item) => item.key === key);
+        if (slot) {
+          slot.count = (slot.count ?? 0) + entry;
+        } else {
+          this.awardInventory.push(
+            new InventorySlot(this.tables, 'award').fromJSON({ key, count: entry }),
+          );
+        }
+      } else if (entry) {
+        // 装备
+        this.awardInventory.push(
+          new InventorySlot(this.tables, 'award').fromJSON({
+            key,
+            count: 1,
+            quality: entry.quality,
+            affixes: entry.affixes,
+          }),
+        );
+      }
+    }
+  }
+
+  /** 原版 `postLoad`。 */
+  postLoad(): void {
+    this.selectCareer(this.currentCareer ?? '');
+    while (this.inventory.length < DEFAULT_INVENTORY_SIZE) {
+      this.inventory.push(new InventorySlot(this.tables, 'inventory'));
+    }
+  }
+
+  /** 原版 `selectCareer`。 */
+  selectCareer(career: string): void {
+    this.currentCareer = career;
+    const careerData = this.tables.careers[career];
+
+    if (!this.careers.has(career)) {
+      const info = new CareerInfo(this.tables, career);
+      if (careerData) {
+        info.selectedSkills = Object.keys(careerData.skills).filter(
+          (key) => (careerData.skills[key] ?? 0) <= 1,
+        );
+        const weapon = careerData.equipments?.weapon;
+        if (weapon) {
+          info.equipments.weapon.fromJSON({ key: weapon, count: 1 });
+        }
+      }
+      this.careers.set(career, info);
+    }
+
+    this.currentCareerLevel = this.level;
+
+    if (careerData) {
+      for (const key of Object.keys(careerData.skills)) {
+        const group = this.tables.skills[key]?.expGroup || key;
+        if (!this.skillExp.has(group)) {
+          this.skillExp.set(group, { level: 0, exp: 0 });
+        }
+      }
+    }
+  }
+
+  getCareerLevel(key: string): number {
+    const data = this.careers.get(key);
+    return data ? data.level : 0;
+  }
+
+  // ───────────────────────── 背包 ─────────────────────────
+
+  /** 原版 `emptySlot(target)`：返回第一个空格下标，无空格返回 -1。 */
+  emptySlot(target: InventorySlot[]): number {
+    for (let i = 0; i < target.length; i++) {
+      if (!target[i]!.key) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * 原版 `notFullSlot(target, key, stack, dungeonKey)`：找可继续堆叠的格子；
+   * 找不到则占用一个空格并写入 key（**副作用**，与原版一致）。
+   */
+  notFullSlot(
+    target: InventorySlot[],
+    key: string,
+    stack: number,
+    dungeonKey: string | null = null,
+  ): number {
+    for (let i = 0; i < target.length; i++) {
+      const slot = target[i]!;
+      if (
+        slot &&
+        slot.key === key &&
+        (key !== 'ticket' || dungeonKey === slot.dungeonKey) &&
+        (slot.count ?? 0) < stack
+      ) {
+        return i;
+      }
+    }
+    const ret = this.emptySlot(target);
+    if (ret >= 0) {
+      target[ret]!.key = key;
+      if (key === 'ticket') {
+        target[ret]!.dungeonKey = dungeonKey;
+      }
+    }
+    return ret;
+  }
+
+  /** 原版 `loot(good, _target)`：入包（金币/神力直接结算，其余按堆叠规则）。 */
+  loot(good: InventorySlot, target?: InventorySlot[]): void {
+    const bag = target ?? this.inventory;
+    const { key } = good;
+
+    if (good.empty || key === null) {
+      return;
+    }
+    if (key === 'gold') {
+      this.gold += good.count ?? 0;
+      good.clear();
+      return;
+    }
+    if (key === 'diamonds') {
+      this.account.diamonds += good.count ?? 0;
+      good.clear();
+      return;
+    }
+    // 原版 `goods[key].stack`（未知 key 会 TypeError）；这里未知 key 视为不可堆叠
+    const limit = key === 'ticket' ? MAX_TICKET_STACK : this.tables.goods[key]?.stack;
+    if (!limit) {
+      // 不可堆叠物品
+      const index = this.emptySlot(bag);
+      if (index < 0) {
+        return;
+      }
+      bag[index]!.fromJSON(good.toJSON());
+      good.clear();
+      return;
+    }
+
+    // 可以堆叠物品
+    while ((good.count ?? 0) > 0) {
+      const index = this.notFullSlot(bag, key, limit, good.dungeonKey);
+      if (index < 0) {
+        // 没有获取完毕。
+        return;
+      }
+      const canPlace = Math.min(good.count ?? 0, limit - (bag[index]!.count ?? 0));
+      bag[index]!.count = (bag[index]!.count ?? 0) + canPlace;
+      good.count = (good.count ?? 0) - canPlace;
+    }
+
+    if (key === 'ticket') {
+      const endlessLevel = getEndlessLevel(good.dungeonKey);
+      if (endlessLevel && endlessLevel > this.account.highestEndlessLevel) {
+        this.account.highestEndlessLevel = endlessLevel;
+      }
+    }
+    good.clear();
+  }
+
+  /** 原版 `sellItem(slot, count)`。 */
+  sellItem(slot: InventorySlot, count: number): void {
+    if (slot.key === null) {
+      return;
+    }
+    this.gold += slot.price * count;
+    if (slot.position === 'build') {
+      this.buildInventory = this.buildInventory.filter((item) => item !== slot);
+    } else if (slot.position === 'award') {
+      this.awardInventory = this.awardInventory.filter((item) => item !== slot);
+    } else {
+      slot.count = (slot.count ?? 0) - count;
+      if (slot.count === 0) {
+        slot.clear();
+      }
+    }
+  }
+
+  /** 原版 `countTicket(dungeonKey)`：地城钥匙 = 地图票 + 背包钥石 + 银行钥石。 */
+  countTicket(dungeonKey: string): number {
+    let count = this.dungeonTickets.get(dungeonKey) ?? 0;
+    count += this.inventory.reduce(
+      (sum, slot) =>
+        slot.key === 'ticket' && slot.dungeonKey === dungeonKey ? sum + (slot.count ?? 0) : sum,
+      0,
+    );
+    count += this.account.bank.reduce(
+      (sum, slot) =>
+        slot.key === 'ticket' && slot.dungeonKey === dungeonKey ? sum + (slot.count ?? 0) : sum,
+      0,
+    );
+    return count;
+  }
+
+  /** 原版 `costTicket(key)`。 */
+  costTicket(key: string): void {
+    const mapCount = this.dungeonTickets.get(key);
+    if (mapCount !== undefined && mapCount > 0) {
+      this.dungeonTickets.set(key, mapCount - 1);
+      return;
+    }
+    const finalSlot =
+      this.inventory.find((slot) => slot.key === 'ticket' && slot.dungeonKey === key) ??
+      this.account.bank.find((slot) => slot.key === 'ticket' && slot.dungeonKey === key);
+    if (finalSlot) {
+      finalSlot.count = (finalSlot.count ?? 0) - 1;
+      if (finalSlot.count === 0) {
+        finalSlot.clear();
+      }
+    }
+  }
+
+  /** 原版 `countGood(key)`：只统计背包（不含银行/锻造/奖励格）。 */
+  countGood(key: string): number {
+    return this.inventory.reduce((sum, slot) => (slot.key === key ? sum + (slot.count ?? 0) : sum), 0);
+  }
+
+  /** 原版 `costGood(key, count)`：从背包**尾部**开始扣，返回未扣完的剩余数量。 */
+  costGood(key: string, count: number): number {
+    let rest = count;
+    for (let i = this.inventory.length - 1; i >= 0; i--) {
+      const slot = this.inventory[i]!;
+      if (slot.key === key) {
+        const dec = Math.min(rest, slot.count ?? 0);
+        slot.count = (slot.count ?? 0) - dec;
+        if ((slot.count ?? 0) <= 0) {
+          slot.clear();
+        }
+        rest -= dec;
+        if (rest <= 0) {
+          return 0;
+        }
+      }
+    }
+    return rest;
+  }
+
+  /**
+   * 原版 `getInventory(target)`：从生产/奖励包裹里领取所有物品
+   * （包裹已满时剩余的原样保留在对应包裹里）。
+   *
+   * 签名变化：原版内部直接调用单例 `world.lootGoods(target)` 并 `this.save()`；
+   * 这里把 `lootGoods` 作为参数注入，并去掉存档副作用（服务端在同一事务里显式落库）。
+   */
+  getInventory(
+    target: InventorySlot[],
+    lootGoods: (target: InventorySlot[]) => InventorySlot[],
+  ): void {
+    const next = lootGoods(target);
+    target.length = 0;
+    target.push(...next);
+  }
+
+  // ───────────────────────── 技能 ─────────────────────────
+
+  /** 原版 `getSkillLevel(key)`（按 `expGroup` 共享等级）。 */
+  getSkillLevel(key: string): number {
+    const group = this.tables.skills[key]?.expGroup || key;
+    return this.skillExp.get(group)?.level ?? 0;
+  }
+
+  /**
+   * 原版 `addSkillExp(key, value)`。
+   *
+   * 与原版一致的两个门槛：技能等级不得超过 `currentCareerLevel`；升级只结算一次
+   * （`if (exp >= maxExp)`，**不是 while**）。
+   * 经验倍率取 `account.updateRate`（原版 `world.updateRate`，离线快进的放大系数）。
+   */
+  addSkillExp(key: string, value: number): void {
+    const skillData = this.tables.skills[key];
+    if (!skillData) {
+      return;
+    }
+    const record = this.skillExp.get(skillData.expGroup || key);
+    if (!record) {
+      return;
+    }
+    if (record.level > this.currentCareerLevel) {
+      return;
+    }
+
+    const maxExp = skillData.maxExp(record.level);
+    record.exp += this.account.updateRate * value;
+    if (record.exp >= maxExp) {
+      record.exp -= maxExp;
+      record.level += 1;
+    }
+  }
+
+  // ───────────────────────── 装备 ─────────────────────────
+
+  /** 原版 `equip(slot)`。 */
+  equip(slot: InventorySlot): void {
+    const { goodData } = slot;
+    if (!goodData || goodData.type !== 'equip' || !goodData.position) {
+      return;
+    }
+    const equipments = this.equipments;
+    if (!equipments) {
+      return;
+    }
+    equipments[goodData.position].swap(slot);
+  }
+
+  /** 原版 `unequip(slot)`：换到第一个空格。 */
+  unequip(slot: InventorySlot): void {
+    const empty = this.emptySlot(this.inventory);
+    if (empty >= 0) {
+      this.inventory[empty]!.swap(slot);
+    }
+  }
+
+  /**
+   * 原版 `sortInventory(target)`：整理背包（类型 → 钥石地图等级 → 品质 → 部位/等级 → goodOrder）。
+   *
+   * ⚠️ 逐行保留原版的一个笔误：比较两张钥石地图等级时，`level2` 也用 `mapData1`。
+   * 这会退化成「按 key 排序」，但为了数值/顺序完全一致，此处不修正。
+   *
+   * ⚠️ 原版把**每个**格子都复制成 `position='inventory'` 的临时格子（即使整理的是银行），
+   * 因此整理后所有格子 `position` 都变成 `'inventory'`。同样逐行保留。
+   */
+  sortInventory(target: InventorySlot[] = this.inventory): void {
+    const goodOrder = getGoodOrder(this.tables);
+    const tmp = target
+      .filter((item) => item.key)
+      .map((item) => new InventorySlot(this.tables, 'inventory').fromJSON(item.toJSON()));
+
+    const compMap = (a: string, b: string, map: Record<string, number>): number =>
+      (map[a] ?? 0) - (map[b] ?? 0);
+
+    tmp.sort((a, b) => {
+      const atype = a.goodData ? a.goodData.type : (a.key ?? '');
+      const btype = b.goodData ? b.goodData.type : (b.key ?? '');
+      if (atype !== btype) {
+        return compMap(atype, btype, {
+          junk: 0,
+          package: 1,
+          material: 2,
+          ticket: 3,
+          equip: 4,
+        });
+      }
+      if (atype === 'ticket' && a.dungeonKey !== b.dungeonKey) {
+        // 地图的话，比较地图等级和key
+        const mapData1 = a.dungeonKey === null ? undefined : this.tables.maps[a.dungeonKey];
+        const level1 = getEndlessMapLevel(a.dungeonKey) || mapData1?.level || 0;
+        // 原版笔误：这里用的是 mapData1（而非 mapData2），逐行保留
+        const level2 = getEndlessMapLevel(b.dungeonKey) || mapData1?.level || 0;
+        if (level1 !== level2) {
+          return level1 - level2;
+        }
+        return (a.dungeonKey ?? '') < (b.dungeonKey ?? '') ? -1 : 1;
+      }
+      const aq = a.displayQuality;
+      const bq = b.displayQuality;
+      if (aq !== bq) {
+        return (aq ?? 0) - (bq ?? 0);
+      }
+      if (atype === 'equip') {
+        const ao = a.equipPositionOrder;
+        const bo = b.equipPositionOrder;
+        if (ao !== bo) {
+          return (ao ?? 0) - (bo ?? 0);
+        }
+        if (a.level !== b.level) {
+          return a.level - b.level;
+        }
+      }
+      return compMap(a.key ?? '', b.key ?? '', goodOrder);
+    });
+
+    target.forEach((item) => item.clear());
+    for (const slot of tmp) {
+      this.loot(slot, target);
+    }
+  }
+}
+
+/** 读取存档里的 `dungeonTickets`（同时支持 Map 与普通对象；原版还支持 ObservableMap）。 */
+function lookupDungeonTicket(source: unknown, key: string): number | undefined {
+  if (source instanceof Map) {
+    const value: unknown = source.get(key);
+    return typeof value === 'number' && !Number.isNaN(value) ? value : undefined;
+  }
+  const raw = asRecord(source)[key];
+  return typeof raw === 'number' && !Number.isNaN(raw) ? raw : undefined;
+}

@@ -6,7 +6,7 @@
  */
 
 import type { DataTables } from '../contracts/data.js';
-import { asNumber, asRecord, asStringArray } from './player-meta.js';
+import { asNumber, asRecord, asStringArray, asTruthyNumber } from './player-meta.js';
 import { InventorySlot, type InventorySlotJson } from './inventory-slot.js';
 
 /** 四个装备位（原版 `equipments` 的固定键）。 */
@@ -79,10 +79,11 @@ export class CareerInfo {
   fromJSON(value: unknown): this {
     const raw = asRecord(value);
     this.exp = asNumber(raw.exp, 0);
-    this.level = asNumber(raw.level, 1);
+    // 原版是 `v.level || 1` / `v.maxLevel || 60`：0 也要落到默认值
+    this.level = asTruthyNumber(raw.level, 1);
     this.peakExp = asNumber(raw.peakExp, 0);
     this.peakLevel = asNumber(raw.peakLevel, 0);
-    this.maxLevel = asNumber(raw.maxLevel, 60);
+    this.maxLevel = asTruthyNumber(raw.maxLevel, 60);
 
     if (raw.equipments) {
       const equipments = asRecord(raw.equipments);

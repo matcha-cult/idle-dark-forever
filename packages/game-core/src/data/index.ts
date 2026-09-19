@@ -1,29 +1,80 @@
 /**
- * ⚠️ 占位实现 —— 由「数据表 TS 化」任务替换为真实的 183 个数据文件移植。
+ * 数据表组装入口。
  *
- * 该文件存在的唯一目的：在数据表尚未移植完成时，让 `src/index.ts` 的导出面保持可编译。
- * 真实实现必须：显式组装（禁止模块级副作用）、保留函数型规则、随机函数注入 `Rng`。
+ * ⚠️ 与原版的唯一结构性差异：**没有模块级副作用**。
+ * 原版 `data/index.js` 靠 `require('./packages/nightmare')` / `require('./packages/year2018')`
+ * 在 import 期原地改写全局注册表（注册顺序即行为）；这里改成显式的
+ * `registerNightmare(tables)` → `registerYear2018(tables)` 调用，顺序与原版 require 顺序一致：
+ *
+ *   基础表（data/base.js 的各表） → nightmare → year2018
+ *
+ * `year2018/redbag.js` 会给「当时已存在的」所有 `enemies` / `maps` 追加红包掉落，
+ * 因此这个顺序是**语义的一部分**（原版注释也强调「活动副本不掉落红包，所以这个顺序很重要」）。
  */
 
-import type { DataTables } from '../contracts/data.js';
+import type { DataTables, MutableDataTables } from '../contracts/data.js';
+import { cloneTables } from './_util.js';
 
+import { affixes } from './affixes.js';
+import { announcement } from './announcement.js';
+import { buffs } from './buffs.js';
+import { careers } from './careers.js';
+import { enemyAffixes } from './enemy-affixes.js';
+import { enemies } from './enemies.js';
+import { enhances } from './enhances.js';
+import { goods } from './goods.js';
+import { legends } from './legends.js';
+import { maps } from './maps.js';
+import { medicines } from './medicines.js';
+import { passives } from './passives.js';
+import { roles } from './roles.js';
+import { skills } from './skills.js';
+import { stories } from './stories.js';
+import { upgrades } from './upgrades.js';
+
+import { registerNightmare } from './packages/nightmare.js';
+import { registerYear2018 } from './packages/year2018.js';
+
+export { registerNightmare, registerYear2018 };
+
+/**
+ * 基础表（未叠加 `data/packages/*`）。
+ *
+ * 类型收口说明：`_shapes.ts` 里的条目类型比冻结契约「更宽」——契约把 hook 的
+ * `this` / `world` / `self` 一律标成 `unknown`，而 183 个数据文件里的近千个函数必须能对它们
+ * 做鸭子类型调用。两者描述的其实是同一批对象，这里做**一次**显式边界转换，
+ * 换取 `src/data/**` 内部全程 `strict` + `noUncheckedIndexedAccess`。
+ */
+const baseTables = {
+  careers,
+  roles,
+  maps,
+  enemies,
+  skills,
+  goods,
+  passives,
+  enhances,
+  buffs,
+  affixes,
+  enemyAffixes,
+  stories,
+  legends,
+  medicines,
+  upgrades,
+  announcement,
+} as unknown as DataTables;
+
+export { baseTables };
+
+/**
+ * 构造一套可独立使用的数据表。
+ *
+ * 每次调用都返回**全新的表对象**（条目与 `loots` 数组均拷贝），
+ * 因此 `registerYear2018` 追加红包掉落不会污染模块级常量，也不会在多次调用间累加。
+ */
 export function createDefaultTables(): DataTables {
-  return {
-    careers: {},
-    roles: {},
-    maps: {},
-    enemies: {},
-    skills: {},
-    goods: {},
-    passives: {},
-    enhances: {},
-    buffs: {},
-    affixes: {},
-    enemyAffixes: {},
-    stories: {},
-    legends: {},
-    medicines: {},
-    upgrades: { bankByDiamonds: [], inventoryByDiamonds: [], inventory: [] },
-    announcement: { version: '0.0.0' },
-  };
+  const tables: MutableDataTables = cloneTables(baseTables);
+  registerNightmare(tables);
+  registerYear2018(tables);
+  return tables;
 }

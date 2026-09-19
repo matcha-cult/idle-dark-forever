@@ -3332,6 +3332,7 @@ function getLevelBonus(level: number) {
   if (level <= 70) {
     return level * 0.5 + 1 - 6;
   }
+  return NaN;
 }
 
 const elements: EnemyEntry[] = [

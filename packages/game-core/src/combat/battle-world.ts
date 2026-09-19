@@ -192,6 +192,13 @@ export class BattleWorld {
 
   private disposed = false;
 
+  /** 世界内单位 id 序列（替代原版模块级 `keyGenerator`，见 `Unit` 构造器注释）。 */
+  private unitKeySeq = 0;
+
+  nextUnitKey(): number {
+    return (this.unitKeySeq += 1);
+  }
+
   constructor(options: BattleWorldOptions) {
     this.clock = options.clock;
     this.logicClock = new Timeline(options.clock);

@@ -37,6 +37,17 @@ export function asNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && !Number.isNaN(value) ? value : fallback;
 }
 
+/**
+ * 精确对齐原版 `v.x || fallback`（fallback 非 0 时必须用它，而不是 {@link asNumber}）。
+ *
+ * 差别就在 `0`：`v.level || 1` 会把 `0`/`NaN`/`undefined` **全部**变成 1，
+ * 而 `asNumber(v.level, 1)` 会把 `0` 原样保留。
+ * 原版受影响的字段：`CareerInfo.level`(1) / `CareerInfo.maxLevel`(60) / `Player.timestamp`(Date.now)。
+ */
+export function asTruthyNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && value !== 0 && !Number.isNaN(value) ? value : fallback;
+}
+
 /** 数字或 `null`。 */
 export function asNumberOrNull(value: unknown): number | null {
   return typeof value === 'number' && !Number.isNaN(value) ? value : null;
@@ -240,12 +251,13 @@ export class PlayerMeta {
     return this.careerData?.name;
   }
 
-  /** 便捷工厂（`new PlayerMeta(tables, key).fromJSON(v)`）。 */
-  static fromJSON(tables: DataTables, key: string, value: unknown): PlayerMeta {
-    return new PlayerMeta(tables, key).fromJSON(value);
-  }
-
-  /** 原版 `PlayerMeta.fromJS`：缺失字段兜底 + `currentCareer` 回落到角色默认职业。 */
+  /**
+   * 原版 `PlayerMeta.fromJS`：缺失字段兜底 + `currentCareer` 回落到角色默认职业。
+   *
+   * 注：这里**不提供** `static fromJSON`——`Player extends PlayerMeta`，
+   * 子类静态工厂签名（多出 `now` / `account`）会与基类静态侧不兼容（TS2417）。
+   * 统一走 `new PlayerMeta(tables, key).fromJSON(v)` 与 `Player.fromJSON(tables, key, now, v, account?)`。
+   */
   fromJSON(value: unknown): this {
     const raw = asRecord(value);
     this.role = asString(raw.role, 'Eyer');

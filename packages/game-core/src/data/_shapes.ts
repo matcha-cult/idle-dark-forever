@@ -97,7 +97,7 @@ export interface SkillStateLike {
   unit: UnitLike;
   /** 施法者（召唤物的技能状态上才有）。 */
   summoner: UnitLike;
-  skillData: Loose<SkillData>;
+  skillData: SkillDataLike;
   notBreakable?: boolean;
   reduceCoolDown(ms: number): void;
   runAttrHooks(value: number, name: string, ...extra: HookArg[]): number;
@@ -170,13 +170,13 @@ export interface UnitLike {
   kill(all?: boolean, ...extra: HookArg[]): void;
   stun(ms: number, type?: string, force?: boolean, ...extra: HookArg[]): boolean;
   startRead(type: string, ms: number, arg?: HookArg, skillState?: SkillStateLike): void;
-  breakCasting(): void;
+  breakCasting(ms?: number): void;
   transformType(type: string): void;
   testCrit(rate?: number, ...extra: HookArg[]): boolean;
   getCritBonus(crit?: HookArg, bonus?: number): number;
   getSkillLevel(key: string): number;
   /** 原版里 `summonSkill` 既是方法（`unit.summonSkill('x')`）又会被当成技能状态读 `.skillData`。 */
-  summonSkill: ((key: string, level?: number) => void) & { skillData: Loose<SkillData>; notBreakable?: boolean };
+  summonSkill: ((key: string, level?: number) => void) & { skillData: SkillDataLike; notBreakable?: boolean };
   useExtraSkill(key: string): void;
   setCamp(camp: string): void;
   setTarget(target: UnitLike | null): void;
@@ -261,6 +261,11 @@ export type BuffHooks = Record<string, BuffHook>;
 /** `skills.cost` 的单项：原版既可能是数字，也可能是 `(self) => number`。 */
 export type SkillCostEntry = number | ((self: UnitLike) => number);
 export type SkillCostKey = 'hp' | 'mp' | 'rp' | 'ep' | 'comboPoint';
+
+/** 运行时读到的技能定义（`skillState.skillData`）：`cost` 的每个键既可能是数字也可能是函数。 */
+export type SkillDataLike = Loose<Omit<SkillData, 'cost'>> & {
+  cost: Record<string, number | ((self: UnitLike) => number)>;
+};
 
 /** 掉落条目（允许原版额外字段；`maxLevel` 在原版用的是 `{ type, value }` 而不是 `count`）。 */
 export type Loot = Loose<LootEntry> | Loose<{ type: 'maxLevel'; value: number; rate?: number }>;

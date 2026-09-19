@@ -74,7 +74,13 @@ export class Born {
     if (savedState) {
       this.over = savedState.over ?? false;
       this.total = savedState.total ?? 0;
-      this.setTimer(savedState.timer ?? 0);
+      // 原版直接 `this.setTimer(savedState.timer)`：`undefined` 会走默认分支（重新随机延迟），
+      // 0（或缺失时被 `?? 0` 误替换）会立刻刷怪。这里保持原版的 undefined 语义。
+      if (savedState.timer !== undefined) {
+        this.setTimer(savedState.timer);
+      } else {
+        this.setTimer();
+      }
     } else {
       this.setTimer(true);
     }

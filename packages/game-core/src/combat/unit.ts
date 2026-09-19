@@ -27,8 +27,6 @@ export type ResourceKey = 'hp' | 'mp' | 'rp' | 'ep' | 'comboPoint';
 
 const RECOVERY_RATE = 0.5;
 
-let keyGenerator = 0;
-
 /**
  * 原版 `addAttrHook` 用的全局 id 生成器（第 862–871 行）。
  * 跨单位共享，保证同一单位内 id 唯一即可；这里逐行照抄（含 10 万回绕）。
@@ -110,7 +108,11 @@ export class Unit {
     this.logicClock = world.logicClock;
     // 原版 `this.timeline = new TimeLine(timeline)`：每个单位一棵子时钟（攻速作用于它）。
     this.clock = new Timeline(world.logicClock);
-    this.key = (keyGenerator += 1);
+    // ⚠️ 原版 `key` 来自模块级全局自增计数器（`let keyGenerator = 0`），
+    // 因此同一进程内「第二个世界」的单位 id 会从中间继续，无法做金样逐字节回归。
+    // 移植后改为**世界内自增**（`world.nextUnitKey()`），既保持单位 id 唯一，
+    // 又让「同种子两次运行」得到同一份事件流。见交付报告差异清单。
+    this.key = world.nextUnitKey();
   }
 
   /** 事件里使用的稳定 id。 */

@@ -8,16 +8,24 @@
 import { describe, expect, it } from 'vitest';
 
 import { EnemyUnit } from './enemy-unit.js';
-import { makeTestWorld } from './test-support.js';
+import { makePlayer, makeTestWorld } from './test-support.js';
 
-function bare(seed = 42) {
+/**
+ * 造一对单位：`from`/`to` 都是 tank（def=50、maxHp=300）。
+ * 默认把 `to` 的护甲清零，只有护甲用例显式保留；这样每个用例只考验一步。
+ */
+function bare(seed = 42, keepDef = false) {
   const t = makeTestWorld({ seed });
-  const from = new EnemyUnit(t.world, 'dummy', 0);
+  const from = new EnemyUnit(t.world, 'dummy', 0); // dummy 有 melee 技能
   const to = new EnemyUnit(t.world, 'tank', 0);
   t.world.addUnit(from);
   t.world.addUnit(to);
   from.camp = 'enemy';
   to.camp = 'enemy';
+  if (!keepDef) {
+    from.addAttrHook('def', (() => 0) as never);
+    to.addAttrHook('def', (() => 0) as never);
+  }
   return { ...t, from, to, skill: from.skills[0]! };
 }
 
@@ -55,16 +63,31 @@ describe('sendDamage 管线', () => {
     expect(to.hp).toBe(230);
   });
 
-  it('③ 吸收百分比：`${type}Absorb` 先扣再进护甲/抗性', () => {
+  it('③ 吸收百分比：`fireAbsorb` 先扣再进抗性', () => {
     const { world, from, to, skill } = bare();
-    to.addAttrHook('meleeAbsorb', (() => 0.5) as never);
-    const ret = world.sendDamage('melee', from, to, skill, 100, false);
-    expect(ret).toBe(50); // (100 - 50) / (1 + 0/200)
+    // 注意：原版只有 PlayerUnit 定义 `meleeAbsorb`；EnemyUnit 走 `fireAbsorb`。
+    to.addAttrHook('fireAbsorb', (() => 0.5) as never);
+    const ret = world.sendDamage('fire', from, to, skill, 100, false);
+    expect(ret).toBe(50); // (100 - 50) / (1 + fireResist 0 /200)
     expect(to.hp).toBe(250);
   });
 
+  it('③ melee 吸收%在 PlayerUnit 上生效（原版只给玩家定义 meleeAbsorb）', () => {
+    const t = makeTestWorld({ seed: 42 });
+    const player = makePlayer();
+    const unit = t.world.addPlayer(player);
+    unit.addAttrHook('def', (() => 0) as never);
+    unit.addAttrHook('meleeAbsorb', (() => 0.5) as never);
+    const from = new EnemyUnit(t.world, 'dummy', 0);
+    t.world.addUnit(from);
+    from.camp = 'enemy';
+    const ret = t.world.sendDamage('melee', from, unit, from.skills[0]!, 100, false);
+    expect(ret).toBe(50);
+    expect(t.sink.events.find((e) => e.kind === 'damage')!.absorbed).toBe(50);
+  });
+
   it('④ 护甲：melee 走 (value-absorbed)/(1+def/200)', () => {
-    const { world, from, to, skill } = bare();
+    const { world, from, to, skill } = bare(42, true);
     expect(to.def).toBe(50); // tank fixture 自带 def=50
     const ret = world.sendDamage('melee', from, to, skill, 100, false);
     expect(ret).toBeCloseTo(80, 10); // 100 / 1.25
@@ -104,11 +127,11 @@ describe('sendDamage 管线', () => {
 
   it('管线顺序不可变：吸收% → 护甲 → 护盾', () => {
     const { world, from, to, skill } = bare();
-    to.addAttrHook('meleeAbsorb', (() => 0.5) as never); // → 50
+    to.addAttrHook('fireAbsorb', (() => 0.5) as never); // → 50
     to.addAttrHook('absorbed', ((v: number) => v - 10) as never); // → 40
-    const ret = world.sendDamage('melee', from, to, skill, 100, false);
-    // (100 - 50) / (1 + 50/200) = 40 → 护盾再吸 10 → 30
-    expect(ret).toBeCloseTo(30, 10);
+    const ret = world.sendDamage('fire', from, to, skill, 100, false);
+    // (100 - 50) / (1 + 0/200) = 50 → 护盾再吸 10 → 40
+    expect(ret).toBeCloseTo(40, 10);
   });
 
   it('skill 为 null 时不发 damage 事件（对齐原版 message.sendDamage 的 early return）', () => {

@@ -18,6 +18,8 @@ import { SeededRngFactory } from '../rng/index.js';
 import { VirtualClock } from '../sim/index.js';
 import { BattleWorld, type BattleWorldOptions } from './battle-world.js';
 import type { PlayerLike } from './player-unit.js';
+import type { Unit } from './unit.js';
+import type { SkillState } from './skill-state.js';
 
 /** 收集所有事件的可重放 Sink。事件字段顺序固定，便于逐字节比较。 */
 export class RecordingSink implements BattleSink {
@@ -174,15 +176,19 @@ export function makeTables(overrides?: Partial<DataTables>): DataTables {
       coolDown: 1000,
       effect(this: unknown, world: unknown, self: unknown) {
         const w = world as BattleWorld;
-        const u = self as { target: { id: string } | null; atk: number };
-        const state = this as {
-          type: string;
-          unit: { atk: number };
-        };
-        if (!u.target) {
+        const u = self as Unit;
+        const state = this as SkillState;
+        const target = u.target;
+        if (!target) {
           return;
         }
-        w.sendDamage('melee', u as never, u.target as never, state as never, u.atk, false);
+        // 与真实数据里的普攻一致：先闪避判定，再暴击判定。
+        if (w.testDodge(u, target, state)) {
+          return;
+        }
+        const crit = u.testCrit();
+        const bonus = u.getCritBonus(crit);
+        w.sendDamage('melee', u, target, state, u.atk * bonus, crit > 0);
       },
     }),
     fireball: skillData({
@@ -194,12 +200,18 @@ export function makeTables(overrides?: Partial<DataTables>): DataTables {
       cost: { mp: 5 },
       effect(this: unknown, world: unknown, self: unknown) {
         const w = world as BattleWorld;
-        const u = self as { target: { id: string } | null; atk: number };
-        const state = this as unknown;
-        if (!u.target) {
+        const u = self as Unit;
+        const state = this as SkillState;
+        const target = u.target;
+        if (!target) {
           return;
         }
-        w.sendDamage('fire', u as never, u.target as never, state as never, u.atk * 2, false);
+        if (w.testDodge(u, target, state)) {
+          return;
+        }
+        const crit = u.testCrit();
+        const bonus = u.getCritBonus(crit);
+        w.sendDamage('fire', u, target, state, u.atk * 2 * bonus, crit > 0);
       },
     }),
   };
@@ -237,8 +249,9 @@ export function makeTables(overrides?: Partial<DataTables>): DataTables {
       exp: 100,
       loots: [],
       phases: [
-        { description: 'p1', monsters: [{ type: 'dummy', total: 2 } as never] },
-        { description: 'p2', monsters: [{ type: 'tank', total: 1 } as never] },
+        // 契约把 phases[].monsters 标为 {type,total}，真实数据还有 max/delay（见交付报告 TODO）。
+        { description: 'p1', monsters: [{ type: 'dummy', total: 2, max: 1, delay: 1000 } as never] },
+        { description: 'p2', monsters: [{ type: 'tank', total: 1, max: 1, delay: 1000 } as never] },
       ],
     }),
   };
