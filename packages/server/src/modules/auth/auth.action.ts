@@ -12,6 +12,7 @@ import { Injectable } from '@nestjs/common';
 import { ActionController, ActionMethod, FlowContext } from '@nbb-ionet/core-framework';
 import { type ActionResult, AUTH_CMD, type LoginResponseDto, type MeDto, ok } from '@idle-dark/protocol';
 import { ActionError, dataOf, requireUserId, toNonEmptyString } from '../../ionet/action-support.js';
+import { guardAction } from '../../common/kernel/result.js';
 import { OnlineSessionService } from '../online/online-session.service.js';
 import { AuthService } from './auth.service.js';
 
