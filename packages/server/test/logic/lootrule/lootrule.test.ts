@@ -10,7 +10,7 @@ import {
   opSetMinLevel,
   opUpdateLootRule,
 } from '../../../src/modules/logic/lootrule/internal/loot-rule-ops.js';
-import { lootRuleActionOf, lootRuleKeyOf } from '../../../src/modules/logic/inventory/internal/loots.js';
+import { lootRuleActionOf, lootRuleKeyOf, parseLootRuleKey } from '@idle-dark/game-core';
 import { makeFakeCharacters, makeFakeContexts, makeFixture } from '../_helpers.js';
 
 function codeOf(fn: () => unknown): string {
@@ -45,16 +45,30 @@ describe('lootrule 状态与更新', () => {
     const fixture = makeFixture();
     const state = lootRuleStateOf(fixture.player);
     const first = state.rules[0]!;
+    const parsed = parseLootRuleKey(first.id)!;
     opUpdateLootRule(fixture.player, {
       rules: [{ ...first, action: 2, enabled: true }],
     });
     const after = lootRuleStateOf(fixture.player);
     expect(after.rules.find((rule) => rule.id === first.id)?.action).toBe(2);
 
-    // 停用该条后回落到 minLootLevel 判定
-    opUpdateLootRule(fixture.player, { rules: [{ ...first, action: 2, enabled: false }] });
+    // 持久化层编码：启用 = action 本身
     fixture.player.minLootLevel = 0;
-    expect(lootRuleActionOf(fixture.player, 'sword', 3, 50)).toBe(0);
+    expect(fixture.player.lootRule.get(first.id)).toBe(2);
+    // 战斗侧读同一编码 → 命中该条为「分解」，邻近品质不受影响
+    expect(lootRuleActionOf(fixture.player, parsed.clazz, parsed.quality, 999)).toBe(2);
+    expect(lootRuleActionOf(fixture.player, parsed.clazz, parsed.quality + 1, 999)).toBe(0);
+
+    // 停用该条 → 持久化编码 +10，且等价于未设置（回落 minLootLevel）
+    opUpdateLootRule(fixture.player, { rules: [{ ...first, action: 2, enabled: false }] });
+    expect(fixture.player.lootRule.get(first.id)).toBe(12);
+    expect(lootRuleActionOf(fixture.player, parsed.clazz, parsed.quality, 999)).toBe(0);
+    // 阈值 60、装备等级 50 → 兜底：0 品质卖钱、其余分解
+    fixture.player.minLootLevel = 60;
+    expect(lootRuleActionOf(fixture.player, parsed.clazz, parsed.quality, 50)).toBe(
+      parsed.quality === 0 ? 1 : 2,
+    );
+    expect(lootRuleActionOf(fixture.player, parsed.clazz, parsed.quality + 1, 50)).toBe(2);
   });
 
   it('非法规则 id / action / enabled → INVALID_PARAM', () => {

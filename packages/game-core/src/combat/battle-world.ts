@@ -32,6 +32,7 @@
 import type { BattleSink, Clock, Logger, Rng, TimerHandle } from '../contracts/ports.js';
 import type { DataTables, LootEntry, MapData } from '../contracts/data.js';
 import { Timeline } from '../sim/index.js';
+import { lootRuleActionOf } from '../rules/loot-rule.js';
 import { Camps } from './camps.js';
 import { EnemyBorn, DungeonState, type Born, type BornSavedState, type DungeonSavedState } from './spawner.js';
 import { EnemyUnit } from './enemy-unit.js';
@@ -550,20 +551,15 @@ export class BattleWorld {
 
   // ────────────────────────────── 掉落 ──────────────────────────────
 
+  /**
+   * 拾取判定：**委托 `rules/loot-rule.ts` 的唯一定义**。
+   *
+   * 这里曾经自己读 `lootRule.get(class)` 再 `rule[quality]`，与面板侧写入的
+   * `c:${class}:${quality}` 编码不匹配 → 永远返回 0，面板设置静默失效。
+   * 不要再在本地复制判定逻辑。
+   */
   getLootRule(clazz: string, quality: number, level: number): number {
-    const rule = this.player?.lootRule?.get(clazz);
-    const value = rule && rule[quality];
-    const ret = toNumber(value, 0);
-    if (ret) {
-      return ret;
-    }
-    if (this.player && level < (this.player.minLootLevel ?? 0)) {
-      if (quality === 0) {
-        return 1; // 出售
-      }
-      return 2; // 分解
-    }
-    return ret;
+    return lootRuleActionOf(this.player, clazz, quality, level);
   }
 
   lootGood(slot: LootSlot): void {

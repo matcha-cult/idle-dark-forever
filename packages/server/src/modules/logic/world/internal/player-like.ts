@@ -1,11 +1,12 @@
 /**
  * `PlayerLike` 适配 + 掉落落地
  *
- * `game-core` 的 `Player` 与 `combat` 的 `PlayerLike` 之间有两处**真实形状差异**：
+ * `game-core` 的 `Player` 与 `combat` 的 `PlayerLike` 之间曾有两处**真实形状差异**：
  *
- * 1. `PlayerLike.lootRule` 被标成 `Map<string, Record<number, number>>`，而 `Player.lootRule`
- *    实际是 `Map<string, number>`（见 `rules/player.ts:fromJSON`）。这里不改 game-core，
- *    运行期行为以 `Player` 为准（`rule[quality]` 取不到 → 回退 `minLootLevel` 规则）。
+ * 1. `PlayerLike.lootRule` 被误标成 `Map<string, Record<number, number>>`（原版的
+ *    `Map<class, number[]>`），而 `Player.lootRule` 实际是 `Map<string, number>`。
+ *    **已修正**为 `ReadonlyMap<string, number>`（见 `combat/player-unit.ts`）；这个类型谎言
+ *    曾经掩盖了掉落规则编码错配（面板写 `c:class:quality`、战斗按 `class` 读 → 恒不命中）。
  * 2. `PlayerLike.careerInfo` 是非可选，而 `Player.careerInfo` 是 `CareerInfo | undefined`。
  *
  * 另外 `BattleWorld.lootGood()` 会把**普通对象**（`{key:'gold'}` / 分解材料）交给
@@ -54,8 +55,13 @@ export function toPlayerLike(
           dungeonKey: (input as { dungeonKey?: unknown })?.dungeonKey ?? null,
         });
     const handled = (input as { handled?: unknown })?.handled;
+    // ⚠️ `player.loot()` 会 `clear()` 掉传入的 slot（key/count 归零）。
+    // 必须**先快照再落地**，否则 recorder 拿到的是空槽 —— 掉落推送会变成
+    // `{slot:{key:null,count:0}, handled:'sell'}`（`dto.gold` 也会因为
+    // `slot.key !== 'gold'` 而丢失），玩家什么也看不到。
+    const snapshot = recorder ? InventorySlot.fromJSON(tables, slot.position, slot.toJSON()) : null;
     player.loot(slot);
-    recorder?.record(slot, typeof handled === 'string' ? handled : 'pickup');
+    if (snapshot) recorder!.record(snapshot, typeof handled === 'string' ? handled : 'pickup');
   };
   Object.defineProperty(like, 'loot', { value: loot, writable: true, enumerable: true });
   return like;

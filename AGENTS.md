@@ -181,6 +181,7 @@ antd-zh token Menu --format markdown
 | 服务端启动 + 线协议冒烟 15/15 | 需要数据库健康（`/api/health` = 200） |
 | 路由探针 20/20 | 需要数据库（Action 会打到持久化层） |
 | **完整游戏流程冒烟 22/22** | `scripts/game-flow-smoke.mjs`，**已在本地实跑通过** |
+| **拾取规则冒烟 18/18** | `scripts/loot-rule-smoke.mjs`（真实战斗掉落 → `(battle,loot)` 推送；本地以 `LOOT_WINDOW_MS=300000` 实跑通过） |
 
 > 无数据库时的行为：`/api/health` 返回 `503 degraded`（正确降级），协议层断言仍可通过；
 > 但依赖 `users`/`characters` 的 Action 会返回 `INTERNAL`。
@@ -267,8 +268,41 @@ cd packages/server
 node dist/main.js &                        # 需先 pnpm run build；会读 .env
 node scripts/route-probe.mjs 3000 "$JWT_SECRET"    # 20/20 域 Action 是否都注册
 node scripts/game-flow-smoke.mjs 3000              # 完整流程（22 项断言）
+LOOT_WINDOW_MS=300000 node scripts/loot-rule-smoke.mjs 3000   # 拾取规则 → 真实掉落（18 项）
 ```
 
 > ⚠️ **不要占用 3000 端口做验证前先确认它是不是 xiuxian 的服务端**：
 > 两者健康检查形状不同（xiuxian 的响应没有 `service` 字段且会报 `redis`），
 > 打到别人的服务端会得到一堆莫名其妙的 404。本工程验证时用独立端口更安全。
+
+---
+
+## 11. 跨域硬约定：拾取规则编码（只允许一处定义）
+
+`Player.lootRule` 是 `Map<string, number>`（原版是 `Map<class, number[]>`），扁平编码为：
+
+| key | value |
+|---|---|
+| `__enabled__` | `1` 开 / `0` 关（缺省视为开） |
+| `c:${class}:${quality}` | `action`（启用）或 `action + 10`（该条停用）；`action` = 0 拾取 / 1 出售 / 2 分解 |
+
+**唯一定义在 `packages/game-core/src/rules/loot-rule.ts`**（`lootRuleKeyOf` / `parseLootRuleKey` /
+`encodeLootRule` / `decodeLootRule` / `lootRuleEnabledOf` / `lootRuleActionOf`）。
+面板（`server/.../lootrule/internal/loot-rule-ops.ts`）与战斗（`combat/battle-world.getLootRule`）
+都**只消费**这套定义。
+
+判定顺序：全局关 → 一律拾取；显式规则命中且 `action !== 0` → 用该 action；
+否则回落 `minLootLevel`（`level < minLootLevel` 时 0 品质出售、其余分解）。
+注意「显式设为拾取（0）」等价于未设置，仍会被 `minLootLevel` 兜底（与原版 `if (ret) return ret;` 一致）。
+
+> 教训：这两处曾各写一份实现，键格式（`class` vs `c:class:quality`）与值类型（`number` vs `number[]`）
+> 双双漂移，面板设置**静默失效**、永远回退兜底。类型撒谎（`PlayerLike.lootRule` 曾误标为
+> `Map<string, Record<number, number>>`）还让 `tsc` 无法发现。**禁止在消费侧复制编码或判定逻辑。**
+
+### 11.1 落地回调必须**先快照再 `player.loot()`**
+
+`Player.loot(slot)` 会把传入的 slot `clear()`（key/count 归零）。`toPlayerLike` 的 `lootRecorder`
+如果在其后才读 slot，拿到的是空槽 → `(battle, loot)` 推送变成 `{slot:{key:null,count:0}}`、
+`dto.gold` 也会因 `slot.key !== 'gold'` 丢失。
+因此 `internal/player-like.ts` 先 `InventorySlot.fromJSON(...)` 复制一份再调用 `player.loot`。
+新增任何"落地后记录"的回调都要遵守这条。

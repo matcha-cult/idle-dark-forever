@@ -13,6 +13,7 @@
  * - `AffixInfo` / `InventorySlot`
  * - `CareerInfo`
  * - `Player`
+ * - 拾取规则编码与判定（`lootRuleKeyOf` / `lootRuleActionOf` …，跨域唯一定义）
  * - `randomAffixValue` / `randomAffixes` / `isValidAffix` / `generateEquip` / `randomEquip`
  *   / `getMaterialLevel` / `getDecomposeMatrials`
  * - `checkRequirement` / `checkStory`
@@ -22,5 +23,6 @@ export * from './player-meta.js';
 export * from './inventory-slot.js';
 export * from './career-info.js';
 export * from './goods.js';
+export * from './loot-rule.js';
 export * from './check.js';
 export * from './player.js';

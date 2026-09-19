@@ -11,13 +11,14 @@
  * `Action` 值 0 拾取 / 1 出售 / 2 分解（协议 `LootRuleAction`）。
  * 未命中显式规则时回落到 `player.minLootLevel`（低于阈值：0 品质卖钱、其余分解）。
  *
- * ⚠️ `world/` 域的掉落结算必须复用 `lootRuleActionOf`（`inventory/internal/loots.ts`），
- * 否则「自动出售 / 分解」会与面板设置不一致。
+ * ⚠️ 两处**都不是本文件定义的**：编码与判定逻辑的唯一定义在
+ * `@idle-dark/game-core` 的 `rules/loot-rule.ts`（`lootRuleKeyOf` / `encodeLootRule` /
+ * `decodeLootRule` / `lootRuleActionOf` …）。这里只负责**读写面板状态**，
+ * 千万不要在服务端再复制一份编码。
  */
 import type { LootRuleEntryDto, LootRuleStateDto, LootRuleUpdateInput } from '@idle-dark/protocol';
 import { BusinessErrorCode } from '@idle-dark/protocol';
 import type { Player } from '@idle-dark/game-core';
-import { OpError } from '../../inventory/internal/op-error.js';
 import {
   LOOT_RULE_ENABLED_KEY,
   decodeLootRule,
@@ -25,7 +26,9 @@ import {
   lootRuleEnabledOf,
   lootRuleKeyOf,
   parseLootRuleKey,
-} from '../../inventory/internal/loots.js';
+} from '@idle-dark/game-core';
+import { OpError } from '../../inventory/internal/op-error.js';
+
 
 /** 规则矩阵的品质维度（原版 UI 为 5 格：普通..传说）。 */
 export const RULE_QUALITY_COUNT = 5;

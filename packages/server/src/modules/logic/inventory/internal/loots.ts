@@ -10,11 +10,16 @@
  *   `loots(..., noUpdateRate=true)` 一致）；
  * - 不处理 `world._endlessLevel` 的等级加成（开包不在无尽副本里结算）；
  * - 不弹提示（服务端只改状态，前端从 `inventory.list` 拿结果）。
+ *
+ * ⚠️ 拾取规则的**编码与判定**（`c:class:quality` / `+10 = 停用` / `minLootLevel` 兜底）
+ * 已统一到 `game-core` 的 `rules/loot-rule.ts`。本文件**只消费**，不得再复制一份实现
+ * （历史上这里与 `combat/battle-world.ts` 各写一份，编码漂移导致面板设置静默失效）。
  */
 import {
   InventorySlot,
   generateEquip,
   getDecomposeMatrials,
+  lootRuleActionOf,
   randomEquip,
   untransformEquipLevel,
   type DataTables,
@@ -22,75 +27,6 @@ import {
   type Player,
   type Rng,
 } from '@idle-dark/game-core';
-
-/** 拾取动作：0 拾取 / 1 出售 / 2 分解。 */
-export type LootAction = 0 | 1 | 2;
-
-/** 全局开关的哨兵 key（`player.lootRule` 里 `class|quality` 之外的单键）。 */
-export const LOOT_RULE_ENABLED_KEY = '__enabled__';
-/** 单条规则的编码前缀。 */
-export const LOOT_RULE_PREFIX = 'c:';
-
-/** 规则 key：`c:${class}:${quality}`。 */
-export function lootRuleKeyOf(clazz: string, quality: number): string {
-  return `${LOOT_RULE_PREFIX}${clazz}:${Math.trunc(quality)}`;
-}
-
-/** 解析规则 key → `{ class, quality }`（非法返回 null）。 */
-export function parseLootRuleKey(id: string): { clazz: string; quality: number } | null {
-  if (!id.startsWith(LOOT_RULE_PREFIX)) return null;
-  const rest = id.slice(LOOT_RULE_PREFIX.length);
-  const sep = rest.lastIndexOf(':');
-  if (sep <= 0 || sep === rest.length - 1) return null;
-  const clazz = rest.slice(0, sep);
-  const quality = Number(rest.slice(sep + 1));
-  if (!Number.isInteger(quality) || quality < 0 || quality > 6) return null;
-  return { clazz, quality };
-}
-
-/** 编码：启用 → `action`；停用 → `action + 10`。 */
-export function encodeLootRule(action: LootAction, enabled: boolean): number {
-  return enabled ? action : action + 10;
-}
-
-export function decodeLootRule(value: unknown): { action: LootAction; enabled: boolean } {
-  const n = typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : 0;
-  if (n >= 10) {
-    const action = n - 10;
-    return { action: clampAction(action), enabled: false };
-  }
-  return { action: clampAction(n), enabled: true };
-}
-
-function clampAction(value: number): LootAction {
-  if (value === 1) return 1;
-  if (value === 2) return 2;
-  return 0;
-}
-
-/** 全局拾取开关（缺省视为启用）。 */
-export function lootRuleEnabledOf(player: Player): boolean {
-  const raw = player.lootRule.get(LOOT_RULE_ENABLED_KEY);
-  if (raw === undefined) return true;
-  return raw !== 0;
-}
-
-/**
- * 原版 `world.getLootRule(clazz, quality, level)`：
- * 先看显式规则，未命中再看 `minLootLevel`（低于则 0 品质卖钱、其余分解）。
- */
-export function lootRuleActionOf(
-  player: Player,
-  clazz: string | undefined,
-  quality: number,
-  level: number,
-): LootAction {
-  if (!lootRuleEnabledOf(player)) return 0;
-  const decoded = decodeLootRule(player.lootRule.get(lootRuleKeyOf(clazz ?? '', quality)));
-  if (decoded.enabled && decoded.action !== 0) return decoded.action;
-  if (level < player.minLootLevel) return quality === 0 ? 1 : 2;
-  return 0;
-}
 
 function finiteNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;

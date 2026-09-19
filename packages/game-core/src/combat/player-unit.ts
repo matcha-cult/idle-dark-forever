@@ -79,7 +79,13 @@ export interface PlayerLike {
   selectCareer(career: string): void;
   dispose?(): void;
   // 掉落/门票（原版 `player.js` 的 inventory 侧，任务 A 只消费）：
-  lootRule?: Map<string, Record<number, number>>;
+  /**
+   * 拾取规则（扁平编码，见 `rules/loot-rule.ts`）。
+   *
+   * ⚠️ 这里曾误标为 `Map<string, Record<number, number>>`（原版的 `Map<class, number[]>`），
+   * 而 `Player.lootRule` 实际是 `Map<string, number>` —— 类型撒谎直接掩盖了掉落规则的编码错配。
+   */
+  lootRule?: ReadonlyMap<string, number>;
   minLootLevel?: number;
   loot?(slot: unknown): void;
   countTicket?(type: string): number;
