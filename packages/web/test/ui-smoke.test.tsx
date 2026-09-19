@@ -7,6 +7,7 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ReactElement } from 'react';
+import { runInAction } from 'mobx';
 import { htmlToText, renderToHtml } from '@idle-dark/ui-kit/testing';
 import { RootStore } from '../src/app/root-store.js';
 import { RootStoreProvider } from '../src/app/root-context.js';
@@ -81,5 +82,83 @@ describe('页面渲染冒烟（空数据）', () => {
       // ErrorBoundary 兜底卡片不应出现（出现说明面板渲染期抛错）
       expect(html).not.toContain('data-testid="error-boundary"');
     }
+  });
+});
+
+/**
+ * ⚠️ 这一段是**回归防护**，起因是一次真实事故：
+ * 上面的「空数据」冒烟**抓不到**只在「有数据分支」里执行的代码 ——
+ * `BattlePanel` 把地图列表写在 `world.maps.length === 0 ? … : （地图卡片）` 的
+ * **非空分支**里，所以空数据时那条分支根本不求值。当时该分支引用了一个未定义的
+ * `unlockedCount`，冒烟测试全绿，但真实浏览器一进战斗页就 `ReferenceError`。
+ *
+ * 教训：面板的冒烟**必须覆盖有数据的分支**，否则「能渲染」是假象。
+ */
+describe('页面渲染冒烟（有数据，防空分支假绿）', () => {
+  const HOME = {
+    key: 'home',
+    name: '自宅',
+    isDungeon: false,
+    level: 0,
+    lockedReason: null,
+    unlocked: true,
+    ticketCount: 0,
+    hint: '安全的避难所',
+  } as const;
+  const STREET = {
+    key: 'town.street',
+    name: '村间小路',
+    isDungeon: false,
+    level: 1,
+    lockedReason: null,
+    unlocked: true,
+    ticketCount: 0,
+  } as const;
+  const CAVE = {
+    key: 'town.cave',
+    name: '洞穴',
+    isDungeon: false,
+    level: 3,
+    lockedReason: '尚未满足进入条件',
+    unlocked: false,
+    ticketCount: 0,
+  } as const;
+
+  function seed(maps: unknown[], map = 'home'): RootStore {
+    const root = makeRoot();
+    runInAction(() => {
+      // ⚠️ `maps` 与 `snapshot` 是两个字段（真实链路里由 `applySnapshot` 同步），
+      // 只设 `snapshot` 不会更新面板读的 `maps`。
+      root.world.maps = maps as never;
+      root.world.snapshot = {
+        map,
+        endlessLevel: 0,
+        units: [],
+        maps: maps as never,
+        pendingMaps: [],
+        updateRate: 1,
+        paused: false,
+      };
+    });
+    return root;
+  }
+
+  it('战斗面板在地图非空时可渲染（含可进入与锁定两类）', () => {
+    const root = seed([HOME, STREET, CAVE]);
+    const html = render(<>{renderPanelContent('battle')}</>, root);
+    const text = htmlToText(html);
+
+    expect(html).not.toContain('data-testid="error-boundary"');
+    expect(text).toContain('村间小路');
+    expect(text).toContain('可进入 2 / 3 张');
+    // 默认只显示可进入的 → 锁定的那张不渲染
+    expect(text).not.toContain('洞穴');
+  });
+
+  it('全部地图都锁定时给出指引而不是一片空白', () => {
+    const root = seed([CAVE]);
+    const text = htmlToText(render(<>{renderPanelContent('battle')}</>, root));
+    expect(text).toContain('可进入 0 / 1 张');
+    expect(text).toContain('完成当前剧情后会解锁新地图');
   });
 });
