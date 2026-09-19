@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import type { Plugin, ViteDevServer } from 'vite';
+// 本地调试默认值（前端端口 / 后端端口与地址）的唯一真相。
+import devConfig from '../../dev.config.json';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -31,8 +33,21 @@ function watchWorkspaceSrc(): Plugin {
   };
 }
 
-/** 同源代理：REST `/api` 与 WS `/ws` 都打到后端，免 CORS。 */
-const target = process.env.VITE_BACKEND_ORIGIN ?? 'http://127.0.0.1:3000';
+/**
+ * 同源代理：REST `/api` 与 WS `/ws` 都打到后端，免 CORS。
+ *
+ * 默认值来自仓库根的 `dev.config.json`（与后端 `pnpm dev:server` 共用一份）；
+ * `VITE_BACKEND_ORIGIN` 仍可临时覆盖。
+ */
+const backendHost = devConfig.backendHost;
+const backendPort = devConfig.backendPort;
+const target = process.env.VITE_BACKEND_ORIGIN ?? `http://${backendHost}:${backendPort}`;
+
+/** 前端端口：`VITE_DEV_PORT` 优先，其次是 `dev.config.json`。 */
+const frontendPort = ((): number => {
+  const raw = Number(process.env.VITE_DEV_PORT ?? devConfig.frontendPort);
+  return Number.isInteger(raw) && raw > 0 && raw < 65_536 ? raw : devConfig.frontendPort;
+})();
 
 export default defineConfig({
   plugins: [react(), watchWorkspaceSrc()],
@@ -65,7 +80,10 @@ export default defineConfig({
     dedupe: ['react', 'react-dom', 'antd', '@ant-design/icons'],
   },
   server: {
-    port: 5173,
+    port: frontendPort,
+    // 端口被占用时**直接失败**，不要静默换号 ——
+    // 否则代理/收藏夹里那个地址会指向一个不存在的 dev server（曾因此误判"改了没生效"）。
+    strictPort: true,
     proxy: {
       '/api': { target, changeOrigin: true },
       '/ws': { target, ws: true, changeOrigin: true },

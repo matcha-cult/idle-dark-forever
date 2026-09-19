@@ -13,13 +13,38 @@
  *
  * `.env` 由 `src/main.ts` 的 `import 'dotenv/config'` 加载（dotenv 先于业务模块，
  * 见 main.ts 启动顺序说明），因此本脚本不再重复加载。
+ *
+ * 端口默认值来自仓库根的 `dev.config.json`（与前端 `vite.config.ts` 共用一份）。
+ * 这里**在 spawn 之前**写进 `process.env.PORT`：dotenv 默认**不覆盖**已存在的环境变量，
+ * 所以配置文件的端口能盖住 `.env` 里的 `PORT=3000`（那是给 CI / 生产用的），
+ * 而显式传的 `PORT=xxxx pnpm dev:server` 又能盖住配置文件。
  */
 import { spawn, spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.resolve(here, '..');
+
+/** 读根目录 `dev.config.json`；缺失或字段非法时回落到内置默认值（读坏配置不该挡开发）。 */
+function backendPortFromConfig() {
+  const fallback = 3100;
+  try {
+    const raw = JSON.parse(
+      readFileSync(path.resolve(pkgRoot, '../../dev.config.json'), 'utf8'),
+    );
+    const port = Number(raw?.backendPort);
+    return Number.isInteger(port) && port > 0 && port < 65_536 ? port : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+if (process.env.PORT === undefined || process.env.PORT === '') {
+  process.env.PORT = String(backendPortFromConfig());
+}
+console.log(`[dev] 后端端口 ${process.env.PORT}（dev.config.json，可用 PORT=… 覆盖）`);
 
 const initial = spawnSync('pnpm', ['exec', 'tsc', '-p', 'tsconfig.json'], {
   cwd: pkgRoot,

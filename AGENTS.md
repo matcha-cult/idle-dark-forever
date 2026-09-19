@@ -190,26 +190,57 @@ antd-zh token Menu --format markdown
 需要**脱离外部实例**做单测时，用内存替身实现 `DatabaseService` 的 `query` / `connect`
 （`packages/server/test/helpers/fake-database.ts` 已有），不要试图在沙箱里安装/启动 PostgreSQL。
 
-### 7.8 端口可能被**宿主预留**：`EADDRINUSE` 但 `ss` 看不见
+### 7.8 端口冲突排查：每次 bash 调用在**独立 PID namespace**
 
-本机实测：Vite 指定 `--port 5273 --strictPort` 报 `Error: Port 5273 is already in use`，
-但 `ss -ltn` / `netstat -ltn` 里**没有任何监听**、`curl` 也是 `000`（连 `[::1]` 也不通）。
-这不是"上一个进程没杀干净"—— 是 DSH 宿主侧的端口预留/代理占了它。
+**结论（已验证）**：DSH 的每次 `bash` 调用都跑在 `bwrap --unshare-pid` 里 ——
+`ps -eo pid,ppid,comm` 只能看到本调用自己的 `bwrap / bash / ps / head`，
+而**网络 namespace 是共享的**（`ss` 能看到别的调用绑的端口）。于是会出现两种看似矛盾的现场：
 
-排查与处置：
+| 现象 | 真相 |
+|---|---|
+| `ss` 里有监听、`ps` 里找不到对应进程 | 正常：进程在**另一次调用**的 PID namespace 里，`kill` / `pkill` 都够不到 |
+| bind 失败（`EADDRINUSE`）但 `ss` 空空如也、`curl` 也是 `000` | 端口确实被占（多半是上次调试残留的 dev server），只是那一刻没抓到 |
+
+排查只用**自己 bind 一次**（比 `ss` 可信）：
 
 ```bash
-# 用 bind 探测（比 ss 可靠：ss 看不到宿主预留）
 node -e "const n=require('net');const s=n.createServer();
 s.on('error',e=>{console.log('FAIL',e.code)});
 s.listen(5273,'127.0.0.1',()=>{console.log('OK');s.close()})"
 ```
-直接换一个端口即可（实测 5274 / 5275 / 8080 正常）。**不要**去 kill 别的进程 ——
-`ss` 里看不见的东西杀不到，且 3000 / 5173 是 `idle-path-of-xiuxian` 的服务。
 
-> 端口占用与"dev server 压根没监听"的 `000` 表现相同，但处置完全不同：
-> 前者的 `curl` 永远 `000` 且 bind 失败，后者 bind 成功却无响应。
-> 判断依据只能是**自己 bind 一次**，而不是看 `ss`。
+- `FAIL EADDRINUSE` → 换端口，或让**用户在他自己的终端里**关掉那个进程（你够不到它）。
+- `OK` 但 Vite 仍报占用 → 是**竞态 / 残留**，重试一次通常就好（实测 5273 经历过
+  「占用 → 空闲 → 又占用」的反复），**不要**据此写下"某端口不可用"的死结论。
+
+> ⚠️ 不要用 `pkill -f vite` 去"清理干净"：跨 namespace 杀不到，
+> 而且 3000 / 5173 是 `idle-path-of-xiuxian` 的服务，误杀会影响别的工程。
+> 另外 `curl` 得到 `000` 既可能是"没有监听"，也可能是"端口被占但无响应"，
+> 两者处置相反 —— 判断依据只能是 bind 探测。
+
+### 7.9 本地调试默认值：`dev.config.json`（唯一真相）
+
+端口与代理地址只写一次：前端 `packages/web/vite.config.ts` **直接 import 它**，
+后端 `packages/server/scripts/dev.mjs` 读它并写进 `process.env.PORT`
+（dotenv 不覆盖已存在的环境变量，所以配置能盖住 `.env` 里的 `PORT=3000`，
+而命令行 `PORT=… pnpm dev:server` 又能盖住配置）。
+
+```jsonc
+// dev.config.json
+{ "backendHost": "127.0.0.1", "backendPort": 3100, "frontendPort": 5273 }
+```
+
+```bash
+pnpm dev:server          # 后端 3100（tsc --watch + node --watch）
+pnpm dev:web             # 前端 5273（vite），/api 与 /ws 代理到 3100
+pnpm dev                 # 两者一起（--parallel）
+```
+
+临时换端口（不改文件）：`PORT=3200 pnpm dev:server`、`VITE_DEV_PORT=5300 pnpm dev:web`、
+`VITE_BACKEND_ORIGIN=http://127.0.0.1:9999 pnpm dev:web`。
+
+前端固定 `strictPort: true`：端口被占时**直接失败**、不静默换号 ——
+否则收藏夹 / 代理指向的地址会悄悄变成一个不存在的 dev server（曾因此误判"改了没生效"）。
 
 ## 8. 新增一个游戏域要改哪些文件
 1. `packages/protocol/src/cmd.ts` —— 登记段与 subCmd（段宽 10、subCmd 从 1 起、0 保留）
