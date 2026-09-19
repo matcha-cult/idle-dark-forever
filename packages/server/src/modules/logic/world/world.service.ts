@@ -36,6 +36,7 @@ import {
 } from '@idle-dark/protocol';
 import type { NotificationBatcher } from '../../game/notification-batcher.js';
 import { NOTIFICATION_BATCHER } from '../../game/notification-batcher.provider.js';
+import { OpIdempotencyService } from '../../game/op-idempotency.service.js';
 import { OnlineSessionService } from '../../online/online-session.service.js';
 import { DATA_TABLES, GAME_CLOCK, PlayerContextService, type AccountExtras, type NowSource, slotDtoOf } from '../shared/index.js';
 import { BattleCollector } from './internal/battle-collector.js';
@@ -76,6 +77,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly playerContext: PlayerContextService,
     private readonly onlineSessions: OnlineSessionService,
+    private readonly opIds: OpIdempotencyService,
     @Inject(NOTIFICATION_BATCHER) private readonly batcher: NotificationBatcher,
     @Inject(GAME_CLOCK) now: NowSource,
     @Inject(DATA_TABLES) tables: DataTables,
@@ -164,6 +166,10 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
 
     if (now - session.lastPersistAt >= WORLD_CONFIG.persistIntervalMs) {
       session.lastPersistAt = now;
+      // 在线期间持续刷新结算锚点：否则「在线挂机数小时」后再看 idle.report 会把
+      // 已经在实时世界里推进过的时间重复结算一次。
+      const player = this.playerContext.peek(session.userId, session.characterId);
+      if (player) player.timestamp = now;
       this.playerContext.markDirty(session.userId, session.characterId);
       this.schedulePersist(session);
     }
@@ -408,6 +414,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     userId: number,
     characterId: string,
     mapKey: string,
+    opId?: string,
   ): Promise<ActionResult<WorldSnapshotDto>> {
     const session = await this.start(userId, characterId);
     if (!session) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);
@@ -420,33 +427,56 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       return ok(await this.snapshotOf(session));
     }
 
-    const player = session.world.player as Player | null;
-    if (!player) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);
+    // 消耗类操作（进入地城会扣钥匙）必须幂等：同 opId 重放不重复扣费。
+    const claim = this.opIds.begin(userId, opId);
+    if (claim.kind === 'invalid') {
+      return fail(BusinessErrorCode.INVALID_PARAM, claim.reason);
+    }
+    if (claim.kind === 'duplicate') {
+      if (claim.inFlight) return fail(BusinessErrorCode.DUPLICATE_OPERATION, '地图切换正在处理中');
+      return ok(await this.snapshotOf(session));
+    }
 
-    const extras = await this.playerContext.extrasOf(userId);
-    let unlocked = false;
     try {
-      unlocked = checkRequirement(
-        map.requirement,
-        requirementContextOf(player, session.world.map, extras),
-      );
-    } catch {
-      unlocked = false;
-    }
-    if (!unlocked) return fail(BusinessErrorCode.MAP_LOCKED);
+      const player = session.world.player as Player | null;
+      if (!player) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);
 
-    const ticketGroup = map.group ?? mapKey;
-    if (map.isDungeon) {
-      if (safeCountTicket(player, ticketGroup) <= 0) return fail(BusinessErrorCode.NO_TICKET);
-      player.costTicket(ticketGroup);
-    }
+      const extras = await this.playerContext.extrasOf(userId);
+      let unlocked = false;
+      try {
+        unlocked = checkRequirement(
+          map.requirement,
+          requirementContextOf(player, session.world.map, extras),
+        );
+      } catch {
+        unlocked = false;
+      }
+      if (!unlocked) {
+        this.opIds.abort(userId, opId ?? '');
+        return fail(BusinessErrorCode.MAP_LOCKED);
+      }
 
-    session.world.map = mapKey;
-    await this.persistPosition(session);
-    player.timestamp = this.now();
-    this.playerContext.markDirty(userId, characterId);
-    await this.playerContext.flush(userId, characterId);
-    return ok(await this.snapshotOf(session));
+      const ticketGroup = map.group ?? mapKey;
+      if (map.isDungeon) {
+        if (safeCountTicket(player, ticketGroup) <= 0) {
+          this.opIds.abort(userId, opId ?? '');
+          return fail(BusinessErrorCode.NO_TICKET);
+        }
+        player.costTicket(ticketGroup);
+      }
+
+      session.world.map = mapKey;
+      await this.persistPosition(session);
+      player.timestamp = this.now();
+      this.playerContext.markDirty(userId, characterId);
+      await this.playerContext.flush(userId, characterId);
+      const snapshot = await this.snapshotOf(session);
+      this.opIds.settle(userId, opId ?? '', snapshot);
+      return ok(snapshot);
+    } catch (error) {
+      this.opIds.abort(userId, opId ?? '');
+      throw error;
+    }
   }
 
   async leave(userId: number, characterId: string): Promise<ActionResult<null>> {

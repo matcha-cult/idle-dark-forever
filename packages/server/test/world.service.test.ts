@@ -12,6 +12,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { createDefaultTables, type DataTables } from '@idle-dark/game-core';
 import type { WorldTickDto } from '@idle-dark/protocol';
 import type { NotificationBatcher, PushFrame } from '../src/modules/game/notification-batcher.js';
+import { OpIdempotencyService } from '../src/modules/game/op-idempotency.service.js';
 import type { OnlineSessionService } from '../src/modules/online/online-session.service.js';
 import { PlayerContextService } from '../src/modules/logic/shared/player-context.service.js';
 import { WorldService } from '../src/modules/logic/world/world.service.js';
@@ -49,7 +50,14 @@ describe('WorldService', () => {
     const onlineSessions = {
       isOnline: () => online,
     } as unknown as OnlineSessionService;
-    service = new WorldService(context, onlineSessions, batcher, () => now, tables);
+    service = new WorldService(
+      context,
+      onlineSessions,
+      new OpIdempotencyService(),
+      batcher,
+      () => now,
+      tables,
+    );
   });
 
   async function startInStreet(): Promise<void> {
@@ -112,6 +120,21 @@ describe('WorldService', () => {
     const result = await service.enterMap(1, 'c1', 'town.valley');
     expect(result.success).toBe(false);
     if (!result.success) expect(result.data.code).toBe('MAP_LOCKED');
+  });
+
+  it('enterMap 带 opId 幂等：同 opId 重复提交只切换一次', async () => {
+    const session = await service.start(1, 'c1');
+    expect(session).not.toBeNull();
+    const extras = await context.extrasOf(1);
+    extras.storiesMap['eyer-stories-1'] = 'done';
+
+    const first = await service.enterMap(1, 'c1', 'town.street', 'op-map-1');
+    expect(first.success).toBe(true);
+    expect(service.positionOf(1, 'c1')?.map).toBe('town.street');
+
+    const second = await service.enterMap(1, 'c1', 'town.street', 'op-map-1');
+    expect(second.success).toBe(true);
+    expect(service.positionOf(1, 'c1')?.map).toBe('town.street');
   });
 
   it('enterMap 未知地图 → MAP_LOCKED（不抛错）', async () => {

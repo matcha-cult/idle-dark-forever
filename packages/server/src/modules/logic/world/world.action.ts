@@ -44,7 +44,10 @@ export class WorldAction {
     if (!key || !map) return ActionError.invalidParam('缺少角色 key 或地图');
     const limited = this.rateLimiter.consumeOrFail(`world:enterMap:${userId}`, 30);
     if (limited) return limited;
-    return guardAction(() => this.world.enterMap(userId, key, map));
+    const opId = toNonEmptyString(body['opId']);
+    return guardAction(() =>
+      this.world.enterMap(userId, key, map, ...(opId !== undefined ? [opId] : [])),
+    );
   }
 
   @ActionMethod(WORLD_CMD.leave)
