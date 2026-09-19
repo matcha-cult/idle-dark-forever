@@ -190,6 +190,27 @@ antd-zh token Menu --format markdown
 需要**脱离外部实例**做单测时，用内存替身实现 `DatabaseService` 的 `query` / `connect`
 （`packages/server/test/helpers/fake-database.ts` 已有），不要试图在沙箱里安装/启动 PostgreSQL。
 
+### 7.8 端口可能被**宿主预留**：`EADDRINUSE` 但 `ss` 看不见
+
+本机实测：Vite 指定 `--port 5273 --strictPort` 报 `Error: Port 5273 is already in use`，
+但 `ss -ltn` / `netstat -ltn` 里**没有任何监听**、`curl` 也是 `000`（连 `[::1]` 也不通）。
+这不是"上一个进程没杀干净"—— 是 DSH 宿主侧的端口预留/代理占了它。
+
+排查与处置：
+
+```bash
+# 用 bind 探测（比 ss 可靠：ss 看不到宿主预留）
+node -e "const n=require('net');const s=n.createServer();
+s.on('error',e=>{console.log('FAIL',e.code)});
+s.listen(5273,'127.0.0.1',()=>{console.log('OK');s.close()})"
+```
+直接换一个端口即可（实测 5274 / 5275 / 8080 正常）。**不要**去 kill 别的进程 ——
+`ss` 里看不见的东西杀不到，且 3000 / 5173 是 `idle-path-of-xiuxian` 的服务。
+
+> 端口占用与"dev server 压根没监听"的 `000` 表现相同，但处置完全不同：
+> 前者的 `curl` 永远 `000` 且 bind 失败，后者 bind 成功却无响应。
+> 判断依据只能是**自己 bind 一次**，而不是看 `ss`。
+
 ## 8. 新增一个游戏域要改哪些文件
 1. `packages/protocol/src/cmd.ts` —— 登记段与 subCmd（段宽 10、subCmd 从 1 起、0 保留）
 2. `packages/protocol/src/dto.ts` —— 该域请求/响应类型
