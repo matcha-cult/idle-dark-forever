@@ -23,6 +23,7 @@ import { NOTIFICATION_BATCHER } from '../../game/notification-batcher.provider.j
 import type { NotificationBatcher } from '../../game/notification-batcher.js';
 import { GAME_CLOCK, PlayerContextService, type NowSource } from '../shared/index.js';
 import { PanelCharacterService } from '../inventory/internal/panel-character.service.js';
+import { WorldService } from '../world/world.service.js';
 import { withOperation } from '../inventory/internal/idempotency.js';
 import { OpError, toFailOrThrow } from '../inventory/internal/op-error.js';
 import { dtoOfResolved, listPanelSlots, resolvePanelSlot } from '../inventory/internal/slot-ref.js';
@@ -64,6 +65,8 @@ export class ProduceLogicService {
     private readonly rateLimiter: RateLimiterService,
     @Inject(NOTIFICATION_BATCHER) private readonly batcher: NotificationBatcher,
     @Inject(GAME_CLOCK) private readonly now: NowSource,
+    /** 末位且可选：单测手工 `new` 时不必造世界替身（见 inventory 同名注释）。 */
+    private readonly world?: WorldService,
   ) {}
 
   async enchantCosts(
@@ -307,6 +310,8 @@ export class ProduceLogicService {
     this.contexts.markDirty(userId, characterId);
     this.contexts.markAccountDirty(userId);
     await this.contexts.flush(userId, characterId);
+    // 附魔 / 重铸会重掷词缀，而词缀是 PlayerUnit 装备 hook 的来源之一。
+    this.world?.markCombatDirty(userId, characterId);
     pushInventoryChanged(this.batcher, userId, listPanelSlots(this.contexts.tables, player));
   }
 

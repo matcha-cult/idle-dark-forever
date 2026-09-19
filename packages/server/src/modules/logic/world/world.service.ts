@@ -59,6 +59,11 @@ interface WorldSession {
   lastTickAt: number;
   lastPersistAt: number;
   pendingLoot: LootDto[];
+  /**
+   * 战斗 hook 需要重绑（面板域改动了装备 / 技能 / 强化 / 词缀后置位）。
+   * 由下一次 tick 消费 —— 避免每 tick 无条件重绑，也避免面板域反向依赖世界内部结构。
+   */
+  combatDirty: boolean;
 }
 
 @Injectable()
@@ -153,6 +158,28 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
 
     const elapsed = Math.max(0, now - session.lastTickAt);
     session.lastTickAt = now;
+
+    // 面板域改过装备 / 技能 / 强化 / 词缀 → 本 tick 先重绑战斗 hook。
+    // 去 MobX 后 `PlayerUnit` 不再自动追踪这些来源（见 `combat/player-unit.ts` 顶部契约表），
+    // 不重绑的话面板改动在战斗里不生效。
+    if (session.combatDirty) {
+      session.combatDirty = false;
+      try {
+        const unit = session.world.playerUnit;
+        if (unit !== null && unit !== undefined) {
+          unit.rebindEquipmentHooks();
+          unit.rebindPassiveHooks();
+          unit.rebindEnhanceHooks();
+        }
+      } catch (error) {
+        this.logger.warn(
+          `重绑战斗 hook 失败 userId=${session.userId} characterId=${session.characterId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+
     const rest = Math.min(elapsed, WORLD_CONFIG.maxCatchUpMs) + session.carryMs;
     if (rest > 0) {
       const remaining = session.clock.stepPaused(
@@ -314,6 +341,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       lastTickAt: now,
       lastPersistAt: now,
       pendingLoot: [],
+      combatDirty: false,
     };
 
     const built = buildBattleWorld({
@@ -400,6 +428,24 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       changed = true;
     }
     if (changed) this.playerContext.markAccountDirty(userId);
+  }
+
+  /**
+   * 面板域改动了**战斗相关**状态后调用：装备/卸下、切换职业、选/取消技能与强化、
+   * 附魔与重铸（词缀变化）。
+   *
+   * 去 MobX 后 `PlayerUnit` 不再自动追踪这些来源，必须由上层显式重绑
+   * （见 `packages/game-core/src/combat/player-unit.ts` 顶部的契约表）。
+   * 这里只置脏标记，真正的重绑在下一次 tick 完成 —— 一次 tick 内多次改动只重绑一次，
+   * 且面板域不必依赖 `WorldService` 的内部结构。
+   *
+   * 对**没有活跃会话**的角色是 no-op（下次 `player.select` 进场时会按最新存档重建单位）。
+   */
+  markCombatDirty(userId: number, characterId?: string): void {
+    const resolved = characterId ?? this.activeByUser.get(userId);
+    if (resolved === undefined || resolved === '') return;
+    const session = this.sessions.get(this.keyOf(userId, resolved));
+    if (session !== undefined) session.combatDirty = true;
   }
 
   // ────────────────────────────── Action 支撑 ──────────────────────────────

@@ -17,6 +17,7 @@ import { NOTIFICATION_BATCHER } from '../../game/notification-batcher.provider.j
 import type { NotificationBatcher } from '../../game/notification-batcher.js';
 import { PlayerContextService } from '../shared/index.js';
 import { PanelCharacterService } from '../inventory/internal/panel-character.service.js';
+import { WorldService } from '../world/world.service.js';
 import { toFailOrThrow } from '../inventory/internal/op-error.js';
 import { pushCareerLevelup } from '../inventory/internal/notify.js';
 import {
@@ -45,6 +46,8 @@ export class CareerLogicService {
     private readonly characters: PanelCharacterService,
     private readonly rateLimiter: RateLimiterService,
     @Inject(NOTIFICATION_BATCHER) private readonly batcher: NotificationBatcher,
+    /** 末位且可选：单测手工 `new` 时不必造世界替身（见 inventory 同名注释）。 */
+    private readonly world?: WorldService,
   ) {}
 
   async list(userId: number, characterId?: string): Promise<ActionResult<CareerPanelDto>> {
@@ -153,6 +156,8 @@ export class CareerLogicService {
 
     this.contexts.markDirty(userId, cid);
     await this.contexts.flush(userId, cid);
+    // 切职业 / 选技能 / 选强化会让 PlayerUnit 的被动与强化 hook 过期。
+    this.world?.markCombatDirty(userId, cid);
     return ok(careerPanelOf(this.contexts.tables, player));
   }
 }
