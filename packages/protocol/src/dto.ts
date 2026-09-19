@@ -241,6 +241,38 @@ export interface MapDto {
   ticketCount: number;
 }
 
+/** 挑战队列条目（结构同 `WorldSnapshotDto.pendingMaps`）。 */
+export interface ChallengeEntryDto {
+  key: string;
+  endlessLevel: number;
+}
+
+/** 单个票键的冷却 / 可挑战状态（09 §5.4）。 */
+export interface DungeonTicketStateDto {
+  /** `group ?? mapKey`（无尽为 `nightmare.<level>`）。 */
+  ticketKey: string;
+  /** 当前可挑战层数。 */
+  stacks: number;
+  available: boolean;
+  /** 下一次回满的周期边界时刻（ms 时间戳）。 */
+  nextResetAt: number;
+}
+
+/** 挑战队列 + 本角色各票键状态（`dungeon.queueGet`）。 */
+export interface ChallengeQueueDto {
+  entries: ChallengeEntryDto[];
+  tickets: DungeonTicketStateDto[];
+}
+
+/** 神力重置结果（`dungeon.reset`）。 */
+export interface DungeonResetResultDto {
+  ticketKey: string;
+  /** 实际消耗的神力。 */
+  cost: number;
+  stacks: number;
+  nextResetAt: number;
+}
+
 /** 世界快照。 */
 export interface WorldSnapshotDto {
   map: string;

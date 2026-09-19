@@ -46,6 +46,13 @@ export const CMD_SEGMENTS = {
    * 控制器决定"进哪张图"，battle 执行会话切换。
    */
   map: 130,
+  /**
+   * 秘境 / 挑战队列控制器（09 R3；cmd 段 140）
+   *
+   * 服务端是挑战队列的**唯一所有者**（RC4）：客户端只能增删/查询；
+   * `enter` 的扣票在 R3-b2 收敛为唯一扣费点（RC2，修 M5 双扣）。
+   */
+  dungeon: 140,
 } as const;
 
 export type CmdSegment = (typeof CMD_SEGMENTS)[keyof typeof CMD_SEGMENTS];
@@ -224,6 +231,32 @@ export const MAP_CMD = {
   leave: 4,
   /** 控制器间命令：队列耗尽后转非秘境战斗图（RD3/RD4） */
   continueOpenWorld: 5,
+} as const;
+
+/**
+ * 秘境 / 挑战队列控制器段（09 R3）
+ *
+ * `queue*` 由服务端**唯一拥有**（RC4）：结构 = 有序条目 `{key, endlessLevel}[]`，
+ * 随角色落库，客户端只能增删/查询。`reset` 用神力重置冷却/购票（RC3）。
+ */
+export const DUNGEON_CMD = {
+  cmd: CMD_SEGMENTS.dungeon,
+  /** 读取挑战队列 + 本角色各票键的冷却/可挑战状态 */
+  queueGet: 1,
+  /** 整体替换挑战队列（服务端校验后落库） */
+  queueSet: 2,
+  /** 追加一个条目 */
+  queueAdd: 3,
+  /** 按下标移除一个条目 */
+  queueRemove: 4,
+  /** 清空挑战队列 */
+  queueClear: 5,
+  /** 进入秘境（R3-b2：唯一扣票 + runId 落库） */
+  enter: 6,
+  /** 离开秘境 */
+  leave: 7,
+  /** 神力重置冷却 / 购票（RC3） */
+  reset: 8,
 } as const;
 
 /** `(cmd << 16) | subCmd` 路由键（与 ionet-ts CmdInfo.cmdMerge 一致）。 */

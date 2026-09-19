@@ -6,6 +6,7 @@ import {
   BATTLE_CMD,
   CAREER_CMD,
   CMD_SEGMENTS,
+  DUNGEON_CMD,
   IDLE_CMD,
   INVENTORY_CMD,
   LOOTRULE_CMD,
@@ -36,6 +37,7 @@ const DOMAIN_CMDS = {
   SHOP_CMD,
   IDLE_CMD,
   MAP_CMD,
+  DUNGEON_CMD,
 } as const;
 
 describe('cmd 段规划', () => {
@@ -66,6 +68,7 @@ describe('cmd 段规划', () => {
     expect(SHOP_CMD.cmd).toBe(CMD_SEGMENTS.shop);
     expect(IDLE_CMD.cmd).toBe(CMD_SEGMENTS.idle);
     expect(MAP_CMD.cmd).toBe(CMD_SEGMENTS.map);
+    expect(DUNGEON_CMD.cmd).toBe(CMD_SEGMENTS.dungeon);
   });
 
   it('段内 subCmd 从 1 起、互不重复、且不越过段宽（< cmd + 10）', () => {

@@ -24,7 +24,13 @@ import {
 } from '@idle-dark/game-core';
 import { GameDatabaseService } from '../../game/game-database.service.js';
 import { DATA_TABLES, GAME_CLOCK, type NowSource } from './game-clock.js';
-import { createAccountExtras, type AccountExtras } from './player-dto.js';
+import {
+  createAccountExtras,
+  type AccountExtras,
+  type ChallengeEntry,
+  type DungeonCooldownEntry,
+} from './player-dto.js';
+import { normalizeChallengeQueue } from './challenge-queue.js';
 
 /** 默认落库节流间隔（供 world tick 定期 flush 参考；本服务不主动起定时器）。 */
 export const DEFAULT_PERSIST_INTERVAL_MS = 30_000;
@@ -65,6 +71,8 @@ interface AccountDataJson {
   medicineExp?: number;
   worldSeeds?: Record<string, number>;
   worldMaps?: Record<string, { map?: unknown; endlessLevel?: unknown }>;
+  challengeQueue?: Record<string, unknown>;
+  dungeonCooldowns?: Record<string, unknown>;
 }
 
 @Injectable()
@@ -302,6 +310,8 @@ export class PlayerContextService {
       medicineExp: entry.extras.medicineExp,
       worldSeeds: { ...entry.extras.worldSeeds },
       worldMaps: cloneWorldMaps(entry.extras.worldMaps),
+      challengeQueue: cloneChallengeQueue(entry.extras.challengeQueue),
+      dungeonCooldowns: cloneDungeonCooldowns(entry.extras.dungeonCooldowns),
     };
     await this.db.query(
       `INSERT INTO account_state (user_id, diamonds, highest_endless_level, data, updated_at)
@@ -454,6 +464,31 @@ function applyAccountData(
       extras.worldMaps[key] = { map, endlessLevel };
     }
   }
+  if (data.challengeQueue && typeof data.challengeQueue === 'object') {
+    const queueByCharacter = data.challengeQueue as Record<string, unknown>;
+    for (const characterId of Object.keys(queueByCharacter)) {
+      extras.challengeQueue[characterId] = normalizeChallengeQueue(queueByCharacter[characterId], tables);
+    }
+  }
+  if (data.dungeonCooldowns && typeof data.dungeonCooldowns === 'object') {
+    const cooldownByCharacter = data.dungeonCooldowns as Record<string, unknown>;
+    for (const characterId of Object.keys(cooldownByCharacter)) {
+      const perChar = cooldownByCharacter[characterId];
+      if (!perChar || typeof perChar !== 'object' || Array.isArray(perChar)) continue;
+      const perCharMap = perChar as Record<string, unknown>;
+      const out: Record<string, DungeonCooldownEntry> = {};
+      for (const ticketKey of Object.keys(perCharMap)) {
+        const cdRaw: unknown = perCharMap[ticketKey];
+        if (!cdRaw || typeof cdRaw !== 'object') continue;
+        out[ticketKey] = {
+          stacks: finiteInt((cdRaw as { stacks?: unknown }).stacks, 0),
+          lastResetAt: finiteOr((cdRaw as { lastResetAt?: unknown }).lastResetAt, 0),
+          lastUsedAt: finiteOr((cdRaw as { lastUsedAt?: unknown }).lastUsedAt, 0),
+        };
+      }
+      if (Object.keys(out).length > 0) extras.dungeonCooldowns[characterId] = out;
+    }
+  }
 }
 
 function cloneTasks(source: Record<string, Record<string, number>>): Record<string, Record<string, number>> {
@@ -472,6 +507,40 @@ function cloneWorldMaps(
   for (const key of Object.keys(source)) {
     const entry = source[key];
     if (entry) out[key] = { map: entry.map, endlessLevel: entry.endlessLevel };
+  }
+  return out;
+}
+
+function cloneChallengeQueue(
+  source: Record<string, ChallengeEntry[]>,
+): Record<string, ChallengeEntry[]> {
+  const out: Record<string, ChallengeEntry[]> = {};
+  for (const key of Object.keys(source)) {
+    const entries = source[key];
+    if (entries) out[key] = entries.map((e) => ({ key: e.key, endlessLevel: e.endlessLevel }));
+  }
+  return out;
+}
+
+function cloneDungeonCooldowns(
+  source: Record<string, Record<string, DungeonCooldownEntry>>,
+): Record<string, Record<string, DungeonCooldownEntry>> {
+  const out: Record<string, Record<string, DungeonCooldownEntry>> = {};
+  for (const characterId of Object.keys(source)) {
+    const perChar = source[characterId];
+    if (!perChar) continue;
+    const inner: Record<string, DungeonCooldownEntry> = {};
+    for (const ticketKey of Object.keys(perChar)) {
+      const entry = perChar[ticketKey];
+      if (entry) {
+        inner[ticketKey] = {
+          stacks: entry.stacks,
+          lastResetAt: entry.lastResetAt,
+          lastUsedAt: entry.lastUsedAt,
+        };
+      }
+    }
+    out[characterId] = inner;
   }
   return out;
 }

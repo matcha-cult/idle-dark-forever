@@ -28,6 +28,22 @@ import {
   type EquipSlot,
 } from '@idle-dark/game-core';
 
+/** 挑战队列条目（服务端唯一所有者，RC4；结构同 `pendingMaps` 的一格）。 */
+export interface ChallengeEntry {
+  key: string;
+  endlessLevel: number;
+}
+
+/** 挑战队列长度上限（防止客户端用超大数组把落库行撑爆）。 */
+export const MAX_CHALLENGE_QUEUE = 32;
+
+/** 单个票键的冷却/层数状态（结构同 game-core `DungeonCooldownState`；09 §5.4）。 */
+export interface DungeonCooldownEntry {
+  stacks: number;
+  lastResetAt: number;
+  lastUsedAt: number;
+}
+
 /** 账号级、`Player` 之外的附加状态（服务端侧车，落在 `account_state.data`）。 */
 export interface AccountExtras {
   /** 剧情三态：`'task'` / `'done'`（原版 `game.storiesMap`）。 */
@@ -52,6 +68,21 @@ export interface AccountExtras {
    * 必须记住，否则每次重连都回到 `home`。
    */
   worldMaps: Record<string, { map: string; endlessLevel: number }>;
+  /**
+   * 挑战队列（characterId → 有序条目）。
+   *
+   * 09 §5.3：**服务端唯一所有者**（RC4），随角色落库、客户端只能增删查询；
+   * 单一归属 = 本侧车（不得再在 `characters.state` 写一份）。
+   */
+  challengeQueue: Record<string, ChallengeEntry[]>;
+  /**
+   * 秘境冷却/层数状态（characterId → ticketKey → 状态）。
+   *
+   * 09 §5.4（RC3）：每日 4 点重置 + 神力重置的状态载体；票键见 `ticketKeyOf`。
+   * 与 `dungeonTickets`（在 `characters.state`）**不同层**：那里是「有多少张票」，
+   * 这里是「本周期还能挑战几次」。
+   */
+  dungeonCooldowns: Record<string, Record<string, DungeonCooldownEntry>>;
 }
 
 export function createAccountExtras(): AccountExtras {
@@ -62,6 +93,8 @@ export function createAccountExtras(): AccountExtras {
     medicineExp: 0,
     worldSeeds: {},
     worldMaps: {},
+    challengeQueue: {},
+    dungeonCooldowns: {},
   };
 }
 

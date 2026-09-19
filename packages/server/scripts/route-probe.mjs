@@ -37,6 +37,14 @@ const ROUTES = [
   [130, 2, 'map.snapshot'],
   [130, 3, 'map.enter'],
   [130, 4, 'map.leave'],
+  [140, 1, 'dungeon.queueGet'],
+  [140, 2, 'dungeon.queueSet'],
+  [140, 3, 'dungeon.queueAdd'],
+  [140, 4, 'dungeon.queueRemove'],
+  [140, 5, 'dungeon.queueClear'],
+  [140, 6, 'dungeon.enter'],
+  [140, 7, 'dungeon.leave'],
+  [140, 8, 'dungeon.reset'],
 ];
 
 const token = jwt.sign({ id: 42, username: 'route-probe' }, secret, { expiresIn: 60 });

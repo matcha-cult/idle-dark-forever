@@ -1,5 +1,5 @@
 /**
- * typed Action API —— 按后端 `cmd` 段组织的游戏接口层（14 个段）。
+ * typed Action API —— 按后端 `cmd` 段组织的游戏接口层（15 个段）。
  *
  * 设计约束：
  * - 路由 `(cmd, subCmd)` **只引用 `@idle-dark/protocol` 的 `*_CMD` 常量**，
@@ -14,7 +14,10 @@ import type {
   ActionResult,
   CareerPanelDto,
   CareerProgressDto,
+  ChallengeEntryDto,
+  ChallengeQueueDto,
   DecomposeResultDto,
+  DungeonResetResultDto,
   EnchantCostsDto,
   EnhanceDto,
   InventorySlotDto,
@@ -44,6 +47,7 @@ import {
   BANK_CMD,
   BATTLE_CMD,
   CAREER_CMD,
+  DUNGEON_CMD,
   IDLE_CMD,
   INVENTORY_CMD,
   LOOTRULE_CMD,
@@ -260,6 +264,79 @@ export class MapApi extends SegmentApi {
 
   leave(options?: GameApiRequestOptions): Promise<ActionResult<null>> {
     return this.call<null>(MAP_CMD.cmd, MAP_CMD.leave, {}, options);
+  }
+}
+
+// ===== dungeon（秘境 / 挑战队列控制器，cmd 140；09 R3） =====
+
+export interface DungeonQueueSetInput {
+  entries: ChallengeEntryDto[];
+}
+
+export interface DungeonQueueAddInput {
+  entry: ChallengeEntryDto;
+}
+
+export interface DungeonQueueRemoveInput {
+  index: number;
+}
+
+export interface DungeonEnterInput {
+  map: string;
+  opId?: string;
+}
+
+export interface DungeonResetInput {
+  map: string;
+  endlessLevel?: number;
+}
+
+export class DungeonApi extends SegmentApi {
+  /** 挑战队列 + 本角色各票键的冷却/可挑战状态。 */
+  queueGet(options?: GameApiRequestOptions): Promise<ActionResult<ChallengeQueueDto>> {
+    return this.call<ChallengeQueueDto>(DUNGEON_CMD.cmd, DUNGEON_CMD.queueGet, {}, options);
+  }
+
+  /** 整体替换挑战队列（服务端校验后落库；RC4 唯一所有者）。 */
+  queueSet(
+    params: DungeonQueueSetInput,
+    options?: GameApiRequestOptions,
+  ): Promise<ActionResult<ChallengeQueueDto>> {
+    return this.call<ChallengeQueueDto>(DUNGEON_CMD.cmd, DUNGEON_CMD.queueSet, params, options);
+  }
+
+  queueAdd(
+    params: DungeonQueueAddInput,
+    options?: GameApiRequestOptions,
+  ): Promise<ActionResult<ChallengeQueueDto>> {
+    return this.call<ChallengeQueueDto>(DUNGEON_CMD.cmd, DUNGEON_CMD.queueAdd, params, options);
+  }
+
+  queueRemove(
+    params: DungeonQueueRemoveInput,
+    options?: GameApiRequestOptions,
+  ): Promise<ActionResult<ChallengeQueueDto>> {
+    return this.call<ChallengeQueueDto>(DUNGEON_CMD.cmd, DUNGEON_CMD.queueRemove, params, options);
+  }
+
+  queueClear(options?: GameApiRequestOptions): Promise<ActionResult<ChallengeQueueDto>> {
+    return this.call<ChallengeQueueDto>(DUNGEON_CMD.cmd, DUNGEON_CMD.queueClear, {}, options);
+  }
+
+  enter(params: DungeonEnterInput, options?: GameApiRequestOptions): Promise<ActionResult<WorldSnapshotDto>> {
+    return this.call<WorldSnapshotDto>(DUNGEON_CMD.cmd, DUNGEON_CMD.enter, params, options);
+  }
+
+  leave(options?: GameApiRequestOptions): Promise<ActionResult<null>> {
+    return this.call<null>(DUNGEON_CMD.cmd, DUNGEON_CMD.leave, {}, options);
+  }
+
+  /** 神力重置冷却 / 购票（RC3）。 */
+  reset(
+    params: DungeonResetInput,
+    options?: GameApiRequestOptions,
+  ): Promise<ActionResult<DungeonResetResultDto>> {
+    return this.call<DungeonResetResultDto>(DUNGEON_CMD.cmd, DUNGEON_CMD.reset, params, options);
   }
 }
 
@@ -546,13 +623,14 @@ export class IdleApi extends SegmentApi {
 
 // ===== 聚合入口 =====
 
-/** 全部 14 个 cmd 段的 typed API 聚合。 */
+/** 全部 15 个 cmd 段的 typed API 聚合。 */
 export class GameApi {
   readonly system: SystemApi;
   readonly auth: AuthApi;
   readonly player: PlayerApi;
   readonly world: WorldApi;
   readonly map: MapApi;
+  readonly dungeon: DungeonApi;
   readonly battle: BattleApi;
   readonly inventory: InventoryApi;
   readonly bank: BankApi;
@@ -569,6 +647,7 @@ export class GameApi {
     this.player = new PlayerApi(transport);
     this.world = new WorldApi(transport);
     this.map = new MapApi(transport);
+    this.dungeon = new DungeonApi(transport);
     this.battle = new BattleApi(transport);
     this.inventory = new InventoryApi(transport);
     this.bank = new BankApi(transport);

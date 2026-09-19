@@ -100,6 +100,56 @@ describe('PlayerContextService', () => {
     expect(reloaded.storiesMap['s1']).toBe('done');
   });
 
+  it('账号侧车（挑战队列 / 秘境冷却）落库后重载一致', async () => {
+    await ctx.create(1, 'c1', 'Eyer', 'warrior');
+    const extras = await ctx.extrasOf(1);
+    extras.challengeQueue['c1'] = [
+      { key: 'home', endlessLevel: 0 },
+      { key: 'town.valley', endlessLevel: 2 },
+    ];
+    extras.dungeonCooldowns['c1'] = {
+      'town.cave2': { stacks: 1, lastResetAt: 1_700_000_000_000, lastUsedAt: 1_699_999_000_000 },
+    };
+    ctx.markAccountDirty(1);
+    await ctx.flushAccount(1);
+
+    ctx.reset();
+    const reloaded = await ctx.extrasOf(1);
+    expect(reloaded.challengeQueue['c1']).toEqual([
+      { key: 'home', endlessLevel: 0 },
+      { key: 'town.valley', endlessLevel: 2 },
+    ]);
+    expect(reloaded.dungeonCooldowns['c1']?.['town.cave2']).toEqual({
+      stacks: 1,
+      lastResetAt: 1_700_000_000_000,
+      lastUsedAt: 1_699_999_000_000,
+    });
+  });
+
+  it('存档脏数据：未知地图条目被丢弃、超长截断、非法冷却值夹取（不清空整条队列）', async () => {
+    await ctx.create(1, 'c1', 'Eyer', 'warrior');
+    // 直接改内存库，模拟外部/旧版本写坏的数据
+    const row = db.accounts.get(1);
+    expect(row).toBeDefined();
+    if (row) {
+      row.data = {
+        challengeQueue: {
+          c1: [{ key: 'home' }, { key: 'no.such.map' }, { key: '' }, null, 'x'],
+        },
+        dungeonCooldowns: {
+          c1: { 'town.cave2': { stacks: Number.NaN, lastResetAt: 'bad', lastUsedAt: -1 } },
+        },
+      };
+    }
+    ctx.reset();
+    const extras = await ctx.extrasOf(1);
+    expect(extras.challengeQueue['c1']).toEqual([{ key: 'home', endlessLevel: 0 }]);
+    const cd = extras.dungeonCooldowns['c1']?.['town.cave2'];
+    expect(cd?.stacks).toBe(0);
+    expect(cd?.lastResetAt).toBe(0);
+    expect(Number.isFinite(cd?.lastUsedAt)).toBe(true);
+  });
+
   it('旧占位行（state = {}）在 load 时按列 role/career 补齐并落库', async () => {
     db.seedCharacter({ id: 'legacy', user_id: 1, role: 'Aleanor', career: 'sorceress', state: {} });
     const player = await ctx.load(1, 'legacy');

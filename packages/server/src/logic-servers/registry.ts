@@ -88,8 +88,9 @@ export const SERVER_DEFINITIONS = {
   },
   dungeon: {
     name: 'dungeon',
-    roots: ['modules/logic/idle'],
-    cmdSegments: [CMD_SEGMENTS.idle],
+    // 09 R3：秘境挑战 + 挑战队列控制器（cmd 140）+ 离线结算编排（idle，cmd 120）。
+    roots: ['modules/logic/idle', 'modules/logic/dungeon'],
+    cmdSegments: [CMD_SEGMENTS.idle, CMD_SEGMENTS.dungeon],
   },
   map: {
     name: 'map',
