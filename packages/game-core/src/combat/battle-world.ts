@@ -40,7 +40,7 @@ import { PlayerUnit, type PlayerLike } from './player-unit.js';
 import { SkillState } from './skill-state.js';
 import { BuffState } from './buff-state.js';
 import { Unit } from './unit.js';
-import { camelCase, readAttr, toNumber, untransformEquipLevel } from './util.js';
+import { camelCase, normalizePositive, readAttr, toNumber, untransformEquipLevel } from './util.js';
 
 /** 各用途独立的随机子序列（标签稳定，便于审计/复算）。 */
 export interface CombatRngStreams {
@@ -112,6 +112,13 @@ export interface BattleWorldOptions {
   endlessLevel?: number;
   /** 离线快进倍率（原版 `world.updateRate`，作用于经验与掉落数量）。 */
   updateRate?: number;
+  /**
+   * 角色经验倍率（开发 / 运营调参用；`1` = 原版）。
+   *
+   * ⚠️ 与 `updateRate` 的区别：`updateRate` 同时放大**掉落数量**，本项**只放大经验**。
+   * 非法值（非有限数 / ≤ 0）一律归为 `1`。
+   */
+  expRate?: number;
   lootService?: LootService;
   /** 原版 `game.medicineLevel.get(type)`。 */
   medicineLevel?: (type: string) => number;
@@ -190,6 +197,8 @@ export class BattleWorld {
   enemyBorn: EnemyBorn | null = null;
 
   updateRate = 1;
+  /** 角色经验倍率（见 `BattleWorldOptions.expRate`）；只影响经验，不影响掉落。 */
+  expRate = 1;
   endlessLevel = 0;
 
   pendingMaps: Array<[string, number]> = [];
@@ -227,6 +236,7 @@ export class BattleWorld {
     this._map = options.map ?? 'home';
     this.endlessLevel = options.endlessLevel ?? 0;
     this.updateRate = options.updateRate ?? 1;
+    this.expRate = normalizePositive(options.expRate, 1);
     this.lootService = options.lootService ?? null;
     this.medicineLevel = options.medicineLevel ?? (() => 0);
     this.onEnemyKilledHook = options.onEnemyKilled ?? (() => {});
@@ -544,7 +554,8 @@ export class BattleWorld {
   gotExp(exp: number, level: number): void {
     const receivers = this.units.filter((v) => v.canGetExp);
     if (receivers.length > 0) {
-      const avgexp = (exp * this.updateRate) / receivers.length;
+      // `expRate` 是开发/运营调参的角色经验倍率；`updateRate` 是离线快进（也放大掉落数量）。
+      const avgexp = (exp * this.updateRate * this.expRate) / receivers.length;
       receivers.forEach((v) => v.gotExp(avgexp, level));
     }
   }

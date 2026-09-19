@@ -45,7 +45,7 @@ import { BattleCollector } from './internal/battle-collector.js';
 import { buildBattleWorld, nextWorldSeed } from './internal/headless.js';
 import { mapListDtoOf, pendingOfflineMsOf, requirementContextOf } from './internal/map-dto.js';
 import { unitStateDtoOf } from './internal/unit-state.js';
-import { OFFLINE_MAX_MS, WORLD_CONFIG } from './world.config.js';
+import { EXP_RATE, OFFLINE_MAX_MS, WORLD_CONFIG } from './world.config.js';
 
 /** Tick 上限：单一真相。 */
 export const WORLD_TICK_MS = WORLD_CONFIG.tickIntervalMs;
@@ -355,6 +355,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       sink: collector,
       clock,
       updateRate: 1,
+      expRate: EXP_RATE,
       medicineLevel: (type) => extras.medicineLevel[type] ?? 0,
       onEnemyKilled: (type, count) => this.onEnemyKilled(userId, extras, type, count),
       lootRecorder: {

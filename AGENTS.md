@@ -227,7 +227,7 @@ s.listen(5273,'127.0.0.1',()=>{console.log('OK');s.close()})"
 
 ```jsonc
 // dev.config.json
-{ "backendHost": "127.0.0.1", "backendPort": 3100, "frontendPort": 5273 }
+{ "backendHost": "127.0.0.1", "backendPort": 3100, "frontendPort": 5273, "expRate": 10 }
 ```
 
 ```bash
@@ -236,8 +236,17 @@ pnpm dev:web             # 前端 5273（vite），/api 与 /ws 代理到 3100
 pnpm dev                 # 两者一起（--parallel）
 ```
 
-临时换端口（不改文件）：`PORT=3200 pnpm dev:server`、`VITE_DEV_PORT=5300 pnpm dev:web`、
-`VITE_BACKEND_ORIGIN=http://127.0.0.1:9999 pnpm dev:web`。
+临时换端口/倍率（不改文件）：`PORT=3200 pnpm dev:server`、`EXP_RATE=1 pnpm dev:server`、
+`VITE_DEV_PORT=5300 pnpm dev:web`、`VITE_BACKEND_ORIGIN=http://127.0.0.1:9999 pnpm dev:web`。
+
+**`expRate`（角色经验倍率，开发用）**：`dev.mjs` 把它写成环境变量 `EXP_RATE`，
+服务端启动时读一次（`world.config.ts#parseExpRate`），注入 `BattleWorldOptions.expRate`：
+
+- 只作用于**角色经验**（在线战斗 + 离线结算都走 `BattleWorld.gotExp`）；
+  **不影响技能经验与掉落数量**（掉落数量归 `updateRate`，两者相乘）。
+- **只有走 `pnpm dev:server` 才有倍率**：直接 `node dist/main.js`、CI、生产都不设 `EXP_RATE` → `1`。
+- 非法值（0 / 负数 / NaN / Infinity / > 1000 / 非数字）一律回落 `1` ——
+  配错一个 0 不该让全服经验归零。
 
 前端固定 `strictPort: true`：端口被占时**直接失败**、不静默换号 ——
 否则收藏夹 / 代理指向的地址会悄悄变成一个不存在的 dev server（曾因此误判"改了没生效"）。
@@ -260,6 +269,7 @@ pnpm dev                 # 两者一起（--parallel）
 | `JWT_SECRET` / `JWT_EXPIRES_IN` | HS256 密钥与有效期 |
 | `IONET_ALLOW_PRODUCTION` | 生产环境必须置 `true` 才允许启动 ionet 模块 |
 | `REDIS_URL` | 预留：本工程当前**未使用** Redis（在线状态走内存注册表） |
+| `EXP_RATE` | 角色经验倍率；**不设 = 1（原版）**。只由 `pnpm dev:server` 按 `dev.config.json` 注入。仅影响角色经验，不影响技能经验与掉落数量 |
 
 `.env` 已在 `.gitignore` 中，**不要提交**（里面有数据库口令）。
 

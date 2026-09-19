@@ -22,6 +22,17 @@ export function toNumber(value: unknown, fallback = 0): number {
 }
 
 /**
+ * 正数倍率规整：只有**有限且 > 0** 的值被接受，其余（undefined / NaN / Infinity /
+ * 0 / 负数 / 非数字）一律回落 `fallback`。
+ *
+ * 用于 `BattleWorldOptions.expRate` 这类调参倍率 —— 配错一个 0 或 NaN
+ * 就会让全服经验归零，必须在这里挡掉。
+ */
+export function normalizePositive(value: unknown, fallback = 1): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+/**
  * 原版 `to[camelCase(damageType + '-absorb')] || 0` 的等价读取。
  *
  * 走 `Record<string, unknown>` 索引，getter 依旧会被触发（PlayerUnit / EnemyUnit

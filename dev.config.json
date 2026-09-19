@@ -1,11 +1,14 @@
 {
   "_comment": [
     "本地调试默认值 —— 唯一真相。`pnpm dev:server` / `pnpm dev:web` / `pnpm dev` 都读这里。",
-    "命令行环境变量优先级更高（便于临时换端口）：PORT、VITE_DEV_PORT、VITE_BACKEND_ORIGIN。",
+    "命令行环境变量优先级更高（便于临时改）：PORT、EXP_RATE、VITE_DEV_PORT、VITE_BACKEND_ORIGIN。",
     "改完前端端口无需改命令：packages/web/vite.config.ts 直接 import 本文件。",
-    "⚠️ 端口固定使用 strictPort：被占用时**直接报错**而不是静默换号，避免对着错端口调试。"
+    "⚠️ 端口固定使用 strictPort：被占用时**直接报错**而不是静默换号，避免对着错端口调试。",
+    "⚠️ expRate 只对**本地开发**生效（由 scripts/dev.mjs 注入 EXP_RATE 环境变量）；",
+    "   生产不设 EXP_RATE 即为 1（原版）。它只放大角色经验，不影响技能经验与掉落数量。"
   ],
   "backendHost": "127.0.0.1",
   "backendPort": 3100,
-  "frontendPort": 5273
+  "frontendPort": 5273,
+  "expRate": 10
 }

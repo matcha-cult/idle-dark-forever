@@ -18,6 +18,9 @@
  * 这里**在 spawn 之前**写进 `process.env.PORT`：dotenv 默认**不覆盖**已存在的环境变量，
  * 所以配置文件的端口能盖住 `.env` 里的 `PORT=3000`（那是给 CI / 生产用的），
  * 而显式传的 `PORT=xxxx pnpm dev:server` 又能盖住配置文件。
+ *
+ * 同理注入 `EXP_RATE`（角色经验倍率，开发用）：**只有走这个脚本才有倍率**，
+ * 直接 `node dist/main.js` 或生产部署都不设它 → 倍率 = 1（原版）。
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -27,24 +30,31 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.resolve(here, '..');
 
-/** 读根目录 `dev.config.json`；缺失或字段非法时回落到内置默认值（读坏配置不该挡开发）。 */
-function backendPortFromConfig() {
-  const fallback = 3100;
+/** 读根目录 `dev.config.json`；缺失或读坏时回落 `{}`（读坏配置不该挡开发）。 */
+function readDevConfig() {
   try {
-    const raw = JSON.parse(
-      readFileSync(path.resolve(pkgRoot, '../../dev.config.json'), 'utf8'),
-    );
-    const port = Number(raw?.backendPort);
-    return Number.isInteger(port) && port > 0 && port < 65_536 ? port : fallback;
+    return JSON.parse(readFileSync(path.resolve(pkgRoot, '../../dev.config.json'), 'utf8'));
   } catch {
-    return fallback;
+    return {};
   }
 }
 
+const devConfig = readDevConfig();
+
 if (process.env.PORT === undefined || process.env.PORT === '') {
-  process.env.PORT = String(backendPortFromConfig());
+  const port = Number(devConfig?.backendPort);
+  process.env.PORT = String(Number.isInteger(port) && port > 0 && port < 65_536 ? port : 3100);
 }
-console.log(`[dev] 后端端口 ${process.env.PORT}（dev.config.json，可用 PORT=… 覆盖）`);
+
+if (process.env.EXP_RATE === undefined || process.env.EXP_RATE === '') {
+  const rate = Number(devConfig?.expRate);
+  // 与服务端 `parseExpRate` 同一口径：只接受有限、> 0、≤ 1000。
+  if (Number.isFinite(rate) && rate > 0 && rate <= 1000) process.env.EXP_RATE = String(rate);
+}
+console.log(
+  `[dev] 后端端口 ${process.env.PORT}（dev.config.json，可用 PORT=… 覆盖）；` +
+    `角色经验倍率 ${process.env.EXP_RATE ?? '1（未配置）'}`,
+);
 
 const initial = spawnSync('pnpm', ['exec', 'tsc', '-p', 'tsconfig.json'], {
   cwd: pkgRoot,

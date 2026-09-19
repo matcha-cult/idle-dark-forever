@@ -29,6 +29,8 @@ export interface BuildWorldOptions {
   clock: Clock;
   /** 离线快进倍率（原版 `world.updateRate`）。 */
   updateRate?: number;
+  /** 角色经验倍率（`1` = 原版；只影响经验，不影响掉落）。 */
+  expRate?: number;
   /** 原版 `game.onEnemyKilled`（击杀任务 / 掉落计数）。 */
   onEnemyKilled?: (type: string, count: number, role?: string) => void;
   /** 原版 `game.medicineLevel.get(type)`。 */
@@ -62,6 +64,7 @@ export function buildBattleWorld(options: BuildWorldOptions): BuiltWorld {
     map: options.map,
     endlessLevel: normalizeEndless(options.endlessLevel),
     updateRate: normalizeRate(options.updateRate),
+    ...(options.expRate === undefined ? {} : { expRate: options.expRate }),
     lootService,
     ...(options.medicineLevel ? { medicineLevel: options.medicineLevel } : {}),
     ...(options.onEnemyKilled ? { onEnemyKilled: options.onEnemyKilled } : {}),

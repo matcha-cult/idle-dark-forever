@@ -38,7 +38,7 @@ import {
 } from '../shared/index.js';
 import { BattleCollector } from '../world/internal/battle-collector.js';
 import { buildBattleWorld, nextWorldSeed } from '../world/internal/headless.js';
-import { OFFLINE_MAX_MS, OFFLINE_PAUSE_AFTER_MS } from '../world/world.config.js';
+import { EXP_RATE, OFFLINE_MAX_MS, OFFLINE_PAUSE_AFTER_MS } from '../world/world.config.js';
 
 /** 离线结算硬上限（保持原版 72h 语义）。 */
 export const MAX_OFFLINE_MS = OFFLINE_MAX_MS;
@@ -193,6 +193,7 @@ export class IdleService {
         sink: collector,
         clock,
         updateRate: 1,
+        expRate: EXP_RATE,
         medicineLevel: (type) => extras.medicineLevel[type] ?? 0,
         // 离线结算不推送掉落，也不需要 LootDto 记录。
       }).world;
