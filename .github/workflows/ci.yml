@@ -1,0 +1,59 @@
+name: CI
+
+# 构建前置：ionet-ts 框架源码由本 workflow 检出到 `vendor/ionet-ts/`。
+# 本仓库**不提交**该目录（见 .gitignore），pnpm-workspace.yaml 通过
+# `vendor/ionet-ts/packages/*` 把框架包纳入 workspace，因此构建前必须就位。
+#
+# 若 ionet-ts 是私有仓库，需配置 secret `IONET_TS_TOKEN`（对 matcha-cult/ionet-ts 有读权限的 PAT）。
+# 未配置时回退到 github.token（仅当两仓库同属一个组织且允许默认 token 跨仓库读取时才有效）。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出本仓库
+        uses: actions/checkout@v4
+
+      - name: 检出 ionet-ts 框架源码到 vendor/ionet-ts
+        uses: actions/checkout@v4
+        with:
+          repository: matcha-cult/ionet-ts
+          ref: dev
+          path: vendor/ionet-ts
+          token: ${{ secrets.IONET_TS_TOKEN || github.token }}
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: 校验框架目录已就位
+        run: |
+          test -f vendor/ionet-ts/PROTOCOL.md || { echo "vendor/ionet-ts 未就位"; exit 1; }
+          ls vendor/ionet-ts/packages
+
+      - name: 安装依赖
+        run: pnpm install --no-frozen-lockfile
+
+      - name: 构建（顺序：protocol → game-core → 其余）
+        run: pnpm run build
+
+      - name: 类型校验
+        run: pnpm run typecheck
+
+      - name: 单元测试
+        run: pnpm run test
