@@ -1,0 +1,82 @@
+// idle-dark-forever —— 数据库 Schema（**数据设计的唯一真相**）
+//
+// 采用与 `idle-path-of-xiuxian` 相同的 Prisma 用法（刻意保持一致）：
+// - **本文件是数据设计工件**：表的形状、约束、默认值以这里为准；
+// - **运行期不用 Prisma Client**：服务端通过 `DatabaseService` / `GameDatabaseService`
+//   走原生 `pg`（`src/modules/database`、`src/modules/game`），`src/` 内**不得** import `@prisma/client`；
+// - **实际 DDL 由 `scripts/init-db.mjs` 执行**（幂等 `CREATE TABLE IF NOT EXISTS` +
+//   增量 `ALTER ... ADD COLUMN IF NOT EXISTS`），改 schema 时必须同步改它；
+// - `prisma` / `@prisma/client` 只在 **devDependencies**，仅用于 `prisma validate` /
+//   `prisma generate` / `prisma db pull`。
+//
+// 校验用法：
+//   pnpm --filter idle-dark-server run prisma:validate   # 校验本文件语法/一致性
+//   pnpm --filter idle-dark-server run prisma:pull       # 用**线上库**反推 schema（核对是否漂移）
+//
+// ⚠️ 命名风格与 `idle-path-of-xiuxian` 一致：模型名 = 表名、字段名 = 列名（snake_case），
+//    因此不需要 `@@map` / `@map`，schema 与 DDL 可逐行对照。
+//
+// ⚠️ 不要与本机 `idle_game` 库共用：那里已有 xiuxian 的 `users` / `characters`
+//    （`characters.id` 是 `integer`、有 `nickname`/`gender`…），列定义与本工程完全不同，
+//    建在同库会被 `CREATE TABLE IF NOT EXISTS` 静默跳过，随后查询必然失败。
+//    本工程使用独立数据库（默认 `idle_dark`）。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// 账号。`id` 为 `BIGSERIAL`；服务端以 `bigint` 参与运算，出参经 `bigintToSafeNumber` 收敛。
+model users {
+  id            BigInt   @id @default(autoincrement())
+  username      String   @unique @db.Text
+  password_hash String   @db.Text
+  display_name  String   @default("") @db.Text
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  account_state account_state?
+  characters    characters[]
+
+}
+
+/// 账号级状态（**跨角色共享**）：神力、角色栏位、最高无尽层，以及一个 `data` 侧车 JSONB
+/// （存放 `banned` / `updateRate` / `bank` / `storiesMap` / `enemyTasks` / `medicineLevel` /
+/// `worldSeeds` / `worldMaps` 等 game-core 的 `PlayerAccountState` 与 `AccountExtras`）。
+///
+/// 为什么用 JSONB 侧车而不是逐列展开：这些结构由 `game-core` 的 `toJSON()` 决定，
+/// 拆成列会让「游戏内核改一个字段」变成一次数据库迁移。
+model account_state {
+  user_id               BigInt   @id
+  diamonds              Int      @default(0)
+  player_slot_count     Int      @default(1)
+  highest_endless_level Int      @default(0)
+  data                  Json     @default("{}") @db.JsonB
+  updated_at            DateTime @default(now()) @db.Timestamptz(6)
+
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// 角色。`state` 是 `game-core` `Player.toJSON()` 的整档 JSONB
+/// （含背包 / 装备 / 职业进度 / 技能等级 / 钥石 / 拾取规则等）。
+/// 抽出的 `role` / `career` / `level` / `peak_level` 只用于**列表页与排序**，
+/// 权威数值一律以 `state` 为准（它们是 `state` 的投影，落库时同步刷新）。
+model characters {
+  id             String   @id @db.Text
+  user_id        BigInt
+  name           String   @db.Text
+  role           String   @default("warrior") @db.Text
+  career         String   @default("warrior") @db.Text
+  level          Int      @default(1)
+  peak_level     Int      @default(0)
+  state          Json     @default("{}") @db.JsonB
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  last_settle_at DateTime @default(now()) @db.Timestamptz(6)
+
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id], map: "idx_characters_user_id")
+}

@@ -81,6 +81,12 @@ jobs:
       - name: 类型校验
         run: pnpm run typecheck
 
+      - name: 校验 Prisma schema（数据设计真相）
+        run: pnpm --filter idle-dark-server run prisma:validate
+        env:
+          # validate 不连库，但 Prisma 读 schema 时会解析 datasource 的 env()
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
       - name: 单元测试（不依赖数据库）
         run: pnpm run test
 

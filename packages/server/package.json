@@ -5,17 +5,20 @@
   "type": "module",
   "description": "idle-dark-forever 权威服务端：NestJS + ionet-ts",
   "scripts": {
-    "dev": "node scripts/dev.mjs",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/main.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist",
     "db:init": "node scripts/init-db.mjs",
+    "dev": "node scripts/dev.mjs",
+    "prisma:generate": "prisma generate",
+    "prisma:pull": "prisma db pull",
+    "prisma:validate": "prisma validate",
+    "smoke:game": "node scripts/game-flow-smoke.mjs",
+    "smoke:routes": "node scripts/route-probe.mjs",
+    "smoke:ws": "node scripts/ws-protocol-smoke.mjs",
+    "start": "node dist/main.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "clean": "rm -rf dist",
-    "smoke:ws": "node scripts/ws-protocol-smoke.mjs",
-    "smoke:game": "node scripts/game-flow-smoke.mjs",
-    "smoke:routes": "node scripts/route-probe.mjs"
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@idle-dark/game-core": "workspace:*",
@@ -37,11 +40,13 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
+    "@prisma/client": "^5.10.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.11.10",
     "@types/ws": "^8.18.1",
+    "prisma": "^5.10.0",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"
   }

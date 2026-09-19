@@ -163,18 +163,28 @@ antd-zh token Menu --format markdown
 ### 7.6 开发中的页面一律包 `ErrorBoundary`
 模块级异常会把整棵 React 树卸载成白屏。`panel-registry` 对每个域包一层（key 跟域走，错误态不粘下一个面板）。
 
-### 7.7 沙箱内**没有**可供端到端验收的数据库（重要）
-本机实测：只有 `psql` **客户端**，`/usr/lib/postgresql/18/bin/` 下**没有 `initdb` / `postgres`**；
-`docker` 命令存在但 **daemon 不可用**（`/var/run/docker.sock` 不存在）。因此：
+### 7.7 数据库：沙箱内**没有服务端二进制**，但有一个**可用的外部实例**
+本机实测：
+- 只有 `psql` **客户端**；`/usr/lib/postgresql/18/bin/` 下**没有 `initdb` / `postgres`**；
+  `docker` 命令存在但 **daemon 不可用**（`/var/run/docker.sock` 不存在）→ **无法在沙箱内自建集群**。
+- **但**本机有一个可直接使用的 PostgreSQL 实例（`idle-path-of-xiuxian` 用的那台），
+  凭据写在 `packages/server/.env` 里 → **数据库相关的端到端验收在本地就能跑**（见 §10.3）。
 
-- **本地能验的**：`pnpm run build`、`pnpm run typecheck`、`pnpm run test`（纯逻辑单测）、
-  以及**不依赖数据库**的服务端启动 + WS 线协议冒烟（`scripts/ws-protocol-smoke.mjs`；
-  数据库不可达时 `/api/health` 会返回 `503 degraded`，这是**正确行为**，不影响协议层断言）。
-- **本地验不了的**：`db:init`、角色存档读写、以及任何需要真实 `characters` / `users` 表的端到端链路。
-  这些**只在 CI 跑** —— `.github/workflows/ci.yml` 已声明 `services: postgres`，
-  并注入 `DATABASE_URL` / `JWT_SECRET`，构建后会执行 `db:init` + 线协议冒烟。
-- 需要本地做依赖数据库的验证时，用**内存替身**实现 `DatabaseService` 的 `query` / `connect` 接口，
-  写进 `packages/server/test/`，不要试图在沙箱里安装/启动 PostgreSQL。
+因此：
+
+| 能在本地跑 | 说明 |
+|---|---|
+| `pnpm run build` / `typecheck` / `test` | 纯逻辑，不需要数据库 |
+| `db:init` / `prisma:validate` / `prisma:pull` | 连 `localhost:35432` |
+| 服务端启动 + 线协议冒烟 15/15 | 需要数据库健康（`/api/health` = 200） |
+| 路由探针 20/20 | 需要数据库（Action 会打到持久化层） |
+| **完整游戏流程冒烟 22/22** | `scripts/game-flow-smoke.mjs`，**已在本地实跑通过** |
+
+> 无数据库时的行为：`/api/health` 返回 `503 degraded`（正确降级），协议层断言仍可通过；
+> 但依赖 `users`/`characters` 的 Action 会返回 `INTERNAL`。
+
+需要**脱离外部实例**做单测时，用内存替身实现 `DatabaseService` 的 `query` / `connect`
+（`packages/server/test/helpers/fake-database.ts` 已有），不要试图在沙箱里安装/启动 PostgreSQL。
 
 ## 8. 新增一个游戏域要改哪些文件
 1. `packages/protocol/src/cmd.ts` —— 登记段与 subCmd（段宽 10、subCmd 从 1 起、0 保留）
@@ -190,6 +200,73 @@ antd-zh token Menu --format markdown
 | 变量 | 说明 |
 |---|---|
 | `PORT` | 单端口三合一（REST `/api` + WS `/ws`），默认 `3000` |
-| `DATABASE_URL` | PostgreSQL 连接串 |
+| `DATABASE_URL` | PostgreSQL 连接串（**本工程用独立库，见 §10**） |
 | `JWT_SECRET` / `JWT_EXPIRES_IN` | HS256 密钥与有效期 |
 | `IONET_ALLOW_PRODUCTION` | 生产环境必须置 `true` 才允许启动 ionet 模块 |
+| `REDIS_URL` | 预留：本工程当前**未使用** Redis（在线状态走内存注册表） |
+
+`.env` 已在 `.gitignore` 中，**不要提交**（里面有数据库口令）。
+
+---
+
+## 10. 数据库：schema 是设计真相，运行期用原生 pg
+
+采用与 `idle-path-of-xiuxian` **相同**的 Prisma 用法（刻意保持一致，便于两个工程互相参照）：
+
+| 角色 | 是什么 |
+|---|---|
+| `packages/server/prisma/schema.prisma` | **数据设计的唯一真相**：表形状/约束/默认值以它为准 |
+| `packages/server/scripts/init-db.mjs` | **实际执行 DDL**（幂等 `CREATE TABLE IF NOT EXISTS` + 增量 `ALTER ... ADD COLUMN IF NOT EXISTS`） |
+| 运行期 | **原生 `pg`**（`DatabaseService` / `GameDatabaseService`）。`src/` 内**禁止** import `@prisma/client` |
+| `prisma` / `@prisma/client` | 只在 **devDependencies**，仅用于 `validate` / `generate` / `db pull` |
+
+> 改表 = 同时改 `schema.prisma` **和** `init-db.mjs`，两处必须一致（`db pull` 可核对）。
+
+```bash
+cd packages/server
+pnpm run prisma:validate   # 校验 schema 语法/一致性（不需要数据库）
+pnpm run prisma:generate   # 生成 Prisma Client（仅类型参考，运行期不用）
+pnpm run prisma:pull       # 用**线上库**反推 schema —— 核对「设计真相」是否已漂移
+pnpm run db:init           # 执行 DDL（幂等）
+```
+
+### 10.1 沙箱内跑 Prisma 必须重定向 `HOME`
+
+Prisma 把引擎缓存在 `os.homedir()/.cache/prisma`，而沙箱内 `~` 只读 → 报
+`EROFS: read-only file system, utime '.../libquery-engine'`。`XDG_CACHE_HOME` **无效**（Prisma 不读它），
+必须改 `HOME`：
+
+```bash
+export HOME="$PWD/../../tmp/prisma-home"   # 指向工作区内（tmp/ 已 gitignore）
+mkdir -p "$HOME"
+./node_modules/.bin/prisma validate
+```
+
+### 10.2 库的选择：**独立数据库，绝不与 xiuxian 共库**
+
+本机 PostgreSQL（`localhost:35432`）上的 `idle_game` 是 `idle-path-of-xiuxian` 的库，里面已有它的
+`users` / `characters`（`characters.id` 是 `integer`、有 `nickname`/`gender`…）与 30 张 `game_*` 表。
+
+本工程的 `characters` 列定义**完全不同**（`id text` / `name` / `role` / `career` / `state jsonb`）。
+建在同一库里会被 `CREATE TABLE IF NOT EXISTS` **静默跳过**，随后所有查询都会失败。
+
+因此本工程使用**独立数据库** `idle_dark`：
+
+```sql
+CREATE DATABASE idle_dark;   -- 已创建；init-db.mjs 只建表不建库
+```
+`DATABASE_URL` 指向 `.../idle_dark`。当前用户具备 `CREATEDB`/`SUPERUSER`（实测），
+但**不要把本工程的表建进 `idle_game`**。
+
+### 10.3 端到端验收（需要数据库，本地/CI 均可）
+
+```bash
+cd packages/server
+node dist/main.js &                        # 需先 pnpm run build；会读 .env
+node scripts/route-probe.mjs 3000 "$JWT_SECRET"    # 20/20 域 Action 是否都注册
+node scripts/game-flow-smoke.mjs 3000              # 完整流程（22 项断言）
+```
+
+> ⚠️ **不要占用 3000 端口做验证前先确认它是不是 xiuxian 的服务端**：
+> 两者健康检查形状不同（xiuxian 的响应没有 `service` 字段且会报 `redis`），
+> 打到别人的服务端会得到一堆莫名其妙的 404。本工程验证时用独立端口更安全。

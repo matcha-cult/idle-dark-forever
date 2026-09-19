@@ -143,6 +143,28 @@ function waitPush(predicate, timeoutMs = 8000) {
 
 // ────────────────────────────── 主流程 ──────────────────────────────
 
+/**
+ * 注册一个**全新账号**并建立 WS 连接。
+ *
+ * 为什么需要：`player_slot_count` 默认 1，主账号建过一个角色后栏位即满；
+ * 而 `player.importSave` 会**新建角色**，所以导入类断言必须用空栏位账号。
+ */
+async function freshAccount(username) {
+  const password = 'smoke-pass-123';
+  const reg = await rest('POST', '/auth/register', { username, password });
+  if (reg.body?.success !== true) {
+    throw new Error(`注册失败：${JSON.stringify(reg.body).slice(0, 160)}`);
+  }
+  const login = await rest('POST', '/auth/login', { username, password });
+  const token = login.body?.data?.token;
+  if (typeof token !== 'string' || token === '') {
+    throw new Error('登录未拿到 token');
+  }
+  const impWs = await openWs(token);
+  attach(impWs);
+  return { token, ws: impWs };
+}
+
 const suffix = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
 const username = `smoke_${suffix}`;
 const password = 'smoke-pass-123';
@@ -239,13 +261,30 @@ try {
     check('player.exportSave 返回可下载存档', exported.ok && typeof saveText === 'string' && saveText.length > 0, typeof saveText === 'string' ? `len=${saveText.length} head=${saveText.slice(0, 8)}` : JSON.stringify(exported.action).slice(0, 160));
 
     if (typeof saveText === 'string' && saveText.length > 0) {
-      const imported = await call(ws, 20, 4, { save: saveText, name: `导入_${suffix.slice(-6)}`, opId: `imp-${suffix}` });
-      check('player.importSave 能导入自己导出的存档', imported.ok, JSON.stringify(imported.action).slice(0, 200));
+      // 导出用**已建角**的主账号即可；但导入会**新建一个角色**，必须换一个「有空闲栏位」的账号
+      // —— `player_slot_count` 默认 1，主账号已占用 1 个，用它导入必然得到 PLAYER_SLOT_FULL
+      //（那是正确行为，不是缺陷）。这里注册第二个账号专门验导入。
+      const importer = await freshAccount(`imp_${suffix}`);
+      const impWs = importer.ws;
+      const imported = await call(impWs, 20, 4, { save: saveText, name: `导入_${suffix.slice(-6)}`, opId: `imp-${suffix}` });
+      check('player.importSave 能导入自己导出的存档（独立空栏位账号）', imported.ok, JSON.stringify(imported.action).slice(0, 200));
 
       // 幂等：同 opId 重复提交必须被拒或回放（不得重复创建）
-      const dup = await call(ws, 20, 4, { save: saveText, name: `导入2_${suffix.slice(-6)}`, opId: `imp-${suffix}` });
+      const dup = await call(impWs, 20, 4, { save: saveText, name: `导入2_${suffix.slice(-6)}`, opId: `imp-${suffix}` });
       const dupCode = dup.action?.data?.code;
-      check('player.importSave 同 opId 重复提交被去重（DUPLICATE_OPERATION 或回放同一结果）', dup.ok || dupCode === 'DUPLICATE_OPERATION', `success=${dup.action?.success} code=${dupCode ?? '-'}`);
+      check(
+        'player.importSave 同 opId 重复提交被去重（DUPLICATE_OPERATION 或回放同一结果）',
+        dup.ok || dupCode === 'DUPLICATE_OPERATION',
+        `success=${dup.action?.success} code=${dupCode ?? '-'}`,
+      );
+      // 反向断言：栏位已满的账号导入应被**正确拒绝**（而不是静默建第二个角色）
+      const over = await call(impWs, 20, 4, { save: saveText, name: `导入3_${suffix.slice(-6)}`, opId: `imp3-${suffix}` });
+      check(
+        '栏位已满时 importSave 返回 PLAYER_SLOT_FULL（正确拒绝，不静默超建）',
+        over.action?.success === false && over.action?.data?.code === 'PLAYER_SLOT_FULL',
+        `success=${over.action?.success} code=${over.action?.data?.code ?? '-'}`,
+      );
+      impWs.close();
     }
 
     // 13) 业务失败的两级判定：不存在的角色
