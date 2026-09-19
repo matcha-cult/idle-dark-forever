@@ -51,6 +51,17 @@ export interface CombatRngStreams {
   affix: Rng;
   spawn: Rng;
   loot: Rng;
+  /**
+   * 数据表里的技能 / Buff / 强化 hook 专用通道。
+   *
+   * 原版这些 hook 内部直接调用 `Math.random()`（`data/skills.ts` 47 处等），无法重放；
+   * 而契约的 hook 签名**不带 `rng` 形参**。因此改为：hook 收到的 `world` 参数上暴露本通道
+   * —— `world.rng.skill.next()`。
+   *
+   * 独立成通道是必须的：复用 `crit` / `loot` 等通道会让战斗判定与技能随机的序列互相扰动，
+   * 破坏金样回归的可解释性与可复算性。
+   */
+  skill: Rng;
 }
 
 /** 掉落物槽位（原版 `InventorySlot` 在战斗侧需要的最小投影）。 */
@@ -230,6 +241,7 @@ export class BattleWorld {
       affix: root.fork('affix'),
       spawn: root.fork('spawn'),
       loot: root.fork('loot'),
+      skill: root.fork('skill'),
     };
   }
 

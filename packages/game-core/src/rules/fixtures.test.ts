@@ -184,7 +184,9 @@ export function createTestTables(): DataTables {
       dust1: { key: 'dust1', type: 'material', name: '尘1', price: 1 },
       piece2: { key: 'piece2', type: 'material', name: '碎片2', price: 2 },
       potion: { key: 'potion', type: 'material', name: '药水', price: 5, stack: 20, energy: 3 },
-      ticket: { key: 'ticket', type: 'material', name: '钥石', price: 0, stack: 50 },
+      // ⚠️ 原版数据表里**没有** `ticket` 这个 good：'ticket' 是伪物品 key，
+      // 由 `loot`（MAX_TICKET_STACK）/ `InventorySlot.name` / `sortInventory`（按 key 归类）
+      // 特判。这里刻意不定义它，以保持与原版一致（`goods['ticket']` 为 undefined）。
       trash: { key: 'trash', type: 'junk', name: '杂物', price: 1 },
       gold: { key: 'gold', type: 'junk', name: '金币', price: 0 },
       diamonds: { key: 'diamonds', type: 'junk', name: '神力', price: 0 },
