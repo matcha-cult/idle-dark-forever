@@ -52,7 +52,7 @@ export interface TimelineLike {
  * 数据表函数可用的**确定性子随机源**。
  *
  * 与 `combat/battle-world.ts` 的 `CombatRngStreams` 对齐：技能 / buff / 强化 / 传奇 hook 里
- * 原本的 `Math.random()` 一律改走 `world.rng.skill`（标签 `'skill'`），
+ * 原本的 `Math.random()` 一律改走 `world.rng.skill`（标签 `'skill'`，共 52 处），
  * 与 `crit` / `dodge` / `loot` 等判定流**互不扰动**，保证金样回归可解释、可重放。
  */
 export interface DataRngStreams {

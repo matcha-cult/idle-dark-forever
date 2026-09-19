@@ -93,14 +93,33 @@
 确实无法确定的叶值（buff hook 第 2/3 参在不同条目里分别是「来源单位 / 世界 / 伤害类型字符串」）
 用**交叉类型** `UnitLike & WorldLike & string` 收敛，而不是 `any`。
 
-### 3.3 `Rng` 注入
+### 3.3 `Rng` 注入（**已全量清零，数据层零裸 `Math.random()`**）
 
-`AffixData.generate` / `LegendData.generate` 按冻结契约改成 `(level, rng: Rng) => number`：
+原版数据文件里共 **52 处**运行时随机调用，全部改为走注入的 `Rng` 端口：
 
-- 签名：`generate(level) {` → `generate(level, rng) {`（49 处词缀/传奇）；
-- 随机源：`affixes/base.js`(15) 与 `affixes/level2.js`(12) 里的 `Math.random()` → **`rng.next()`**，
-  27 个词缀的数值生成全部走注入端口，可重放（`index.test.ts` 用探针 Rng 断言了「调用了注入源」且「相同序列同结果 / 不同取值不同结果」）。
-- 传奇的 `generate` 原版本来就是常量（`return 0.3` 之类），只需接受 `rng` 形参。
+| 场景 | 数量 | 改法 | 随机源 |
+|---|---|---|---|
+| 词缀 `generate` | 27（`affixes/base.js` + `level2.js`，其中 27 处用随机数） | `Math.random()` → `rng.next()`；签名 `generate(level)` → `generate(level, rng)` | 冻结契约的 `rng` 形参 |
+| 传奇 `generate` | 16 个（24 条传奇里只有 16 条写了 `generate`） | 仅签名补 `rng`（原版返回常量） | 同上 |
+| `skills.*.effect` | 47 | `Math.random()` → `world.rng.skill.next()` | `BattleWorld.rng.skill`（标签 `'skill'`） |
+| `buffs.*.effect` | 1（`knight.deserve`） | 同上 | 同上 |
+| `buffs.*.hooks.attacked`（`iceShield`） | 1 | `this.unit.world.rng.skill.next()`（该 hook 形参里没有 world） | `Unit.world.rng.skill` |
+| `legends.*.hooks`（`mithrilRing-1`） | 1 | `this.world.rng.skill.next()`（`AttrHook` 形参里没有 world） | `Unit.world.rng.skill` |
+| `enhances.*.hooks`（`knight.recharge`） | 1 | `world.rng.skill.next()` | `world.rng.skill` |
+| `packages/year2018` 的召唤 buff `effect` | 1 | `world.rng.skill.next()` | `world.rng.skill` |
+
+设计要点：
+
+- **独立通道**：只用 `world.rng.skill`（`combat/battle-world.ts` 的 `CombatRngStreams.skill`，标签 `'skill'`），
+  不借 `crit` / `dodge` / `loot`，也不 `fork` 新流——否则会互相扰动战斗判定序列、破坏金样回归的可解释性。
+- **统一用 `.next()`**：保持原表达式逐字不变（`Math.random() * a + b` → `rng.skill.next() * a + b`），
+  分布与 `[0,1)` 语义与原版**逐位一致**；没有改成 `.int(n)`，以免依赖 `int` 的具体实现。
+- **无法从形参拿 world 的只有 2 处**（buff `attacked` hook、传奇 hook），按 `this.unit.world` / `this.world` 取，
+  底层就是原版 `Unit.world`（`readonly world: BattleWorld`），**没有臆造随机源、没有保留降级分支**。
+- 视图类型（`_shapes.ts`）补了 `WorldLike.rng: DataRngStreams` 与 `UnitLike.world: WorldLike`，仍然零 `any`。
+- 护栏：`index.test.ts` 新增「源码扫描」用例——遍历全部数据表函数（>600 个）的 `toString()`，
+  断言无一含 `Math.random`；另有「同 seed 两次运行产出相同伤害、不同 seed 不同、且恰好消费一次 `skill` 流」
+  的可重放断言，以及两处 `this.world` / `this.unit.world` 路径的定向用例。
 
 ### 3.4 消灭副作用式 `extend`
 
@@ -119,6 +138,16 @@ createDefaultTables()
 
 移植期顺带修掉一个**真实缺陷**：`extend` 组合出的新条目原样沿用了 origin 的 `key`（原版 `util.define` 会覆写
 `info.key`），导致 `skills['nightmare.wolf.1'].key === 'wolf.call'`。已在 `_util.ts` 显式覆写，并有单测覆盖。
+
+---
+
+## 3.5 随机源现状（`grep` 前后对比）
+
+| 口径 | 改造前 | 改造后 |
+|---|---|---|
+| `grep -ro "Math\.random" src/data --include=*.ts \| wc -l`（含注释/测试名里的字样） | 72 | 23 |
+| 其中**真实调用点** | **52** | **0** |
+| 剩余字样分布 | — | 18 个数据文件的头注释（自述「零 `Math.random()`」）+ `_shapes.ts` 设计说明 1 处 + `index.test.ts` 的 2 个用例名与 1 处断言字符串 |
 
 ---
 
@@ -143,7 +172,7 @@ createDefaultTables()
 | 13 | `RoleData.startup` 必填 | 2 个角色都没写；反而有额外 `requirement` | 改可选 |
 | 14 | 契约无 `producers` 表 | 原版 `base.js` 导出 `producers: {}` | 确认是否需要（当前为空表） |
 | 15 | `announcement` 在 `DataTables` 内 | 原版 `annoucement.js` **不在** `data/base.js` 的表里，是单独 import | 确认归属（当前按契约放进 `DataTables`） |
-| 16 | **hook 家族没有 `rng` 形参** | `buffs/skills/enhances/legends` 的 hook 里仍有 **52 处裸 `Math.random()`**（技能伤害浮动、冰盾触发、暴击等） | ⚠️ **这是与 `AGENTS.md` §1.5「禁止裸 `Math.random()`」最直接的冲突**。要在这些函数里消灭 `Math.random()`，必须给 `SkillData.effect` / `BuffData.hooks` / `AttrHook` 等签名补一个 `rng`（或让 `world`/`this` 暴露）随机源。**契约冻结期内我没有自行改动，原样保留了原版随机调用。** |
+| 16 | hook 家族没有 `rng` 形参 | ~~52 处裸 `Math.random()`~~ | ✅ **已解决，且无需改契约**：`BattleWorld.rng` 新增了 `skill` 通道（由并行开发的 `combat/` 侧提供），数据层一律改用 `world.rng.skill`；两处拿不到 world 形参的 hook 走 `this.unit.world` / `this.world`。当前数据层**零** `Math.random()` 调用（见 §3.3）。 |
 
 其它原版额外字段（`def` / `stunResist` / `*Absorb` / `allResist` / `speedRate` / `v2Skills` / `element` / `targetType` /
 `nonBreakable` / `isEndless` / `level`(goods)）通过条目类型的索引签名承载，未写进契约。
@@ -161,8 +190,12 @@ pnpm --filter @idle-dark/game-core exec tsc -p tsconfig.json --noEmit
 
 # ② 数据层单测
 pnpm --filter @idle-dark/game-core exec vitest run src/data
-# → Test Files 1 passed / Tests 17 passed
+# → Test Files 1 passed / Tests 21 passed
 ```
+
+> 注：`src/rules/*.test.ts` 的失败属于并行进行的规则层开发，不在数据层范围内。
+> 同一时刻 `tsc` 的 0 error 指 `src/data/**` 与 `_shapes.ts` / `_util.ts` 全部干净；
+> 全包若报错只会来自其它 agent 正在写的 `src/rules/**`。
 
 另外做了两项**一次性**（不随包提交）的强化验证：
 

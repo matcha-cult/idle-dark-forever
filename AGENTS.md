@@ -163,8 +163,20 @@ antd-zh token Menu --format markdown
 ### 7.6 开发中的页面一律包 `ErrorBoundary`
 模块级异常会把整棵 React 树卸载成白屏。`panel-registry` 对每个域包一层（key 跟域走，错误态不粘下一个面板）。
 
-## 8. 新增一个游戏域要改哪些文件
+### 7.7 沙箱内**没有**可供端到端验收的数据库（重要）
+本机实测：只有 `psql` **客户端**，`/usr/lib/postgresql/18/bin/` 下**没有 `initdb` / `postgres`**；
+`docker` 命令存在但 **daemon 不可用**（`/var/run/docker.sock` 不存在）。因此：
 
+- **本地能验的**：`pnpm run build`、`pnpm run typecheck`、`pnpm run test`（纯逻辑单测）、
+  以及**不依赖数据库**的服务端启动 + WS 线协议冒烟（`scripts/ws-protocol-smoke.mjs`；
+  数据库不可达时 `/api/health` 会返回 `503 degraded`，这是**正确行为**，不影响协议层断言）。
+- **本地验不了的**：`db:init`、角色存档读写、以及任何需要真实 `characters` / `users` 表的端到端链路。
+  这些**只在 CI 跑** —— `.github/workflows/ci.yml` 已声明 `services: postgres`，
+  并注入 `DATABASE_URL` / `JWT_SECRET`，构建后会执行 `db:init` + 线协议冒烟。
+- 需要本地做依赖数据库的验证时，用**内存替身**实现 `DatabaseService` 的 `query` / `connect` 接口，
+  写进 `packages/server/test/`，不要试图在沙箱里安装/启动 PostgreSQL。
+
+## 8. 新增一个游戏域要改哪些文件
 1. `packages/protocol/src/cmd.ts` —— 登记段与 subCmd（段宽 10、subCmd 从 1 起、0 保留）
 2. `packages/protocol/src/dto.ts` —— 该域请求/响应类型
 3. `packages/server/src/modules/logic/<domain>/` —— `*.action.ts`（只校验转发）+ `*.logic.service.ts`（门面编排）+ `internal/`（实现）

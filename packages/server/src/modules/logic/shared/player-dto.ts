@@ -288,8 +288,8 @@ export function playerStateDtoOf(
     slotLimits: slotLimitsOf(player),
     selectedSkills: [...(career?.selectedSkills ?? [])],
     selectedEnhances: [...(career?.selectedEnhances ?? [])],
-    skillExp: mapToRecord(player.skillExp),
-    dungeonTickets: mapToRecord(player.dungeonTickets),
+    skillExp: skillExpRecord(player.skillExp),
+    dungeonTickets: numberRecord(player.dungeonTickets),
     storiesDone: storiesDoneOf(options.extras),
     enemyTasks: cloneEnemyTasks(options.extras.enemyTasks),
     medicineLevel: { ...options.extras.medicineLevel },
@@ -301,14 +301,18 @@ export function playerStateDtoOf(
   };
 }
 
-function mapToRecord(
-  source: ReadonlyMap<string, { level: number; exp: number }> | ReadonlyMap<string, number>,
-): Record<string, { level: number; exp: number }> | Record<string, number> {
-  const out: Record<string, never> = {};
-  for (const [key, value] of source) {
-    (out as Record<string, unknown>)[key] = value;
-  }
-  return out as never;
+function skillExpRecord(
+  source: ReadonlyMap<string, { level: number; exp: number }>,
+): Record<string, { level: number; exp: number }> {
+  const out: Record<string, { level: number; exp: number }> = {};
+  for (const [key, value] of source) out[key] = { level: value.level, exp: value.exp };
+  return out;
+}
+
+function numberRecord(source: ReadonlyMap<string, number>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [key, value] of source) out[key] = value;
+  return out;
 }
 
 function storiesDoneOf(extras: AccountExtras): string[] {
