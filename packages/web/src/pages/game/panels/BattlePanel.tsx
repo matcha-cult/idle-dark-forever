@@ -11,7 +11,7 @@
  */
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
-import { App as AntApp, Button, Flex, Space, Tag, Typography, theme } from 'antd';
+import { App as AntApp, Button, Flex, Space, Switch, Tag, Typography, theme } from 'antd';
 import type { BattleEventDto, MapDto, UnitStateDto } from '@idle-dark/protocol';
 import {
   ActionBar,
@@ -66,6 +66,12 @@ export const BattlePanel = observer(function BattlePanel() {
   const { modal } = AntApp.useApp();
   const { token } = theme.useToken();
   const [busyMap, setBusyMap] = useState<string | null>(null);
+  /** 默认只显示可进入的地图；47 张图全平铺会让玩家找不到能进的那张。 */
+  const [showLocked, setShowLocked] = useState(false);
+
+  const unlockedMaps = world.maps.filter((map) => mapLockedReason(map) === null);
+  const visibleMaps = showLocked ? world.maps : unlockedMaps;
+  const unlockedCount = unlockedMaps.length;
 
   const names: Record<string, string> = {};
   for (const unit of world.units) names[unit.id] = unit.name;
@@ -130,13 +136,36 @@ export const BattlePanel = observer(function BattlePanel() {
           {world.maps.length === 0 ? (
             <EmptyState description="暂无可进入的地图" hint="世界数据会在收到 `(world, snapshot)` 后出现" />
           ) : (
-            <Flex wrap gap={token.paddingXS}>
-              {world.maps.map((map) => {
-                const reason = mapLockedReason(map);
-                const locked = reason !== null;
-                return (
-                  <Flex
-                    key={map.key}
+            <>
+              {/*
+                数据表里有 47 张地图，前期绝大多数是锁定的。早期把它们全部平铺，
+                玩家很难在 45 张「尚未满足进入条件」的卡片里找到那唯一一张能进的
+                —— 这是实际被反馈过的「地图无法解锁」体验问题。
+                默认只显示可进入的，需要时再展开全部（服务端已把可进入的排在前面）。
+              */}
+              <Flex justify="space-between" align="center" gap={token.paddingXS} wrap>
+                <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
+                  {`可进入 ${unlockedCount} / ${world.maps.length} 张`}
+                  {unlockedCount === 0 ? ' —— 完成当前剧情后会解锁新地图' : ''}
+                </Typography.Text>
+                <Space>
+                  <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
+                    显示未解锁
+                  </Typography.Text>
+                  <Switch
+                    checked={showLocked}
+                    onChange={setShowLocked}
+                    data-testid="battle-show-locked"
+                  />
+                </Space>
+              </Flex>
+              <Flex wrap gap={token.paddingXS}>
+                {visibleMaps.map((map) => {
+                  const reason = mapLockedReason(map);
+                  const locked = reason !== null;
+                  return (
+                    <Flex
+                      key={map.key}
                     vertical
                     gap={2}
                     style={{
@@ -172,7 +201,8 @@ export const BattlePanel = observer(function BattlePanel() {
                   </Flex>
                 );
               })}
-            </Flex>
+              </Flex>
+            </>
           )}
 
           {world.pendingMaps.length === 0 ? null : (

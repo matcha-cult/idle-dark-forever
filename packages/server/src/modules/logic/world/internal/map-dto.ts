@@ -54,9 +54,12 @@ export function mapListDtoOf(
     };
     if (map.hint) dto.hint = map.hint;
     if (ticketGroup) dto.ticketGroup = ticketGroup;
+    dto.unlocked = unlocked;
     out.push(dto);
   }
-  return out;
+  // 可进入的排前面：数据表里有 47 张图，早期全部平铺时玩家很难在 45 张锁定的卡片里
+  // 找到那唯一一张能进的（这是实际被反馈过的问题）。同组内保持数据表顺序（地图推进是有序的）。
+  return out.sort((a, b) => Number(b.unlocked === true) - Number(a.unlocked === true));
 }
 
 function safeTicketCount(player: Player, group: string): number {

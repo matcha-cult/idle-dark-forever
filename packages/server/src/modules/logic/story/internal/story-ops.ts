@@ -65,34 +65,22 @@ export function taskTypeOf(story: StoryData): 'kill' | 'purchase' | undefined {
 }
 
 /**
- * 去掉需求里的 `map` 条件。
+ * 构造判定上下文。
  *
- * ⚠️ 面板域当前**拿不到当前地图**（`PlayerStateDto.map` 来自 `world/` 运行时，
- * 而 `world/` 尚未提供只读查询入口），若保留 `map` 条件会导致所有剧情永远锁死。
- * 因此本域先忽略 `map` 门槛（role / level / stories 等仍严格判定），
- * 待 world 暴露当前地图后改为传入真实值。见交付报告。
+ * ⚠️ `map` 必须传**真实当前地图**（`WorldService.positionOf`）。早期版本因为没有只读入口
+ * 而把它写成 `null` 并剥离需求里的 `map` 条件，后果是主线断裂：
+ * `eyer-stories-2`（原版要求 `map: 'town.street'`）可以在安全屋 `home` 直接完成，
+ * 于是「剧情推进 → 解锁新地图 → 在新地图触发下一段剧情」的循环被跳过，
+ * 玩家会在 `home` 接到「去 town.street 杀 10 只史莱姆」的任务却毫无指引。
  */
-export function stripMapRequirement(requirement: Requirement | undefined): Requirement | undefined {
-  if (!requirement) return requirement;
-  const clone: Record<string, unknown> = {};
-  for (const key of Object.keys(requirement)) {
-    if (key === 'map') continue;
-    const value = (requirement as Record<string, unknown>)[key];
-    if (key === '$or' || key === '$and') {
-      if (Array.isArray(value)) {
-        clone[key] = value.map((item) => stripMapRequirement(item as Requirement));
-      }
-      continue;
-    }
-    clone[key] = value;
-  }
-  return clone as Requirement;
-}
-
-function requirementContext(player: Player, extras: AccountExtras): RequirementContext {
+function requirementContext(
+  player: Player,
+  extras: AccountExtras,
+  map: string | null,
+): RequirementContext {
   return {
     player,
-    map: null,
+    map,
     storiesMap: new Map(Object.entries(extras.storiesMap)),
   };
 }
@@ -102,8 +90,9 @@ export function requirementMet(
   player: Player,
   extras: AccountExtras,
   story: StoryData,
+  map: string | null,
 ): boolean {
-  return checkRequirement(stripMapRequirement(story.requirement), requirementContext(player, extras));
+  return checkRequirement(story.requirement, requirementContext(player, extras, map));
 }
 
 /** 剩余击杀数（未登记任务时回落到 `killCount`）。 */
@@ -120,10 +109,14 @@ export function storyDtoOf(
   player: Player,
   extras: AccountExtras,
   story: StoryData,
+  map: string | null,
 ): StoryDto {
   const status = statusOf(extras, story.key);
-  const met = requirementMet(tables, player, extras, story);
-  const taskType = taskTypeOf(story) ?? 'kill';
+  const met = requirementMet(tables, player, extras, story, map);
+  const realType = taskTypeOf(story);
+  // 没有 `taskType` 的条目是**纯剧情脚本**（原版进入地图即播放），
+  // 不能默认成 `'kill'`，否则前端会渲染一个永远完不成的击杀进度。
+  const taskType = realType ?? 'script';
   const dto: StoryDto = {
     key: story.key,
     group: story.group,
@@ -135,7 +128,7 @@ export function storyDtoOf(
   };
   if (story.enemy !== undefined) dto.enemy = story.enemy;
   if (story.killCount !== undefined) dto.killCount = story.killCount;
-  if (taskType === 'kill' && taskTypeOf(story) === 'kill') dto.remaining = remainingKills(extras, story);
+  if (realType === 'kill') dto.remaining = remainingKills(extras, story);
   if (story.price !== undefined) dto.price = story.price;
   return dto;
 }
@@ -144,11 +137,12 @@ export function listStories(
   tables: DataTables,
   player: Player,
   extras: AccountExtras,
+  map: string | null,
 ): StoryDto[] {
   const out: StoryDto[] = [];
   for (const key of Object.keys(tables.stories)) {
     const story = tables.stories[key];
-    if (story) out.push(storyDtoOf(tables, player, extras, story));
+    if (story) out.push(storyDtoOf(tables, player, extras, story, map));
   }
   return out;
 }
@@ -158,13 +152,14 @@ export function startableKeys(
   tables: DataTables,
   player: Player,
   extras: AccountExtras,
+  map: string | null,
 ): Set<string> {
   const out = new Set<string>();
   for (const key of Object.keys(tables.stories)) {
     const story = tables.stories[key];
     if (!story) continue;
     if (statusOf(extras, key) !== 'none') continue;
-    if (requirementMet(tables, player, extras, story)) out.add(key);
+    if (requirementMet(tables, player, extras, story, map)) out.add(key);
   }
   return out;
 }
@@ -180,13 +175,14 @@ export function opPlayStory(
   player: Player,
   extras: AccountExtras,
   key: string,
+  map: string | null,
 ): StoryPlayDto {
   const story = tables.stories[key];
   if (!story) throw new OpError(BusinessErrorCode.STORY_NOT_FOUND);
 
   const status = statusOf(extras, key);
   if (status === 'none') {
-    if (!requirementMet(tables, player, extras, story)) {
+    if (!requirementMet(tables, player, extras, story, map)) {
       throw new OpError(BusinessErrorCode.STORY_LOCKED);
     }
     extras.storiesMap[key] = 'task';
@@ -246,6 +242,7 @@ export function opFinishStory(
   player: Player,
   extras: AccountExtras,
   key: string,
+  map: string | null,
 ): FinishStoryOutcome {
   const story = tables.stories[key];
   if (!story) throw new OpError(BusinessErrorCode.STORY_NOT_FOUND);
@@ -268,7 +265,7 @@ export function opFinishStory(
     }
   }
 
-  const before = startableKeys(tables, player, extras);
+  const before = startableKeys(tables, player, extras, map);
   extras.storiesMap[key] = 'done';
   if (story.enemy) {
     const bucket = extras.enemyTasks[story.enemy];
@@ -279,7 +276,7 @@ export function opFinishStory(
   }
   grantAwards(player, tables, story);
 
-  const after = startableKeys(tables, player, extras);
+  const after = startableKeys(tables, player, extras, map);
   const unlocked: Array<{ key: string; name: string }> = [];
   for (const candidate of after) {
     if (before.has(candidate)) continue;
@@ -287,7 +284,7 @@ export function opFinishStory(
     if (data) unlocked.push({ key: candidate, name: data.name });
   }
 
-  return { dto: storyDtoOf(tables, player, extras, story), unlocked };
+  return { dto: storyDtoOf(tables, player, extras, story, map), unlocked };
 }
 
 /** 战斗击杀回调（供 `world/` 域调用）：递减任务进度并返回是否发生变化。 */

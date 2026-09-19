@@ -7,6 +7,7 @@ import {
   opPlayStory,
   parseStoryScript,
   requirementMet,
+  taskTypeOf,
 } from '../../../src/modules/logic/story/internal/story-ops.js';
 import { makeFixture } from '../_helpers.js';
 
@@ -18,6 +19,12 @@ function codeOf(fn: () => unknown): string {
     throw error;
   }
   throw new Error('expected throw');
+}
+
+function storyOf(fixture: ReturnType<typeof makeFixture>, key: string) {
+  const story = fixture.tables.stories[key];
+  if (!story) throw new Error(`夹具里没有剧情 ${key}`);
+  return story;
 }
 
 describe('story 剧本解析', () => {
@@ -34,88 +41,138 @@ describe('story 剧本解析', () => {
   });
 });
 
-describe('story 列表 / 开始 / 完成', () => {
-  it('列表覆盖全部剧情，未开启的带锁定原因', () => {
+describe('taskTypeOf：区分「纯剧情脚本」与任务', () => {
+  it('没有 taskType 的条目 → undefined（不是 kill）', () => {
     const fixture = makeFixture();
-    const list = listStories(fixture.tables, fixture.player, fixture.extras);
-    expect(list.length).toBe(Object.keys(fixture.tables.stories).length);
-    expect(list.every((story) => story.status === 'none')).toBe(true);
+    // eyer-stories-1 在原版数据里只有 requirement、没有 taskType，是纯剧情脚本
+    expect(taskTypeOf(storyOf(fixture, 'eyer-stories-1'))).toBeUndefined();
   });
 
-  it('未满足前置条件（前序剧情未完成）→ STORY_LOCKED', () => {
+  it('kill / purchase 原样返回', () => {
     const fixture = makeFixture();
-    const lockedKey = Object.keys(fixture.tables.stories).find((key) => {
-      const story = fixture.tables.stories[key]!;
-      return !requirementMet(fixture.tables, fixture.player, fixture.extras, story);
-    });
-    expect(lockedKey).toBeDefined();
+    expect(taskTypeOf(storyOf(fixture, 'eyer-stories-3'))).toBe('kill');
+  });
+});
+
+describe('地图门控（回归：曾在错误地图也能推剧情）', () => {
+  it('eyer-stories-1 只在 home 满足', () => {
+    const f = makeFixture();
+    const story = storyOf(f, 'eyer-stories-1');
+    expect(requirementMet(f.tables, f.player, f.extras, story, 'home')).toBe(true);
+    expect(requirementMet(f.tables, f.player, f.extras, story, 'town.street')).toBe(false);
+  });
+
+  it('eyer-stories-2 需要「在 town.street」且「前序剧情已完成」', () => {
+    const f = makeFixture();
+    const story = storyOf(f, 'eyer-stories-2');
+
+    // 前序未完成：任何时候都不满足
+    expect(requirementMet(f.tables, f.player, f.extras, story, 'town.street')).toBe(false);
+
+    f.extras.storiesMap['eyer-stories-1'] = 'done';
+    // 前序完成 + 在正确地图 → 满足
+    expect(requirementMet(f.tables, f.player, f.extras, story, 'town.street')).toBe(true);
+    // ⚠️ 关键回归：前序完成但仍在安全屋 home → **不满足**（修复前这里会错误地返回 true）
+    expect(requirementMet(f.tables, f.player, f.extras, story, 'home')).toBe(false);
+    // 当前地图未知（无活跃会话）→ 保守判定为不满足
+    expect(requirementMet(f.tables, f.player, f.extras, story, null)).toBe(false);
+  });
+
+  it('在错误地图 play → STORY_LOCKED', () => {
+    const f = makeFixture();
     expect(
-      codeOf(() => opPlayStory(fixture.tables, fixture.player, fixture.extras, lockedKey!)),
+      codeOf(() => opPlayStory(f.tables, f.player, f.extras, 'eyer-stories-1', 'town.street')),
     ).toBe(BusinessErrorCode.STORY_LOCKED);
   });
 
-  it('未知剧情 → STORY_NOT_FOUND；未开始就完成 → STORY_LOCKED；已完成再完成 → STORY_ALREADY_DONE', () => {
-    const fixture = makeFixture();
-    expect(
-      codeOf(() => opPlayStory(fixture.tables, fixture.player, fixture.extras, 'nope')),
-    ).toBe(BusinessErrorCode.STORY_NOT_FOUND);
-
-    const key = Object.keys(fixture.tables.stories)[0]!;
-    expect(
-      codeOf(() => opFinishStory(fixture.tables, fixture.player, fixture.extras, key)),
-    ).toBe(BusinessErrorCode.STORY_LOCKED);
-
-    fixture.extras.storiesMap[key] = 'done';
-    expect(
-      codeOf(() => opFinishStory(fixture.tables, fixture.player, fixture.extras, key)),
-    ).toBe(BusinessErrorCode.STORY_ALREADY_DONE);
-  });
-
-  it('play 开启剧情并登记击杀任务；未完成时 finish → STORY_LOCKED', () => {
-    const fixture = makeFixture();
-    const key = Object.keys(fixture.tables.stories).find(
-      (candidate) =>
-        requirementMet(fixture.tables, fixture.player, fixture.extras, fixture.tables.stories[candidate]!),
-    )!;
-    const play = opPlayStory(fixture.tables, fixture.player, fixture.extras, key);
+  it('在正确地图 play 纯剧情脚本 → 置 task 且不登记击杀任务', () => {
+    const f = makeFixture();
+    const play = opPlayStory(f.tables, f.player, f.extras, 'eyer-stories-1', 'home');
     expect(play.nodes.length).toBeGreaterThan(0);
-    expect(fixture.extras.storiesMap[key]).toBe('task');
+    expect(f.extras.storiesMap['eyer-stories-1']).toBe('task');
+    // 纯剧情脚本没有 enemy，不应产生击杀任务
+    expect(Object.keys(f.extras.enemyTasks)).toEqual([]);
+  });
+});
 
-    const story = fixture.tables.stories[key]!;
-    if (story.taskType === 'kill' && (story.killCount ?? 0) > 0) {
-      expect(
-        codeOf(() => opFinishStory(fixture.tables, fixture.player, fixture.extras, key)),
-      ).toBe(BusinessErrorCode.STORY_LOCKED);
-    }
+describe('story 列表 / 完成', () => {
+  it('列表覆盖全部剧情；taskType 为 script 而不是 kill', () => {
+    const f = makeFixture();
+    const list = listStories(f.tables, f.player, f.extras, 'home');
+    expect(list.length).toBe(Object.keys(f.tables.stories).length);
+
+    const first = list.find((s) => s.key === 'eyer-stories-1');
+    expect(first?.taskType).toBe('script');
+    expect(first?.canStart).toBe(true);
+    // 纯剧情脚本不该带击杀进度字段
+    expect(first?.remaining).toBeUndefined();
+
+    const third = list.find((s) => s.key === 'eyer-stories-3');
+    expect(third?.taskType).toBe('kill');
+    expect(third?.canStart).toBe(false);
   });
 
-  it('击杀任务清零后 finish 成功并置为 done', () => {
-    const fixture = makeFixture();
-    // 找一条击杀类剧情，手动把它置为进行中并把剩余击杀清零。
-    const key = Object.keys(fixture.tables.stories).find((candidate) => {
-      const story = fixture.tables.stories[candidate]!;
-      return story.taskType === 'kill' && !!story.enemy;
-    })!;
-    const story = fixture.tables.stories[key]!;
-    fixture.extras.storiesMap[key] = 'task';
-    fixture.extras.enemyTasks[story.enemy!] = { [key]: 0 };
-
-    const outcome = opFinishStory(fixture.tables, fixture.player, fixture.extras, key);
+  it('完成纯剧情脚本 → done（无需击杀）', () => {
+    const f = makeFixture();
+    opPlayStory(f.tables, f.player, f.extras, 'eyer-stories-1', 'home');
+    const outcome = opFinishStory(f.tables, f.player, f.extras, 'eyer-stories-1', 'home');
     expect(outcome.dto.status).toBe('done');
-    expect(fixture.extras.storiesMap[key]).toBe('done');
+    expect(f.extras.storiesMap['eyer-stories-1']).toBe('done');
+  });
+
+  it('完成剧情后解锁后续（unlocked 上报）', () => {
+    const f = makeFixture();
+    opPlayStory(f.tables, f.player, f.extras, 'eyer-stories-1', 'home');
+    const outcome = opFinishStory(f.tables, f.player, f.extras, 'eyer-stories-1', 'home');
+    // 剧情 1 完成后，地图 town.street 解锁 → 站到那里即可继续剧情 2
+    expect(requirementMet(f.tables, f.player, f.extras, storyOf(f, 'eyer-stories-2'), 'town.street')).toBe(
+      true,
+    );
+    expect(Array.isArray(outcome.unlocked)).toBe(true);
+  });
+
+  it('击杀任务未清零 → STORY_LOCKED；清零后 → done', () => {
+    const f = makeFixture();
+    const story = storyOf(f, 'eyer-stories-3');
+    f.extras.storiesMap['eyer-stories-3'] = 'task';
+    f.extras.enemyTasks[story.enemy!] = { 'eyer-stories-3': 10 };
+    expect(
+      codeOf(() => opFinishStory(f.tables, f.player, f.extras, 'eyer-stories-3', 'town.street')),
+    ).toBe(BusinessErrorCode.STORY_LOCKED);
+
+    f.extras.enemyTasks[story.enemy!] = { 'eyer-stories-3': 0 };
+    const outcome = opFinishStory(f.tables, f.player, f.extras, 'eyer-stories-3', 'town.street');
+    expect(outcome.dto.status).toBe('done');
+    expect(f.extras.storiesMap['eyer-stories-3']).toBe('done');
   });
 
   it('购买类任务神力不足 → NOT_ENOUGH_DIAMONDS', () => {
-    const fixture = makeFixture();
-    const key = Object.keys(fixture.tables.stories).find((candidate) => {
-      const story = fixture.tables.stories[candidate]!;
+    const f = makeFixture();
+    const key = Object.keys(f.tables.stories).find((candidate) => {
+      const story = f.tables.stories[candidate]!;
       return story.taskType === 'purchase' && (story.price ?? 0) > 0;
     });
     if (!key) return; // 数据表里当前没有购买类任务时跳过
-    fixture.extras.storiesMap[key] = 'task';
-    fixture.account.diamonds = 0;
+    f.extras.storiesMap[key] = 'task';
+    f.account.diamonds = 0;
+    expect(codeOf(() => opFinishStory(f.tables, f.player, f.extras, key, null))).toBe(
+      BusinessErrorCode.NOT_ENOUGH_DIAMONDS,
+    );
+  });
+
+  it('未知剧情 → STORY_NOT_FOUND；未开始就完成 → STORY_LOCKED；已完成再完成 → STORY_ALREADY_DONE', () => {
+    const f = makeFixture();
+    expect(codeOf(() => opPlayStory(f.tables, f.player, f.extras, 'nope', 'home'))).toBe(
+      BusinessErrorCode.STORY_NOT_FOUND,
+    );
+
     expect(
-      codeOf(() => opFinishStory(fixture.tables, fixture.player, fixture.extras, key)),
-    ).toBe(BusinessErrorCode.NOT_ENOUGH_DIAMONDS);
+      codeOf(() => opFinishStory(f.tables, f.player, f.extras, 'eyer-stories-1', 'home')),
+    ).toBe(BusinessErrorCode.STORY_LOCKED);
+
+    f.extras.storiesMap['eyer-stories-1'] = 'done';
+    expect(
+      codeOf(() => opFinishStory(f.tables, f.player, f.extras, 'eyer-stories-1', 'home')),
+    ).toBe(BusinessErrorCode.STORY_ALREADY_DONE);
   });
 });

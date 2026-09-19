@@ -229,6 +229,13 @@ export interface MapDto {
   level: number;
   /** 未解锁原因（null = 已解锁）。 */
   lockedReason: string | null;
+  /**
+   * 是否可进入。
+   *
+   * 与 `lockedReason === null` 同义，单独给出是为了让前端**不必解析文案**即可筛选/排序 ——
+   * 数据表里有 47 张图，其中绝大多数在前期是锁定的，服务端会把可进入的排在前面。
+   */
+  unlocked?: boolean;
   /** 进入需要的钥匙 group。 */
   ticketGroup?: string;
   ticketCount: number;
@@ -322,7 +329,16 @@ export interface StoryDto {
   name: string;
   /** 'none' | 'task' | 'done' */
   status: 'none' | 'task' | 'done';
-  taskType: 'kill' | 'purchase';
+  /**
+   * 剧情类型。
+   *
+   * - `'kill'`：需要击杀指定敌人若干只
+   * - `'purchase'`：需要花费神力购买情报
+   * - `'script'`：**纯剧情脚本**，没有任务目标 —— 原版在**进入满足条件的地图时自动播放**，
+   *   条件满足即可直接完成。数据表里相当一部分条目没有 `taskType` 字段，就是这一类；
+   *   早期版本把这类错报成 `'kill'`，导致前端显示一个永远完不成的击杀进度。
+   */
+  taskType: 'kill' | 'purchase' | 'script';
   enemy?: string;
   killCount?: number;
   remaining?: number;

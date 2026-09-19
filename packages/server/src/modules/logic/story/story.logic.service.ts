@@ -14,6 +14,7 @@ import { NOTIFICATION_BATCHER } from '../../game/notification-batcher.provider.j
 import type { NotificationBatcher } from '../../game/notification-batcher.js';
 import { PlayerContextService } from '../shared/index.js';
 import { PanelCharacterService } from '../inventory/internal/panel-character.service.js';
+import { WorldService } from '../world/world.service.js';
 import { toFailOrThrow } from '../inventory/internal/op-error.js';
 import { pushInventoryChanged, pushStoryUnlock } from '../inventory/internal/notify.js';
 import { listPanelSlots } from '../inventory/internal/slot-ref.js';
@@ -37,14 +38,26 @@ export class StoryLogicService {
     private readonly contexts: PlayerContextService,
     private readonly characters: PanelCharacterService,
     private readonly rateLimiter: RateLimiterService,
+    private readonly world: WorldService,
     @Inject(NOTIFICATION_BATCHER) private readonly batcher: NotificationBatcher,
   ) {}
+
+  /**
+   * 当前地图（剧情需求里的 `map` 条件要用它判定）。
+   *
+   * 拿不到会话时返回 `null` —— 此时任何带 `map` 条件的剧情都判定为「未满足」，
+   * 这正是想要的方向：宁可让剧情晚一点解锁，也不要让玩家在错误的地图把它做掉。
+   */
+  private currentMapOf(userId: number, characterId: string): string | null {
+    return this.world.positionOf(userId, characterId)?.map ?? null;
+  }
 
   async list(userId: number, characterId?: string): Promise<ActionResult<StoryDto[]>> {
     const loaded = await this.loadPlayer(userId, characterId);
     if (!loaded.ok) return loaded.fail;
     const extras = await this.contexts.extrasOf(userId);
-    return ok(listStories(this.contexts.tables, loaded.player, extras));
+    const map = this.currentMapOf(userId, loaded.characterId);
+    return ok(listStories(this.contexts.tables, loaded.player, extras, map));
   }
 
   async play(
@@ -58,10 +71,11 @@ export class StoryLogicService {
     const loaded = await this.loadPlayer(userId, characterId);
     if (!loaded.ok) return loaded.fail;
     const extras = await this.contexts.extrasOf(userId);
+    const map = this.currentMapOf(userId, loaded.characterId);
 
     let result: StoryPlayDto;
     try {
-      result = opPlayStory(this.contexts.tables, loaded.player, extras, key);
+      result = opPlayStory(this.contexts.tables, loaded.player, extras, key, map);
     } catch (error) {
       return toFailOrThrow(error);
     }
@@ -83,10 +97,11 @@ export class StoryLogicService {
     if (!loaded.ok) return loaded.fail;
     const { player, characterId: cid } = loaded;
     const extras = await this.contexts.extrasOf(userId);
+    const map = this.currentMapOf(userId, cid);
 
     let outcome: FinishStoryOutcome;
     try {
-      outcome = opFinishStory(this.contexts.tables, player, extras, key);
+      outcome = opFinishStory(this.contexts.tables, player, extras, key, map);
     } catch (error) {
       return toFailOrThrow(error);
     }
