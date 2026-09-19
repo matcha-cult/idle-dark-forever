@@ -343,6 +343,51 @@ describe('登录 → 选角 → 推送 → 面板更新', () => {
   });
 });
 
+describe('断线重连：自动重新进入当前角色', () => {
+  function selectRequests(server: Harness['server']): number {
+    return server.requests.filter(
+      (request) => request.cmd === PLAYER_CMD.cmd && request.subCmd === PLAYER_CMD.select,
+    ).length;
+  }
+
+  async function waitFor(condition: () => boolean, tries = 400): Promise<void> {
+    for (let i = 0; i < tries; i += 1) {
+      if (condition()) return;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    throw new Error('waitFor 超时');
+  }
+
+  it('已在玩角色时重连 → 自动重新 select（服务端每次握手都重置当前角色）', async () => {
+    const { root, server } = createHarness();
+    opened.push(root);
+    await root.login('tester', 'secret123');
+    await root.selectCharacter('k1');
+    // 注意：`player.select` 同时是「刷新角色全量状态」的通道（`player-store.load`），
+    // 所以一次 `selectCharacter` 本来就会发两次请求 —— 这里用**相对增量**断言。
+    const before = selectRequests(server);
+    expect(before).toBeGreaterThan(0);
+
+    root.client.ionet.forceReconnect('test-drop');
+    await waitFor(() => selectRequests(server) === before + 1);
+
+    expect(root.session.activePlayerKey).toBe('k1');
+    expect(root.player.name).toBe('守夜人');
+  });
+
+  it('停在选角页（未选角色）时重连 → 不自动 select（否则选角页会继续收到战斗推送）', async () => {
+    const { root, server } = createHarness();
+    opened.push(root);
+    await root.login('tester', 'secret123');
+    expect(root.session.hasCharacter).toBe(false);
+    expect(selectRequests(server)).toBe(0);
+
+    root.client.ionet.forceReconnect('test-drop');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(selectRequests(server)).toBe(0);
+  });
+});
+
 describe('进图自动播放剧情（(story, unlock) 推送）', () => {
   /** 等待 `handleNotification` 内部的异步编排（load → open）落定。 */
   async function waitFor(condition: () => boolean, tries = 50): Promise<void> {

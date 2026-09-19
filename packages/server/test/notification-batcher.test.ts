@@ -202,3 +202,40 @@ describe('NotificationBatcher', () => {
     });
   });
 });
+
+describe('drop：丢弃待发帧（连接语义突变时不补发）', () => {
+  it('丢弃后 flushAll 不投递任何帧，返回丢弃数量', () => {
+    const delivered: Array<{ userId: number; frames: PushFrame[] }> = [];
+    const batcher = new NotificationBatcher((userId, frames) => {
+      delivered.push({ userId, frames });
+    });
+    batcher.enqueue(1, { cmd: 30, subCmd: 5, data: { serverTime: 1 } });
+    batcher.enqueue(1, { cmd: 30, subCmd: 5, data: { serverTime: 2 } });
+    batcher.enqueue(1, { cmd: 50, subCmd: 9, data: [] });
+
+    const dropped = batcher.drop(1);
+    expect(dropped).toBe(2); // 2 条路由（同路由回合）
+    expect(batcher.flushAll()).toEqual({ users: 0, frames: 0 });
+    expect(delivered).toHaveLength(0);
+  });
+
+  it('未知用户 / 重复丢弃 → 0，不抛错', () => {
+    const batcher = new NotificationBatcher(() => undefined);
+    expect(batcher.drop(999)).toBe(0);
+    batcher.enqueue(1, { cmd: 1, subCmd: 1 });
+    expect(batcher.drop(1)).toBe(1);
+    expect(batcher.drop(1)).toBe(0);
+  });
+
+  it('丢弃只影响目标用户（其他用户照常投递）', () => {
+    const seen: number[] = [];
+    const batcher = new NotificationBatcher((userId) => {
+      seen.push(userId);
+    });
+    batcher.enqueue(1, { cmd: 1, subCmd: 1 });
+    batcher.enqueue(2, { cmd: 1, subCmd: 1 });
+    batcher.drop(1);
+    batcher.flushAll();
+    expect(seen).toEqual([2]);
+  });
+});

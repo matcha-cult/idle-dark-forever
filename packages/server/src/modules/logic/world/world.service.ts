@@ -39,6 +39,7 @@ import { NOTIFICATION_BATCHER } from '../../game/notification-batcher.provider.j
 import { OpIdempotencyService } from '../../game/op-idempotency.service.js';
 import { OnlineSessionService } from '../../online/online-session.service.js';
 import { DATA_TABLES, GAME_CLOCK, PlayerContextService, type AccountExtras, type NowSource, slotDtoOf } from '../shared/index.js';
+import { PanelCharacterService } from '../inventory/internal/panel-character.service.js';
 import { pushStoryUnlock } from '../inventory/internal/notify.js';
 import { opAdvanceStoriesOnMapEntry } from '../story/internal/story-ops.js';
 import { BattleCollector } from './internal/battle-collector.js';
@@ -85,6 +86,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     private readonly playerContext: PlayerContextService,
     private readonly onlineSessions: OnlineSessionService,
     private readonly opIds: OpIdempotencyService,
+    private readonly panelCharacters: PanelCharacterService,
     @Inject(NOTIFICATION_BATCHER) private readonly batcher: NotificationBatcher,
     @Inject(GAME_CLOCK) now: NowSource,
     @Inject(DATA_TABLES) tables: DataTables,
@@ -397,6 +399,36 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       this.playerContext.markDirty(userId, characterId);
     }
     await this.playerContext.flush(userId, characterId);
+  }
+
+  /**
+   * 把该账号视为**回到「未选角色」**：停掉活跃世界会话 + 清理两个「当前角色」注册表。
+   *
+   * ## 谁调用 & 为什么
+   *
+   * **每次 WS 握手成功后**（`app.module.ts` 的 `authenticate`）调用。
+   *
+   * 「当前角色」是账号级内存状态，而 `player.select` 是 WS Action。若不随新连接失效：
+   * 刷新页面时旧 socket 关闭、新 socket 以同一 token 打开，服务端仍认为该角色"在线"
+   * （`OnlineSessionService.isOnline` 是**账号级**判据），于是世界继续 tick，把
+   * `(world, tick)` 战斗推送灌给一个停在「选角页」的页面 —— 玩家此时并没有在玩任何角色。
+   *
+   * 语义上就是「每次进入都要选角色」：新连接 = 未选角色。断线重连由前端重新
+   * `player.select` 补上（`RootStore.reenterCharacterIfNeeded`）。
+   *
+   * 失败只记日志：**握手不能因为清理失败而拒绝连接**。
+   */
+  async resetActiveCharacter(userId: number): Promise<void> {
+    const active = this.activeByUser.get(userId);
+    this.activeByUser.delete(userId);
+    this.panelCharacters.clear(userId);
+    // 队列里可能还压着上一批 `(world, tick)`：必须**丢弃**而不是 flush，
+    // 否则新连上、还停在选角页的连接会收到最后一帧战斗推送（实测漏 1 帧）。
+    this.batcher.drop(userId);
+    if (active === undefined) return;
+    // 走 stop() 而不是直接删会话：它会持久化地图位置并把角色状态 flush 落库
+    // （刷新页面正是最后一次可靠落库机会）。
+    await this.stop(userId, active);
   }
 
   /**

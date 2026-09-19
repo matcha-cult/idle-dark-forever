@@ -183,7 +183,7 @@ antd-zh token Menu --format markdown
 | **完整游戏流程冒烟 22/22** | `scripts/game-flow-smoke.mjs`，**已在本地实跑通过** |
 | **拾取规则冒烟 18/18** | `scripts/loot-rule-smoke.mjs`（真实战斗掉落 → `(battle,loot)` 推送；本地以 `LOOT_WINDOW_MS=300000` 实跑通过） |
 | **进图剧情冒烟 14/14** | `scripts/story-entry-smoke.mjs`（进图自动播放 + 击杀任务静默登记，已本地实跑通过） |
-| **角色归属冒烟 7/7** | `scripts/character-scope-smoke.mjs`（同账号两条 WS 连接不串号，见 §15） |
+| **角色归属冒烟 10/10** | `scripts/character-scope-smoke.mjs`（同账号两条连接不串号 + 刷新后不再推战斗消息，见 §15） |
 
 > 无数据库时的行为：`/api/health` 返回 `503 degraded`（正确降级），协议层断言仍可通过；
 > 但依赖 `users`/`characters` 的 Action 会返回 `INTERNAL`。
@@ -334,7 +334,7 @@ node scripts/route-probe.mjs 3000 "$JWT_SECRET"    # 20/20 域 Action 是否都�
 node scripts/game-flow-smoke.mjs 3000              # 完整流程（22 项断言）
 LOOT_WINDOW_MS=300000 node scripts/loot-rule-smoke.mjs 3000   # 拾取规则 → 真实掉落（18 项）
 node scripts/story-entry-smoke.mjs 3000                       # 进图自动触发剧情（14 项）
-node scripts/character-scope-smoke.mjs 3000                   # 角色归属 / 推送范围（7 项）
+node scripts/character-scope-smoke.mjs 3000                   # 角色归属 / 推送范围（10 项）
 ```
 
 > ⚠️ **不要占用 3000 端口做验证前先确认它是不是 xiuxian 的服务端**：
@@ -465,6 +465,16 @@ __IDLE_DARK__                   // 根 store（临时排查）
 
 - 选角是 WS Action（`player.select`，cmd 20/6）；握手只认**账号**（`?token=` → userId），
   所以「先连 WS 再选角色」是协议决定的，不是 bug。
+- **每次 WS 握手成功 = 该账号回到「未选角色」**：`app.module.ts` 的 `authenticate` 里
+  **await** `WorldService.resetActiveCharacter(userId)`（停活跃会话 + 清两个注册表 +
+  `batcher.drop(userId)`）。不这样做的话，刷新页面后旧角色仍被当成"在线"
+  （`OnlineSessionService.isOnline` 是**账号级**判据），`(world, tick)` 会灌给停在选角页的页面。
+  - 必须 **await**：否则握手已放行、连接已能收推送，而旧会话还在 tick（实测漏 1 帧）；
+  - 必须 **drop** 而不是 flush 待发帧：队列里那批 tick 属于"上一段游玩"，不能投给新连接；
+  - 有 2s 超时保护：DB 卡住也不能把握手挂死（超时放行，重置继续在后台跑）。
+  - 断线重连由前端补：`RootStore` 在「曾经 online 过之后再次 online」时重新
+    `player.select(activePlayerKey)`；**全新登录/刷新时 `activePlayerKey` 为 null，
+    故意不自动选角**（否则又会在选角页拉起战斗推送）。
 - `player.select` 是**切换**：`PlayerLogicService.select` 会 `start(新角色)` 后
   `stop(旧角色)`，保证同一账号**只有一个活跃世界会话**。
 - `WorldService.stop()` 在指针仍指向该角色时清理 `activeByUser`（切人流程是
@@ -493,7 +503,8 @@ __IDLE_DARK__                   // 根 store（临时排查）
   `stop` 清指针 / `resolveActiveCharacter` 四种入参 / 每 tick 至多一帧）。
   去掉"停旧会话"那两行 → 3/6 用例失败（已实测）。
 - 端到端 `server/scripts/character-scope-smoke.mjs`（真实 REST+WS+DB，同账号两条连接）
-  7/7 通过。
+  **10/10 通过**，含「新连接（未 select、模拟刷新）收不到 `(world, tick)`」与
+  「新连接 `world.snapshot` → 尚未选择角色」。
 - 面板域（inventory/shop/… 的 `characterId` 可选、走 `PanelCharacterService`）**尚未**做
   同样的显式化 —— 见交接文档的后续项。
 

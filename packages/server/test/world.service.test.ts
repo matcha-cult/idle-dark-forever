@@ -14,6 +14,7 @@ import { STORY_CMD, type StoryUnlockDto, type WorldTickDto } from '@idle-dark/pr
 import type { NotificationBatcher, PushFrame } from '../src/modules/game/notification-batcher.js';
 import { OpIdempotencyService } from '../src/modules/game/op-idempotency.service.js';
 import type { OnlineSessionService } from '../src/modules/online/online-session.service.js';
+import { PanelCharacterService } from '../src/modules/logic/inventory/internal/panel-character.service.js';
 import { PlayerContextService } from '../src/modules/logic/shared/player-context.service.js';
 import type { AccountExtras } from '../src/modules/logic/shared/index.js';
 import { WorldService } from '../src/modules/logic/world/world.service.js';
@@ -47,6 +48,8 @@ describe('WorldService', () => {
         return true;
       },
       registerMerger: () => undefined,
+      drop: () => 0,
+      flushAll: () => ({ users: 0, frames: 0 }),
     } as unknown as NotificationBatcher;
     const onlineSessions = {
       isOnline: () => online,
@@ -55,6 +58,7 @@ describe('WorldService', () => {
       context,
       onlineSessions,
       new OpIdempotencyService(),
+      new PanelCharacterService(db.asService() as unknown as GameDatabaseService),
       batcher,
       () => now,
       tables,
@@ -205,12 +209,15 @@ describe('WorldService · 进图自动触发剧情（原版 MapPanel.checkStorie
         return true;
       },
       registerMerger: () => undefined,
+      drop: () => 0,
+      flushAll: () => ({ users: 0, frames: 0 }),
     } as unknown as NotificationBatcher;
     const onlineSessions = { isOnline: () => true } as unknown as OnlineSessionService;
     service = new WorldService(
       context,
       onlineSessions,
       new OpIdempotencyService(),
+      new PanelCharacterService(db.asService() as unknown as GameDatabaseService),
       batcher,
       () => now,
       tables,

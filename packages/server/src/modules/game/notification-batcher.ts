@@ -139,6 +139,21 @@ export class NotificationBatcher {
     return frames.length;
   }
 
+  /**
+   * **丢弃**某用户的全部待发帧（不投递），返回丢掉的帧数。
+   *
+   * 用途：连接语义发生突变时（例如新 WS 握手把该账号重置为「未选角色」）——
+   * 此时队列里可能还压着上一批 `(world, tick)`，若照常 flush 会投给**刚连上、
+   * 还停在选角页**的新连接（实测会漏出 1 帧）。这类帧必须丢弃而不是补发。
+   */
+  drop(userId: number): number {
+    const queue = this.queues.get(userId);
+    const dropped = this.overflow.get(userId) ?? 0;
+    this.queues.delete(userId);
+    this.overflow.delete(userId);
+    return (queue?.size ?? 0) + dropped;
+  }
+
   /** 立即投递全部待发帧。 */
   flushAll(): { users: number; frames: number } {
     const userIds = new Set<number>([...this.queues.keys(), ...this.overflow.keys()]);

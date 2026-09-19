@@ -77,6 +77,10 @@ export class RootStore {
   readonly shop: ShopStore;
   readonly idle: IdleStore;
 
+  /** 「已选角色期间掉过线」→ 重连时需要重新进入角色。 */
+  private reenterPending = false;
+  /** 重连后重新进入角色的并发保护（避免状态抖动时重复 select）。 */
+  private reentering = false;
   private readonly autoRefreshMetricsMs: number;
   private metricsTimer: ReturnType<typeof setInterval> | null = null;
   private readonly routingUnsubscribers: Array<() => void> = [];
@@ -91,7 +95,25 @@ export class RootStore {
       baseUrl: options.baseUrl ?? resolveApiBaseUrl(),
       getToken: () => this.session.token ?? undefined,
       callbacks: {
-        onStateChange: (state, detail) => this.connection.handleStateChange(state, detail),
+        onStateChange: (state, detail) => {
+          this.connection.handleStateChange(state, detail);
+          // 新连接 = 服务端把该账号视为「未选角色」（每次 WS 握手都会重置，见
+          // WorldService.resetActiveCharacter）。因此**掉线后重新连上**要替玩家重新进入
+          // 当前角色，否则角色相关 Action 会以「尚未选择角色」失败。
+          //
+          // 判据是「在已选角色的情况下掉过线」这个**标志位**，而不是比较前后状态：
+          // 首次连接的 `online` 可能延迟到达（实测会落在 `player.select` 之后），
+          // 而且重连期间可能连发多次 `online`；标志位对这些时序都不敏感，
+          // 也不会在全新登录 / 刷新（`activePlayerKey` 为 null）时误触发。
+          if (state !== 'online') {
+            if (this.session.activePlayerKey !== null) this.reenterPending = true;
+            return;
+          }
+          if (this.reenterPending) {
+            this.reenterPending = false;
+            void this.reenterCharacterIfNeeded();
+          }
+        },
         onBusinessError: (error) => this.toast.fromError(error),
       },
       ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl }),
@@ -243,6 +265,24 @@ export class RootStore {
       this.connection.refreshMetrics();
     } catch (error) {
       this.toast.fromError(error, '连接失败');
+    }
+  }
+
+  /**
+   * 断线重连后重新进入当前角色（见构造函数里的 `onStateChange` 注释）。
+   *
+   * 只在「本地已记住角色」时动作：全新登录 / 刷新页面时 `activePlayerKey` 为 null，
+   * 此时**故意不选角** —— 服务端也不该有该角色的会话（否则选角页会收到战斗推送）。
+   */
+  private async reenterCharacterIfNeeded(): Promise<void> {
+    const key = this.session.activePlayerKey;
+    if (key === null || this.reentering) return;
+    this.reentering = true;
+    try {
+      const state = await this.session.selectPlayer(key);
+      if (state !== null) this.player.applyState(state);
+    } finally {
+      this.reentering = false;
     }
   }
 

@@ -124,8 +124,27 @@ check(
   `A=${A.ticks.length} B=${B.ticks.length}（2.5s）`,
 );
 
+// 4) 刷新页面场景：**新连接（未选角）不应再收到战斗推送**
+//    —— 旧实现里旧会话还在跑、isOnline 又是账号级判据，于是选角页会一直收到 (world, tick)。
+const C = connect(token);
+await C.open();
+check('刷新后新连接建立', true);
+await new Promise((r) => setTimeout(r, 3000));
+check(
+  '新连接（停在选角页、未 select）**收不到** (world, tick) 战斗推送',
+  C.ticks.length === 0,
+  `收到 ${C.ticks.length} 帧`,
+);
+const staleSnap = await C.call(30, 1, {});
+check(
+  '新连接调 world.snapshot → 视为未选角色',
+  staleSnap.data?.success === false && staleSnap.data?.data?.code === 'NOT_IN_MAP',
+  JSON.stringify(staleSnap.data).slice(0, 140),
+);
+
 A.ws.close();
 B.ws.close();
+C.ws.close();
 await db.end();
 const failed = results.filter((r) => r.ok === false);
 console.log(`\n角色归属冒烟：${results.length - failed.length}/${results.length} 通过`);

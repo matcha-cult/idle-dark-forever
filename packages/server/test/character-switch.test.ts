@@ -41,6 +41,7 @@ describe('角色会话归属（切人 / 当前角色 / 推送范围）', () => {
   let context: PlayerContextService;
   let world: WorldService;
   let players: PlayerLogicService;
+  let panelCharacters: PanelCharacterService;
   let frames: CapturedFrame[];
   let now: number;
 
@@ -58,12 +59,16 @@ describe('角色会话归属（切人 / 当前角色 / 推送范围）', () => {
         return true;
       },
       registerMerger: () => undefined,
+      drop: () => 0,
+      flushAll: () => ({ users: 0, frames: 0 }),
     } as unknown as NotificationBatcher;
     const onlineSessions = { isOnline: () => true } as unknown as OnlineSessionService;
+    panelCharacters = new PanelCharacterService(db.asService() as unknown as GameDatabaseService);
     world = new WorldService(
       context,
       onlineSessions,
       new OpIdempotencyService(),
+      panelCharacters,
       batcher,
       () => now,
       tables,
@@ -79,7 +84,7 @@ describe('角色会话归属（切人 / 当前角色 / 推送范围）', () => {
       context,
       world,
       new OpIdempotencyService(),
-      new PanelCharacterService(db.asService() as unknown as GameDatabaseService),
+      panelCharacters,
       () => now,
       tables,
     );
@@ -164,6 +169,36 @@ describe('角色会话归属（切人 / 当前角色 / 推送范围）', () => {
     // 空串按「没给」处理
     const blank = world.resolveActiveCharacter(1, '   ');
     expect(blank.ok && blank.key).toBe(X);
+  });
+
+  it('resetActiveCharacter（新 WS 握手即回未选角色）：停会话 + 清两个注册表 + 不再推送', async () => {
+    await players.select(1, X);
+    expect(panelCharacters.peekActive(1)).toBe(X);
+    runTicks(2);
+    const before = tickFrames().length;
+    expect(before).toBeGreaterThan(0);
+
+    await world.resetActiveCharacter(1);
+
+    expect(world.isInBattle(1, X)).toBe(false);
+    expect(world.activeCharacterOf(1)).toBeUndefined();
+    expect(panelCharacters.peekActive(1)).toBeNull();
+    // 未选角色 → 归属校验拒绝（前端此时停在选角页）
+    const resolved = world.resolveActiveCharacter(1, undefined);
+    expect(resolved.ok).toBe(false);
+    if (!resolved.ok) expect(resolved.fail.data.code).toBe('NOT_IN_MAP');
+
+    // ✅ 关键：会话已停，tick 不再产生任何推送（刷新后选角页不该收到战斗消息）
+    runTicks(5);
+    expect(tickFrames().length).toBe(before);
+  });
+
+  it('resetActiveCharacter 幂等：未选角 / 重复调用不抛错', async () => {
+    await expect(world.resetActiveCharacter(1)).resolves.toBeUndefined();
+    await players.select(1, X);
+    await world.resetActiveCharacter(1);
+    await expect(world.resetActiveCharacter(1)).resolves.toBeUndefined();
+    expect(world.activeCharacterOf(1)).toBeUndefined();
   });
 
   it('在线 tick 只推送当前角色的世界，且每 tick 至多一帧 world.tick', async () => {
