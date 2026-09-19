@@ -413,7 +413,12 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     if (!session) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);
     const map = this.tables.maps[mapKey];
     if (!map) return fail(BusinessErrorCode.MAP_LOCKED, '地图不存在');
-    if (session.world.map === mapKey) return fail(BusinessErrorCode.ALREADY_IN_MAP);
+    // 重复进入当前地图 = 「重置本图」（原版重新进入地图会重置刷怪与战斗），
+    // 不报 ALREADY_IN_MAP、也不重复扣钥匙 —— 这样前端 select 后直接 enterMap 永远可用。
+    if (session.world.map === mapKey) {
+      session.world.onMapChanged();
+      return ok(await this.snapshotOf(session));
+    }
 
     const player = session.world.player as Player | null;
     if (!player) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);

@@ -36,6 +36,13 @@ export interface PlayerExportSaveDto {
   key: string;
   filename: string;
   content: string;
+  /**
+   * `content` 的别名。
+   *
+   * `protocol` 未定义该 DTO（见交付报告"未闭合项"），而 `game-flow-smoke.mjs` 按 `save`
+   * 字段读取；这里同时给出 `content` 与 `save`，两种读取都成立。
+   */
+  save: string;
 }
 
 export interface PlayerCreateCommand {
@@ -166,5 +173,6 @@ export function buildExportSave(player: Player): PlayerExportSaveDto {
     key: player.key,
     filename: `idle-dark-${safeName}-${player.key}.save`,
     content,
+    save: content,
   };
 }

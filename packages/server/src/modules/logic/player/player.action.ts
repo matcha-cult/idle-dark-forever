@@ -70,7 +70,9 @@ export class PlayerAction {
     const body = dataOf(data);
     const name = toNonEmptyString(body['name']);
     const role = toNonEmptyString(body['role']) ?? 'Eyer';
-    const content = typeof body['content'] === 'string' ? body['content'] : '';
+    // 兼容两种字段名：传输层定义为 `content`，端到端冒烟脚本用 `save`。
+    const rawContent = body['content'] ?? body['save'];
+    const content = typeof rawContent === 'string' ? rawContent : '';
     if (!name || content.trim() === '') {
       return ActionError.invalidParam('缺少角色名或存档内容');
     }

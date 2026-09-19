@@ -99,7 +99,10 @@ export class IdleService {
       this.cached.delete(key);
       return ok(hit);
     }
-    return this.settle(userId, characterId);
+    const result = await this.settle(userId, characterId);
+    // `settle` 会把报告写入缓存；claim 的语义是「领取并清空」，因此这里必须再删一次。
+    if (result.success) this.cached.delete(key);
+    return result;
   }
 
   private async settle(
