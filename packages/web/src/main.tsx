@@ -18,6 +18,15 @@ const rootStore = new RootStore();
 rootStore.theme.hydrate();
 void rootStore.bootstrap();
 
+// 开发期自检探针（**动态 import + DEV 守卫**：生产包里根本不会被打进去）：
+// 暴露 `__IDLE_DARK__` 与 `await __idleDarkTickRate()`，用来量 `(world, tick)` 的真实
+// 推送频率、并识别「同一帧被投递多次」（多标签页 / 多个 dev server）。
+if (import.meta.env.DEV) {
+  void import('./services/tick-rate.js').then(({ installDevProbe }) => {
+    installDevProbe(rootStore, window, rootStore.client);
+  });
+}
+
 const container = document.getElementById('root');
 if (container === null) throw new Error('缺少 #root 容器');
 

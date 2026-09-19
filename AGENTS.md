@@ -421,3 +421,36 @@ node scripts/story-entry-smoke.mjs 3000                       # 进图自动触�
   （见 `unit.ts:602-614` 与 `enemy-unit.ts:455-460`）。
 - 服务端 `battle.focus` 只拒绝 `ghost` 与不存在的目标，中立目标本就被允许 ——
   **别在前端把它过滤掉**。
+
+---
+
+## 14. `(world, tick)` 推送频率：设计值 5Hz/连接 + 自检探针
+
+**设计（实测，不要凭感觉）**：`WorldService` 心跳 `WORLD_CONFIG.tickIntervalMs = 200`，
+`NotificationBatcher` flush 周期 `200`，同一 `(userId, cmdMerge)` 在一批内**合并成一帧**。
+⇒ **每个 WS 连接**每秒收到 ~5 帧 `(cmd=30, subCmd=5)`，帧间隔中位数 200ms。
+
+实测（直连 3100 与经 5273 代理一致）：
+
+```
+{"frames":60,"perSecond":5,"gapMin":199,"gapP50":200,"gapP90":201,"gapMax":202}
+```
+
+**若在浏览器里看到明显更多**，只有两种可能 —— 用探针量，不要靠 console 里数：
+
+```js
+await __idleDarkTickRate()      // 默认采样 10s，打印 frames / perSecond / 间隔分布 / 结论
+await __idleDarkTickRate(3000)
+__IDLE_DARK__                   // 根 store（临时排查）
+```
+
+| 现象 | 结论 |
+|---|---|
+| 同一 `serverTime` 出现多次（`duplicatedFrames > 0`） | **同一帧被投递多次**：多个标签页 / 5273 与 5274 两个 dev server / 残留 socket。框架 `sendNotification` 会发给该 userId 的**全部** OPEN 连接 |
+| 不重复但 `perSecond > 6` | 服务端真的快于设计 —— 查 `tickIntervalMs` 与 batcher `flushIntervalMs` |
+| 两者都正常，只是"刷屏" | 帧里带整份 `units` 快照，`console.log` 5 次/秒 × 大对象 = 观感问题 |
+
+探针只在 `import.meta.env.DEV` 下**动态 import**（`main.tsx`），
+生产包里 `grep __idleDarkTickRate dist/assets/*.js` 应为 **0 命中**（已验证）。
+纯汇总逻辑在 `web/src/services/tick-rate.ts#summarizeTickRate`，单测覆盖空样本/单帧/乱序/
+重复 `serverTime`/窗口非法等边界。

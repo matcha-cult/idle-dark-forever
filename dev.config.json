@@ -10,5 +10,5 @@
   "backendHost": "127.0.0.1",
   "backendPort": 3100,
   "frontendPort": 5273,
-  "expRate": 10
+  "expRate": 100
 }
