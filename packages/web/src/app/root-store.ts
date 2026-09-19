@@ -139,9 +139,25 @@ export class RootStore {
   async login(username: string, password: string): Promise<boolean> {
     const ok = await this.session.login(username, password);
     if (!ok) return false;
+    await this.enterAfterAuth();
+    return true;
+  }
+
+  /**
+   * 注册 → 服务端直接签发 token → 与登录**走完全相同的后续编排**。
+   * 新账号必然没有角色，随后由 `App` 的三态门落到建角页。
+   */
+  async register(username: string, password: string): Promise<boolean> {
+    const ok = await this.session.register(username, password);
+    if (!ok) return false;
+    await this.enterAfterAuth();
+    return true;
+  }
+
+  /** 认证成功后的共同编排：连 WS → 并发拉账号信息与角色列表。 */
+  private async enterAfterAuth(): Promise<void> {
     await this.connectAfterAuth();
     await Promise.all([this.session.loadMe(), this.session.loadPlayers()]);
-    return true;
   }
 
   /** 建角成功后直接进入该角色。 */

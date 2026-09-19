@@ -74,6 +74,16 @@ export class RestClient {
     return this.send<LoginResultDto>('POST', '/auth/login', input, false);
   }
 
+  /**
+   * 注册（`POST /api/auth/register`）。
+   *
+   * 服务端注册成功会**直接签发 token**（与登录同形状），因此注册后无需再调一次登录。
+   * 返回体同样遵守 `ActionResult`；业务失败（如账号已存在、长度不合法）不抛错。
+   */
+  register(input: LoginInput): Promise<ActionResult<LoginResultDto>> {
+    return this.send<LoginResultDto>('POST', '/auth/register', input, false);
+  }
+
   me(): Promise<ActionResult<{ userId: string; displayName: string; diamonds: number; playerSlotCount: number; highestEndlessLevel: number }>> {
     return this.send('GET', '/auth/me', undefined, true);
   }

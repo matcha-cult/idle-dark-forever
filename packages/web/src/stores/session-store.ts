@@ -96,25 +96,63 @@ export class SessionStore {
 
   /** REST 登录；成功后 token 落盘。失败不抛（返回 false + Toast）。 */
   async login(username: string, password: string): Promise<boolean> {
+    return this.authenticate('login', username, password);
+  }
+
+  /** 清掉页面内联错误（登录/注册切换时用，避免上一个模式的报错残留）。 */
+  clearError(): void {
+    if (this.errorMessage === null) return;
+    this.errorMessage = null;
+  }
+
+  /**
+   * REST 注册；服务端注册成功即签发 token，因此**注册后直接进入已登录态**（无需再登录一次）。
+   * 失败不抛（返回 false + Toast + `errorMessage`）。
+   */
+  async register(username: string, password: string): Promise<boolean> {
+    return this.authenticate('register', username, password);
+  }
+
+  /**
+   * 登录 / 注册的唯一实现。
+   *
+   * 两者除了「打哪个端点」与「失败文案」之外**完全同构**（都返回
+   * `ActionResult<LoginResponseDto>`），所以合并到一处，避免两条链路的
+   * token 落盘 / 状态机 / 竞态处理出现分叉。
+   */
+  private async authenticate(
+    kind: 'login' | 'register',
+    username: string,
+    password: string,
+  ): Promise<boolean> {
+    const fallback = kind === 'login' ? '登录失败' : '注册失败';
     runInAction(() => {
       this.busy = true;
       this.status = 'authenticating';
       this.errorMessage = null;
     });
     try {
-      const result = await this.rest.login({ username, password });
+      const result =
+        kind === 'login'
+          ? await this.rest.login({ username, password })
+          : await this.rest.register({ username, password });
+
       if (result.success === false) {
         const code = failureCodeOf(result);
         const message = failureMessageOf(result);
         runInAction(() => {
           this.status = 'anonymous';
-          this.errorMessage = message ?? code ?? '登录失败';
+          this.errorMessage = message ?? code ?? fallback;
         });
-        toastFailure(this.toast, result, '登录失败');
+        toastFailure(this.toast, result, fallback);
         return false;
       }
+
       const data = result.data;
-      if (typeof data?.token !== 'string' || data.token.length === 0) throw new Error('登录响应缺少 token');
+      if (typeof data?.token !== 'string' || data.token.length === 0) {
+        throw new Error(`${fallback}：响应缺少 token`);
+      }
+
       runInAction(() => {
         this.token = data.token;
         this.me = {
@@ -126,7 +164,9 @@ export class SessionStore {
         };
         this.status = 'authenticated';
         this.errorMessage = null;
+        // 换账号/新注册都要清掉上一个会话选中的角色，避免误用到他人的 key
         this.activePlayerKey = null;
+        this.players = [];
       });
       safeSet(this.storage, TOKEN_STORAGE_KEY, data.token);
       safeSet(this.storage, ME_STORAGE_KEY, JSON.stringify(this.me));
@@ -136,7 +176,7 @@ export class SessionStore {
         this.status = 'anonymous';
         this.errorMessage = error instanceof Error ? error.message : String(error);
       });
-      this.toast.fromError(error, '登录失败');
+      this.toast.fromError(error, fallback);
       return false;
     } finally {
       runInAction(() => {
