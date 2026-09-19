@@ -1,0 +1,390 @@
+/**
+ * 共享 DTO 契约（前后端唯一真相）。
+ *
+ * 设计原则：
+ * - 只描述**线协议载荷**，不含服务端内部实现类型（内部类型在 @idle-dark/game-core）；
+ * - 物品/单位等高频结构用「扁平 + 预计算展示字段」形状，前端不做数值推导（服务端权威）；
+ * - 所有可选字段显式标 `?`，服务端可增量裁剪。
+ */
+
+// ────────────────────────────── 基础枚举 ──────────────────────────────
+
+/** 品质 0..6：普通 / 优秀 / 精良 / 史诗 / 传说 / 远古 / 神器。 */
+export type Quality = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+export const QUALITY_NAMES: readonly string[] = ['普通', '优秀', '精良', '史诗', '传说', '远古', '神器'];
+
+/** 物品大类。 */
+export type GoodType = 'equip' | 'material' | 'junk' | 'package';
+
+/** 装备部位。 */
+export type EquipPosition = 'weapon' | 'plastron' | 'gaiter' | 'ornament';
+
+/** 物品所在容器（对应原版 InventorySlot.position）。 */
+export type ItemPosition = 'equip' | 'inventory' | 'build' | 'award' | 'bank' | 'loot';
+
+/** 自动拾取动作：0 拾取 / 1 出售 / 2 分解。 */
+export type LootRuleAction = 0 | 1 | 2;
+
+/** 技能/被动/强化槽位上限随等级变化，由服务端算好下发。 */
+export interface SlotLimits {
+  maxSkillCount: number;
+  maxEnhanceCount: number;
+}
+
+// ────────────────────────────── 物品 ──────────────────────────────
+
+/** 一条词缀的展示态（数值与区间由服务端算好）。 */
+export interface AffixDto {
+  key: string;
+  /** 展示名，如「攻击力 +12」。 */
+  display: string;
+  /** 是否为传奇词缀（来自 legends 表）。 */
+  isLegend: boolean;
+  /** 已被重铸过（原版 rebuilted 标记）。 */
+  rebuilt?: boolean;
+}
+
+/** 背包/装备栏中的一个格子。 */
+export interface InventorySlotDto {
+  /** 稳定实例 id（服务端生成，用于所有针对单件的操作）。 */
+  id: string;
+  /** 物品基底 key（goods 表 key）；空槽为 null。 */
+  key: string | null;
+  count: number;
+  /** 装备等级（非装备为 0）。 */
+  level: number;
+  quality: Quality;
+  position: ItemPosition;
+  displayQuality: Quality;
+  name: string;
+  description?: string;
+  type: GoodType;
+  /** 装备专属。 */
+  equipClass?: string;
+  equipPosition?: EquipPosition;
+  atkSpeed?: number;
+  /** 需求等级（服务端已做 transformEquipLevel 换算）。 */
+  requireLevel?: number;
+  /** 预计算的售价。 */
+  price: number;
+  locked: boolean;
+  /** 附魔次数（影响费用）。 */
+  enchantTimes: number;
+  affixes: AffixDto[];
+  /** 副本钥匙所属 group（如 'nightmare.3'）。 */
+  dungeonKey?: string;
+  /** 可堆叠上限。 */
+  stack?: number;
+  /** 分解/炼金能量。 */
+  energy?: number;
+}
+
+/** 装备栏（4 个固定槽）。 */
+export type EquipmentsDto = Partial<Record<EquipPosition, InventorySlotDto | null>>;
+
+// ────────────────────────────── 角色 ──────────────────────────────
+
+/** 角色列表项（轻量，用于选择界面）。 */
+export interface PlayerMetaDto {
+  key: string;
+  name: string;
+  role: string;
+  roleName: string;
+  currentCareer: string;
+  currentCareerName: string;
+  level: number;
+  peakLevel: number;
+  createdAt: number;
+  /** 该角色是否处于战斗中（服务端世界是否在跑）。 */
+  inBattle: boolean;
+}
+
+/** 单个职业的进度。 */
+export interface CareerProgressDto {
+  key: string;
+  name: string;
+  level: number;
+  peakLevel: number;
+  maxLevel: number;
+  exp: number;
+  maxExp: number;
+  peakExp: number;
+  maxPeakExp: number;
+  /** 该职业下所有技能 key → 解锁等级。 */
+  skills: Record<string, number>;
+  /** 该职业下所有被动 key → 解锁等级。 */
+  passives: Record<string, number>;
+  /** 该职业下所有强化 key → 解锁等级。 */
+  enhances: Record<string, number>;
+  availableClasses: Record<string, boolean>;
+}
+
+/** 技能展示态。 */
+export interface SkillDto {
+  key: string;
+  name: string;
+  group: string;
+  description: string;
+  level: number;
+  /** 解锁等级（职业等级门槛）。 */
+  unlockLevel: number;
+  unlocked: boolean;
+  selected: boolean;
+  isAttack: boolean;
+  coolDown: number;
+  /** 当前是否满足使用条件（服务端判定）。 */
+  usable: boolean;
+}
+
+/** 强化（被动）展示态。 */
+export interface EnhanceDto {
+  key: string;
+  name: string;
+  description: string;
+  unlockLevel: number;
+  unlocked: boolean;
+  selected: boolean;
+}
+
+/** 角色完整状态（进入角色时下发）。 */
+export interface PlayerStateDto {
+  key: string;
+  name: string;
+  role: string;
+  roleName: string;
+  level: number;
+  peakLevel: number;
+  exp: number;
+  maxExp: number;
+  gold: number;
+  /** 账号级神力（跨角色共享，随角色态一并下发便于 UI）。 */
+  diamonds: number;
+  currentCareer: string;
+  careers: CareerProgressDto[];
+  equipments: EquipmentsDto;
+  inventory: InventorySlotDto[];
+  buildInventory: InventorySlotDto[];
+  awardInventory: InventorySlotDto[];
+  inventorySize: number;
+  slotLimits: SlotLimits;
+  /** 已选主动技能（顺序即优先级）。 */
+  selectedSkills: string[];
+  selectedEnhances: string[];
+  /** 技能等级：expGroup|skillKey → { level, exp }。 */
+  skillExp: Record<string, { level: number; exp: number }>;
+  /** 副本钥匙计数：group|key → count。 */
+  dungeonTickets: Record<string, number>;
+  /** 已通关故事 key 集合。 */
+  storiesDone: string[];
+  /** 进行中的击杀任务：enemyKey → { storyKey: remaining }。 */
+  enemyTasks: Record<string, Record<string, number>>;
+  /** 药剂等级。 */
+  medicineLevel: Record<string, number>;
+  medicineExp: number;
+  maxMedicineExp: number;
+  /** 当前地图与无尽层。 */
+  map: string;
+  endlessLevel: number;
+  /** 离线结算待领取（>0 表示需要弹结算报告）。 */
+  pendingOfflineMs: number;
+}
+
+// ────────────────────────────── 战斗世界 ──────────────────────────────
+
+/** 单位运行时快照（服务端权威，前端只渲染）。 */
+export interface UnitStateDto {
+  id: string;
+  /** 'player' | 'enemy' | 'summon' | ... */
+  kind: string;
+  /** 敌方为敌人 key，我方为角色 key。 */
+  typeKey: string;
+  name: string;
+  camp: string;
+  level: number;
+  quality: Quality;
+  hp: number;
+  maxHp: number;
+  mp: number;
+  maxMp: number;
+  rp: number;
+  maxRp: number;
+  ep: number;
+  maxEp: number;
+  comboPoint: number;
+  /** 当前目标单位 id。 */
+  targetId: string | null;
+  /** 施法/读条进度 0..1（无读条为 null）。 */
+  castingProgress: number | null;
+  /** 生效中的 Buff 展示态。 */
+  buffs: Array<{ key: string; name: string; stack: number; remainMs: number }>;
+}
+
+/** 地图展示态。 */
+export interface MapDto {
+  key: string;
+  name: string;
+  hint?: string;
+  isDungeon: boolean;
+  level: number;
+  /** 未解锁原因（null = 已解锁）。 */
+  lockedReason: string | null;
+  /** 进入需要的钥匙 group。 */
+  ticketGroup?: string;
+  ticketCount: number;
+}
+
+/** 世界快照。 */
+export interface WorldSnapshotDto {
+  map: string;
+  endlessLevel: number;
+  units: UnitStateDto[];
+  /** 当前地图可进入的列表。 */
+  maps: MapDto[];
+  /** 挑战队列（原版 pendingMaps）。 */
+  pendingMaps: Array<{ key: string; endlessLevel: number }>;
+  /** 累计模拟速率（原版 updateRate），用于 UI 展示加速倍率。 */
+  updateRate: number;
+  paused: boolean;
+}
+
+/** 战斗事件（推送给前端做日志渲染 / Toast）。 */
+export type BattleEventDto =
+  | { kind: 'damage'; fromId: string; toId: string; damageType: string; skill: string; value: number; crit: boolean; absorbed: number }
+  | { kind: 'heal'; fromId: string; toId: string; skill: string; value: number }
+  | { kind: 'dodge'; fromId: string; toId: string; skill: string }
+  | { kind: 'death'; unitId: string; name: string; camp: string }
+  | { kind: 'buff'; unitId: string; buffKey: string; name: string; on: boolean }
+  | { kind: 'exp'; amount: number; level: number; peak: boolean }
+  | { kind: 'general'; text: string };
+
+/** (world, tick) 推送载荷：单位增量 + 可选事件。 */
+export interface WorldTickDto {
+  /** 服务端时间戳（客户端据此做时间对齐，不用于本地推进）。 */
+  serverTime: number;
+  units: UnitStateDto[];
+  events: BattleEventDto[];
+  /** 本次批次内的经验/金币增量，便于 HUD 累加显示。 */
+  gainedExp: number;
+  gainedGold: number;
+}
+
+/** (battle, loot) 推送载荷。 */
+export interface LootDto {
+  slot: InventorySlotDto;
+  /** 'pickup' | 'sell' | 'decompose' —— 按拾取规则处理的结果。 */
+  handled: 'pickup' | 'sell' | 'decompose';
+  gold?: number;
+  materials?: Array<{ key: string; count: number }>;
+}
+
+// ────────────────────────────── 生产 ──────────────────────────────
+
+export interface CostDto {
+  gold?: number;
+  diamonds?: number;
+  materials?: Array<{ key: string; count: number }>;
+}
+
+export interface EnchantCostsDto {
+  /** 逐词缀的重掷费用（锁定的词缀不计费）。 */
+  enchant: CostDto;
+  /** 锁定某个词缀额外消耗的神力。 */
+  lockDiamond: number;
+}
+
+export interface RebuildCostsDto {
+  diamonds: number;
+  /** 已经重铸过的词缀不能再重铸。 */
+  rebuildableAffixKeys: string[];
+}
+
+export interface DecomposeResultDto {
+  materials: Array<{ key: string; count: number }>;
+  diamonds: number;
+}
+
+export interface MedicineStateDto {
+  levels: Record<string, number>;
+  exp: number;
+  maxExp: number;
+  /** 坩埚等级（bowelLevel）与转化倍率。 */
+  bowelLevel: number;
+  bowelEffect: number;
+  bowelUpgradePrice: number;
+}
+
+// ────────────────────────────── 故事 / 商店 / 离线 ──────────────────────────────
+
+export interface StoryDto {
+  key: string;
+  group: string;
+  name: string;
+  /** 'none' | 'task' | 'done' */
+  status: 'none' | 'task' | 'done';
+  taskType: 'kill' | 'purchase';
+  enemy?: string;
+  killCount?: number;
+  remaining?: number;
+  price?: number;
+  /** 是否满足开启条件（服务端判定）。 */
+  canStart: boolean;
+  lockedReason: string | null;
+}
+
+export interface StoryPlayDto {
+  key: string;
+  name: string;
+  /** 已解析的剧情脚本节点（前端只负责播放）。 */
+  nodes: Array<{ type: string; args: string[] }>;
+  awards: Record<string, unknown>;
+}
+
+export interface ShopStateDto {
+  playerSlotCount: number;
+  playerSlotMax: number;
+  nextSlotPrice: number;
+  diamonds: number;
+  /** 药剂等级搬运费用预览。 */
+  exchangeOptions: Array<{ from: string; to: string; cost: number }>;
+}
+
+export interface OfflineReportDto {
+  /** 实际参与结算的离线时长（毫秒）。 */
+  offlineMs: number;
+  /** 被 72h 上限截断的时长。 */
+  cappedMs: number;
+  /** 真实模拟的时长（有界快进预算内）。 */
+  simulatedMs: number;
+  /** 超出预算、按速率外推的时长。 */
+  extrapolatedMs: number;
+  gainedExp: number;
+  gainedGold: number;
+  kills: number;
+  loots: Array<{ key: string; count: number; quality: Quality }>;
+  materials: Array<{ key: string; count: number }>;
+  /** 是否因超过最大离线时间而暂停生产。 */
+  pausedByMaxOffline: boolean;
+}
+
+// ────────────────────────────── 认证 ──────────────────────────────
+
+export interface LoginRequestDto {
+  username: string;
+  password: string;
+}
+
+export interface LoginResponseDto {
+  token: string;
+  expiresAt: number;
+  userId: string;
+  displayName: string;
+}
+
+export interface MeDto {
+  userId: string;
+  displayName: string;
+  diamonds: number;
+  playerSlotCount: number;
+  highestEndlessLevel: number;
+}

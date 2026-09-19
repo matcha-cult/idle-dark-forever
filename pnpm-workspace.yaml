@@ -1,0 +1,4 @@
+packages:
+  - "packages/*"
+  # ionet-ts 框架源码由 CI 挂载到 vendor/ionet-ts 后参与构建（见 README「框架依赖」）。
+  - "vendor/ionet-ts/packages/*"

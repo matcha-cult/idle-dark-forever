@@ -1,0 +1,25 @@
+{
+  "name": "@idle-dark/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "description": "idle-dark-forever 共享线协议：cmd 段常量 + DTO 类型 + 业务结果约定（前后端共用，唯一真相）",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo \"no tests\" && exit 0",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

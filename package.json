@@ -1,0 +1,24 @@
+{
+  "name": "idle-dark-forever",
+  "version": "0.1.0",
+  "private": true,
+  "description": "永夜 · 服务端权威重制 — ionet-ts + NestJS + React + Antd",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "dev:server": "pnpm --filter ./packages/server dev",
+    "dev:web": "pnpm --filter ./packages/web dev",
+    "build": "pnpm -r run build",
+    "build:protocol": "pnpm --filter @idle-dark/protocol run build",
+    "build:core": "pnpm --filter @idle-dark/game-core run build",
+    "build:server": "pnpm --filter idle-dark-server run build",
+    "build:web": "pnpm --filter idle-dark-web run build",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "clean": "pnpm -r run clean"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}

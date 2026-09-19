@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.production
+
+# 框架源码：由 CI 挂载（本地用符号链接），不提交
+vendor/ionet-ts/
+vendor/session-collaboration/
+
+# 临时文件夹
+tmp/
+.devdb/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Test
+coverage/
+
+# 本地工作区说明（含本机路径信息，禁止提交）
+AGENTS.local.md
+CLAUDE.local.md
