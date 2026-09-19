@@ -1,0 +1,95 @@
+/**
+ * 世界 tick 聚合与人机接口纯函数单测
+ *
+ * 覆盖：`world.tick` 合并器（累积事件 / 取最新快照 / 累加 exp·gold）、
+ * `battle.loot` 合并器、以及 tick 预算配置的合理性上界。
+ */
+import { describe, expect, it } from 'vitest';
+import type { WorldTickDto } from '@idle-dark/protocol';
+import { mergeLoot, mergeWorldTick, WORLD_TICK_MS } from '../src/modules/logic/world/world.service.js';
+import { WORLD_CONFIG } from '../src/modules/logic/world/world.config.js';
+
+function tick(partial: Partial<WorldTickDto>): WorldTickDto {
+  return {
+    serverTime: partial.serverTime ?? 0,
+    units: partial.units ?? [],
+    events: partial.events ?? [],
+    gainedExp: partial.gainedExp ?? 0,
+    gainedGold: partial.gainedGold ?? 0,
+  };
+}
+
+describe('mergeWorldTick', () => {
+  it('prev 为 null/undefined 时原样返回 next', () => {
+    const next = tick({ serverTime: 5, gainedExp: 3 });
+    expect(mergeWorldTick(null, next)).toEqual(next);
+    expect(mergeWorldTick(undefined, next)).toEqual(next);
+  });
+
+  it('next 非法时返回 prev', () => {
+    const prev = tick({ serverTime: 5 });
+    expect(mergeWorldTick(prev, null)).toEqual(prev);
+    expect(mergeWorldTick(prev, { hello: 1 })).toEqual(prev);
+  });
+
+  it('事件累积、单位取最新、exp/gold 累加、serverTime 取最大', () => {
+    const a = tick({
+      serverTime: 100,
+      units: [{ id: 'u1' } as never],
+      events: [{ kind: 'general', text: 'a' }],
+      gainedExp: 1,
+      gainedGold: 2,
+    });
+    const b = tick({
+      serverTime: 200,
+      units: [{ id: 'u2' } as never],
+      events: [{ kind: 'general', text: 'b' }],
+      gainedExp: 10,
+      gainedGold: 20,
+    });
+    const merged = mergeWorldTick(a, b);
+    expect(merged.serverTime).toBe(200);
+    expect(merged.units).toEqual([{ id: 'u2' }]);
+    expect(merged.events).toHaveLength(2);
+    expect(merged.gainedExp).toBe(11);
+    expect(merged.gainedGold).toBe(22);
+  });
+
+  it('两侧都非法时返回零帧（不抛错）', () => {
+    const merged = mergeWorldTick('x', 42);
+    expect(merged.units).toEqual([]);
+    expect(merged.events).toEqual([]);
+    expect(merged.gainedExp).toBe(0);
+  });
+});
+
+describe('mergeLoot', () => {
+  it('标量 + 标量 → 数组', () => {
+    expect(mergeLoot({ a: 1 }, { b: 2 })).toEqual([{ a: 1 }, { b: 2 }]);
+  });
+
+  it('数组与标量混用', () => {
+    expect(mergeLoot([{ a: 1 }], { b: 2 })).toEqual([{ a: 1 }, { b: 2 }]);
+    expect(mergeLoot({ a: 1 }, [{ b: 2 }])).toEqual([{ a: 1 }, { b: 2 }]);
+  });
+
+  it('undefined / null 被忽略', () => {
+    expect(mergeLoot(undefined, undefined)).toEqual([]);
+    expect(mergeLoot(null, null)).toEqual([]);
+    expect(mergeLoot(null, { a: 1 })).toEqual([{ a: 1 }]);
+  });
+});
+
+describe('WORLD_CONFIG 预算', () => {
+  it('tick 间隔在方案建议的 100~200ms 区间内', () => {
+    expect(WORLD_TICK_MS).toBeGreaterThanOrEqual(100);
+    expect(WORLD_TICK_MS).toBeLessThanOrEqual(200);
+  });
+
+  it('单帧预算为正有限值，且 catch-up 有上界', () => {
+    expect(WORLD_CONFIG.callbackBudgetPerCharacterPerTick).toBeGreaterThan(0);
+    expect(WORLD_CONFIG.maxCharactersPerTick).toBeGreaterThan(0);
+    expect(WORLD_CONFIG.maxCatchUpMs).toBeLessThanOrEqual(WORLD_CONFIG.tickIntervalMs * 60);
+    expect(WORLD_CONFIG.persistIntervalMs).toBeGreaterThanOrEqual(10_000);
+  });
+});

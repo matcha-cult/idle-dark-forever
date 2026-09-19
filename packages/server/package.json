@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "clean": "rm -rf dist",
     "smoke:ws": "node scripts/ws-protocol-smoke.mjs",
-    "smoke:game": "node scripts/game-flow-smoke.mjs"
+    "smoke:game": "node scripts/game-flow-smoke.mjs",
+    "smoke:routes": "node scripts/route-probe.mjs"
   },
   "dependencies": {
     "@idle-dark/game-core": "workspace:*",

@@ -95,6 +95,8 @@ jobs:
             sleep 1
           done
           node packages/server/scripts/ws-protocol-smoke.mjs 3000 "$JWT_SECRET"
+          # 路由探针：确认各域 Action 都已注册（未注册会 404）
+          node packages/server/scripts/route-probe.mjs 3000 "$JWT_SECRET"
           kill %1
 
       - name: 端到端冒烟（完整游戏流程，需数据库）

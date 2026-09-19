@@ -29,7 +29,7 @@ export class WorldAction {
   async snapshot(ctx: FlowContext, data: unknown): Promise<ActionResult<WorldSnapshotDto>> {
     const userId = requireUserId(ctx);
     if (typeof userId !== 'number') return userId;
-    const key = toNonEmptyString(dataOf(data)['key']);
+    const key = this.resolveKey(userId, dataOf(data)['key']);
     if (!key) return ActionError.invalidParam('缺少角色 key');
     return guardAction(() => this.world.snapshot(userId, key));
   }
@@ -39,7 +39,7 @@ export class WorldAction {
     const userId = requireUserId(ctx);
     if (typeof userId !== 'number') return userId;
     const body = dataOf(data);
-    const key = toNonEmptyString(body['key']);
+    const key = this.resolveKey(userId, body['key']);
     const map = toNonEmptyString(body['map']);
     if (!key || !map) return ActionError.invalidParam('缺少角色 key 或地图');
     const limited = this.rateLimiter.consumeOrFail(`world:enterMap:${userId}`, 30);
@@ -51,7 +51,7 @@ export class WorldAction {
   async leave(ctx: FlowContext, data: unknown): Promise<ActionResult<null>> {
     const userId = requireUserId(ctx);
     if (typeof userId !== 'number') return userId;
-    const key = toNonEmptyString(dataOf(data)['key']);
+    const key = this.resolveKey(userId, dataOf(data)['key']);
     if (!key) return ActionError.invalidParam('缺少角色 key');
     return guardAction(() => this.world.leave(userId, key));
   }
@@ -60,8 +60,13 @@ export class WorldAction {
   async skipOffline(ctx: FlowContext, data: unknown): Promise<ActionResult<OfflineReportDto>> {
     const userId = requireUserId(ctx);
     if (typeof userId !== 'number') return userId;
-    const key = toNonEmptyString(dataOf(data)['key']);
+    const key = this.resolveKey(userId, dataOf(data)['key']);
     if (!key) return ActionError.invalidParam('缺少角色 key');
     return guardAction(() => this.world.skipOffline(userId, key));
+  }
+
+  /** 前端不带 key 时回退到「最近一次 select 的角色」。 */
+  private resolveKey(userId: number, raw: unknown): string | undefined {
+    return toNonEmptyString(raw) ?? this.world.activeCharacterOf(userId);
   }
 }

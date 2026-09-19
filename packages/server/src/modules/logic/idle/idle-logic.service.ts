@@ -192,7 +192,7 @@ export class IdleService {
         updateRate: 1,
         medicineLevel: (type) => extras.medicineLevel[type] ?? 0,
         // 离线结算不推送掉落，也不需要 LootDto 记录。
-      });
+      }).world;
 
       let remaining = simulated;
       let calls = 0;

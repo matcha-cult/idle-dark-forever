@@ -9,6 +9,7 @@ import { type ActionResult, IDLE_CMD, type OfflineReportDto } from '@idle-dark/p
 import { ActionError, dataOf, requireUserId, toNonEmptyString } from '../../../ionet/action-support.js';
 import { guardAction } from '../../../common/kernel/result.js';
 import { RateLimiterService } from '../../../common/services/rate-limiter.service.js';
+import { WorldService } from '../world/world.service.js';
 import { IdleService } from './idle-logic.service.js';
 
 @Injectable()
@@ -16,6 +17,7 @@ import { IdleService } from './idle-logic.service.js';
 export class IdleAction {
   constructor(
     private readonly idle: IdleService,
+    private readonly world: WorldService,
     private readonly rateLimiter: RateLimiterService,
   ) {}
 
@@ -23,7 +25,7 @@ export class IdleAction {
   async report(ctx: FlowContext, data: unknown): Promise<ActionResult<OfflineReportDto>> {
     const userId = requireUserId(ctx);
     if (typeof userId !== 'number') return userId;
-    const key = toNonEmptyString(dataOf(data)['key']);
+    const key = this.resolveKey(userId, dataOf(data)['key']);
     if (!key) return ActionError.invalidParam('缺少角色 key');
     const limited = this.rateLimiter.consumeOrFail(`idle:report:${userId}`, 20);
     if (limited) return limited;
@@ -34,10 +36,14 @@ export class IdleAction {
   async claim(ctx: FlowContext, data: unknown): Promise<ActionResult<OfflineReportDto>> {
     const userId = requireUserId(ctx);
     if (typeof userId !== 'number') return userId;
-    const key = toNonEmptyString(dataOf(data)['key']);
+    const key = this.resolveKey(userId, dataOf(data)['key']);
     if (!key) return ActionError.invalidParam('缺少角色 key');
     const limited = this.rateLimiter.consumeOrFail(`idle:claim:${userId}`, 20);
     if (limited) return limited;
     return guardAction(() => this.idle.claim(userId, key));
+  }
+
+  private resolveKey(userId: number, raw: unknown): string | undefined {
+    return toNonEmptyString(raw) ?? this.world.activeCharacterOf(userId);
   }
 }

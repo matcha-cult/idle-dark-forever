@@ -66,6 +66,8 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
   private readonly now: NowSource;
   private readonly tables: DataTables;
   private readonly sessions = new Map<string, WorldSession>();
+  /** `userId → 最近一次 `player.select` 的角色`（前端后续请求不带 key 时的权威解析）。 */
+  private readonly activeByUser = new Map<number, string>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private tickCursor = 0;
   private persisting = false;
@@ -247,6 +249,16 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     return this.sessions.size;
   }
 
+  /**
+   * 最近一次 `player.select` 的角色 key。
+   *
+   * 前端 transport 的 `world.snapshot` / `world.leave` / `battle.focus` / `idle.*`
+   * 都不带角色 key（见 `game-api.ts`），因此服务端必须有这个「当前角色」指针。
+   */
+  activeCharacterOf(userId: number): string | undefined {
+    return this.activeByUser.get(userId);
+  }
+
   positionOf(
     userId: number,
     characterId: string,
@@ -264,7 +276,10 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
   async start(userId: number, characterId: string): Promise<WorldSession | null> {
     const key = this.keyOf(userId, characterId);
     const existing = this.sessions.get(key);
-    if (existing) return existing;
+    if (existing) {
+      this.activeByUser.set(userId, characterId);
+      return existing;
+    }
 
     const player = await this.playerContext.load(userId, characterId);
     if (!player) return null;
@@ -319,6 +334,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     this.playerContext.markDirty(userId, characterId);
 
     this.sessions.set(key, session);
+    this.activeByUser.set(userId, characterId);
     return session;
   }
 
