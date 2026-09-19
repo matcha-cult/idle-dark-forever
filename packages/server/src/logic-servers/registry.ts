@@ -94,9 +94,8 @@ export const SERVER_DEFINITIONS = {
   map: {
     name: 'map',
     // 09 R2：开放世界控制器（地图目录/解锁/位置/种子/map.enter/...）。
-    // 边界已登记；源码当前仍由 battle 承载，R2 迁入后在此登记 roots。
-    roots: [],
-    cmdSegments: [],
+    roots: ['modules/logic/map'],
+    cmdSegments: [CMD_SEGMENTS.map],
   },
 } as const satisfies Record<string, LogicServerDefinition>;
 
@@ -113,4 +112,5 @@ export const ALL_SERVER_DEFINITIONS: readonly LogicServerDefinition[] = Object.v
 export const TRANSITIONAL_DEEP_IMPORTS: readonly { readonly from: string; readonly to: string; readonly reason: string }[] = [
   { from: 'character', to: 'battle', reason: 'R4：player.select → StartSession/StopSession 命令' },
   { from: 'dungeon', to: 'battle', reason: 'R4/R5：idle 结算 → battle 命令/事件' },
+  { from: 'map', to: 'battle', reason: 'R4：map.enter → SwitchMap/StartSession 命令（当前过渡为直接调用）' },
 ];

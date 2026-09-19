@@ -34,7 +34,7 @@ function recordingTransport(
   };
 }
 
-describe('GameApi —— 13 个 cmd 段全覆盖（路由常量直接来自 protocol）', () => {
+describe('GameApi —— 14 个 cmd 段全覆盖（路由常量直接来自 protocol）', () => {
   it('每个段的方法都打到对应的 CMD_SEGMENTS 段', async () => {
     const { calls, transport } = recordingTransport();
     const api = new GameApi(transport);
@@ -43,6 +43,7 @@ describe('GameApi —— 13 个 cmd 段全覆盖（路由常量直接来自 prot
     await api.auth.me();
     await api.player.list();
     await api.world.snapshot();
+    await api.map.list();
     await api.battle.focus({ targetId: null });
     await api.inventory.list();
     await api.bank.list();
@@ -58,6 +59,7 @@ describe('GameApi —— 13 个 cmd 段全覆盖（路由常量直接来自 prot
       CMD_SEGMENTS.auth,
       CMD_SEGMENTS.player,
       CMD_SEGMENTS.world,
+      CMD_SEGMENTS.map,
       CMD_SEGMENTS.battle,
       CMD_SEGMENTS.inventory,
       CMD_SEGMENTS.bank,
@@ -70,7 +72,7 @@ describe('GameApi —— 13 个 cmd 段全覆盖（路由常量直接来自 prot
     ]);
   });
 
-  it('聚合入口暴露全部 13 个子 API', () => {
+  it('聚合入口暴露全部 14 个子 API', () => {
     const { transport } = recordingTransport();
     const api = new GameApi(transport);
     expect(Object.keys(api).filter((key) => key !== 'transport').sort()).toEqual(
@@ -82,6 +84,7 @@ describe('GameApi —— 13 个 cmd 段全覆盖（路由常量直接来自 prot
         'idle',
         'inventory',
         'lootrule',
+        'map',
         'player',
         'produce',
         'shop',

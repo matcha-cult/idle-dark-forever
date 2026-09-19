@@ -4,8 +4,8 @@
  * 解锁判定在服务端（`checkRequirement`），客户端只渲染 `lockedReason`。
  */
 import type { MapDto, PlayerStateDto } from '@idle-dark/protocol';
-import { checkRequirement, Player, type DataTables, type RequirementContext } from '@idle-dark/game-core';
-import type { AccountExtras } from '../../shared/index.js';
+import { checkRequirement, Player, type DataTables, type Requirement, type RequirementContext } from '@idle-dark/game-core';
+import type { AccountExtras } from './player-dto.js';
 
 /** 当前玩家所在地图（原版 `world.map`，不在 `Player` 存档里）。 */
 export function requirementContextOf(
@@ -85,3 +85,62 @@ export function pendingOfflineMsOf(player: Player, now: number, capMs: number): 
 
 /** 类型占位（避免 `PlayerStateDto` 在本文件被 tree-shake 掉类型导入）。 */
 export type PlayerStateRef = PlayerStateDto;
+
+/**
+ * 把持久化位置解析成可用位置（09 §2.2 map 控制器 / battle 会话宿主共用）。
+ *
+ * - `stored` 缺失 → `home` / 0；
+ * - 未知 mapKey → `home`（存档漂移时不让玩家卡死在不存在的地图）；
+ * - `endlessLevel` 非有限值 → 0（RC1：无尽暂缓，但字段必须不产生 NaN）。
+ */
+export function resolveWorldPosition(
+  tables: DataTables,
+  stored: { map: string; endlessLevel: number } | undefined,
+): WorldPosition {
+  if (!stored) return { map: 'home', endlessLevel: 0 };
+  const map = tables.maps[stored.map] ? stored.map : 'home';
+  const endlessLevel =
+    typeof stored.endlessLevel === 'number' && Number.isFinite(stored.endlessLevel)
+      ? Math.trunc(stored.endlessLevel)
+      : 0;
+  return { map, endlessLevel };
+}
+
+/**
+ * 地图解锁判定（**唯一入口**，09 §6.1 同源纪律）。
+ *
+ * `requirement` 为空 → 解锁；判定抛错 → **不解锁**（fail-closed），
+ * 绝不让异常把玩家放进不该进的地图。
+ */
+export function evaluateMapUnlock(
+  requirement: Requirement | null | undefined,
+  player: Player,
+  currentMap: string,
+  extras: AccountExtras,
+): boolean {
+  try {
+    return checkRequirement(requirement, requirementContextOf(player, currentMap, extras));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 挑战队列耗尽后的「非秘境战斗图」选择（RD4，09 §10.2）。
+ *
+ * 优先级：`candidate`（= `run.outside`）→ 角色持久化开放世界位置 → `home`。
+ * **只接受非秘境图**；候选非法 / 是秘境 / 不存在 → 落到下一档，最终兜底 `home`。
+ */
+export function pickOpenWorldMap(
+  tables: DataTables,
+  candidate: string | null | undefined,
+  persisted: string | null | undefined,
+): string {
+  const usable = (key: string | null | undefined): string | null => {
+    if (typeof key !== 'string' || key === '') return null;
+    const map = tables.maps[key];
+    if (!map || map.isDungeon === true) return null;
+    return key;
+  };
+  return usable(candidate) ?? usable(persisted) ?? 'home';
+}

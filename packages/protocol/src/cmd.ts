@@ -38,6 +38,14 @@ export const CMD_SEGMENTS = {
   shop: 110,
   /** 离线结算 */
   idle: 120,
+  /**
+   * 地图 / 开放世界控制器（09 R2；cmd 段 130）
+   *
+   * 与 battle 的 `world`(30) 段分工：`map.*` 是**控制器**（地图目录、解锁判定、
+   * 位置/种子、进图决策），`world.*`(30) 是 battle **会话宿主**的入口；
+   * 控制器决定"进哪张图"，battle 执行会话切换。
+   */
+  map: 130,
 } as const;
 
 export type CmdSegment = (typeof CMD_SEGMENTS)[keyof typeof CMD_SEGMENTS];
@@ -196,6 +204,26 @@ export const IDLE_CMD = {
   report: 1,
   /** 领取离线收益 */
   claim: 2,
+} as const;
+
+/**
+ * 地图 / 开放世界控制器段（09 R2）
+ *
+ * `continueOpenWorld` 供 dungeon 队列耗尽后转入非秘境战斗图（RD3/RD4），
+ * 不经客户端，由控制器间调用。`enter` 幂等（`opId`）。
+ */
+export const MAP_CMD = {
+  cmd: CMD_SEGMENTS.map,
+  /** 地图目录 + 解锁状态（`MapDto[]`） */
+  list: 1,
+  /** 当前世界快照（与 `world.snapshot` 同形，便于控制器统一入口） */
+  snapshot: 2,
+  /** 进入地图（解锁判定 + 幂等 opId；地城票在 R3 由 dungeon 控制器扣） */
+  enter: 3,
+  /** 离开当前地图（关会话） */
+  leave: 4,
+  /** 控制器间命令：队列耗尽后转非秘境战斗图（RD3/RD4） */
+  continueOpenWorld: 5,
 } as const;
 
 /** `(cmd << 16) | subCmd` 路由键（与 ionet-ts CmdInfo.cmdMerge 一致）。 */

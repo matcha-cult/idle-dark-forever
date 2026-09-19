@@ -8,6 +8,7 @@
  */
 export * from './game-clock.js';
 export * from './player-dto.js';
+export * from './map-dto.js';
 export * from './player-context.service.js';
 export * from './logic-shared.module.js';
 export * from './events.js';

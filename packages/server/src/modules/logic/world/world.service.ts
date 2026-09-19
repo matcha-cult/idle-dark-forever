@@ -14,7 +14,6 @@
  */
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import {
-  checkRequirement,
   RealClock,
   type Clock,
   type DataTables,
@@ -50,7 +49,13 @@ import {
 import { PanelCharacterService } from '../shared/panel-character.service.js';
 import { BattleCollector } from './internal/battle-collector.js';
 import { buildBattleWorld, nextWorldSeed } from './internal/headless.js';
-import { mapListDtoOf, pendingOfflineMsOf, requirementContextOf } from './internal/map-dto.js';
+import {
+  evaluateMapUnlock,
+  mapListDtoOf,
+  pendingOfflineMsOf,
+  resolveWorldPosition,
+  requirementContextOf,
+} from '../shared/map-dto.js';
 import { nextCursor, planAdvance, planRound, shouldStopRound } from './internal/tick-scheduler.js';
 import {
   beginClose,
@@ -525,7 +530,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     if (!player) return null;
 
     const extras = await this.playerContext.extrasOf(userId);
-    const position = resolvePosition(this.tables, extras.worldMaps[characterId]);
+    const position = resolveWorldPosition(this.tables, extras.worldMaps[characterId]);
     // 持久化位置是「当前地图」的**唯一权威**（08 §2.3 / 09 §4.3）：quest 域据此判定
     // 剧情的地图条件，不再反向调用 battle。会话启动即写入，保证从未进过图的角色也有位置。
     extras.worldMaps[characterId] = { map: position.map, endlessLevel: position.endlessLevel };
@@ -764,15 +769,8 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       if (!player) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);
 
       const extras = await this.playerContext.extrasOf(userId);
-      let unlocked = false;
-      try {
-        unlocked = checkRequirement(
-          map.requirement,
-          requirementContextOf(player, session.world.map, extras),
-        );
-      } catch {
-        unlocked = false;
-      }
+      // 解锁判定唯一入口（shared/map-dto）：map 控制器与 battle 会话宿主共用同一实现。
+      const unlocked = evaluateMapUnlock(map.requirement, player, session.world.map, extras);
       if (!unlocked) {
         this.opIds.abort(userId, opId ?? '');
         return fail(BusinessErrorCode.MAP_LOCKED);
@@ -916,15 +914,6 @@ function toLootDto(slot: InventorySlot, handled: string): LootDto {
   const dto: LootDto = { slot: slotDtoOf(slot, 0), handled: action };
   if (action === 'sell' && slot.key === 'gold') dto.gold = slot.count ?? 0;
   return dto;
-}
-
-function resolvePosition(
-  tables: DataTables,
-  stored: { map: string; endlessLevel: number } | undefined,
-): { map: string; endlessLevel: number } {
-  if (!stored) return { map: 'home', endlessLevel: 0 };
-  const map = tables.maps[stored.map] ? stored.map : 'home';
-  return { map, endlessLevel: stored.endlessLevel };
 }
 
 function safeCountTicket(player: Player, group: string): number {

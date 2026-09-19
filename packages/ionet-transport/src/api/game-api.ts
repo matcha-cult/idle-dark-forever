@@ -1,5 +1,5 @@
 /**
- * typed Action API —— 按后端 `cmd` 段组织的游戏接口层（13 个段）。
+ * typed Action API —— 按后端 `cmd` 段组织的游戏接口层（14 个段）。
  *
  * 设计约束：
  * - 路由 `(cmd, subCmd)` **只引用 `@idle-dark/protocol` 的 `*_CMD` 常量**，
@@ -23,6 +23,7 @@ import type {
   LootRuleEntryDto,
   LootRuleStateDto,
   LootRuleUpdateInput,
+  MapDto,
   MeDto,
   MedicineStateDto,
   OfflineReportDto,
@@ -46,6 +47,7 @@ import {
   IDLE_CMD,
   INVENTORY_CMD,
   LOOTRULE_CMD,
+  MAP_CMD,
   PLAYER_CMD,
   PRODUCE_CMD,
   SHOP_CMD,
@@ -230,6 +232,34 @@ export class WorldApi extends SegmentApi {
   /** 放弃离线收益（原版「跳过」按钮）。 */
   skipOffline(options?: GameApiRequestOptions): Promise<ActionResult<null>> {
     return this.call<null>(WORLD_CMD.cmd, WORLD_CMD.skipOffline, {}, options);
+  }
+}
+
+// ===== map（开放世界控制器，cmd 130；09 R2） =====
+
+export interface MapEnterInput {
+  map: string;
+  /** 幂等键：同 opId 重放不重复切换 / 不重复扣费。 */
+  opId?: string;
+}
+
+export class MapApi extends SegmentApi {
+  /** 地图目录 + 解锁状态。 */
+  list(options?: GameApiRequestOptions): Promise<ActionResult<MapDto[]>> {
+    return this.call<MapDto[]>(MAP_CMD.cmd, MAP_CMD.list, {}, options);
+  }
+
+  snapshot(options?: GameApiRequestOptions): Promise<ActionResult<WorldSnapshotDto>> {
+    return this.call<WorldSnapshotDto>(MAP_CMD.cmd, MAP_CMD.snapshot, {}, options);
+  }
+
+  /** 进入地图（控制器做解锁判定；`opId` 幂等）。 */
+  enter(params: MapEnterInput, options?: GameApiRequestOptions): Promise<ActionResult<WorldSnapshotDto>> {
+    return this.call<WorldSnapshotDto>(MAP_CMD.cmd, MAP_CMD.enter, params, options);
+  }
+
+  leave(options?: GameApiRequestOptions): Promise<ActionResult<null>> {
+    return this.call<null>(MAP_CMD.cmd, MAP_CMD.leave, {}, options);
   }
 }
 
@@ -516,12 +546,13 @@ export class IdleApi extends SegmentApi {
 
 // ===== 聚合入口 =====
 
-/** 全部 13 个 cmd 段的 typed API 聚合。 */
+/** 全部 14 个 cmd 段的 typed API 聚合。 */
 export class GameApi {
   readonly system: SystemApi;
   readonly auth: AuthApi;
   readonly player: PlayerApi;
   readonly world: WorldApi;
+  readonly map: MapApi;
   readonly battle: BattleApi;
   readonly inventory: InventoryApi;
   readonly bank: BankApi;
@@ -537,6 +568,7 @@ export class GameApi {
     this.auth = new AuthApi(transport);
     this.player = new PlayerApi(transport);
     this.world = new WorldApi(transport);
+    this.map = new MapApi(transport);
     this.battle = new BattleApi(transport);
     this.inventory = new InventoryApi(transport);
     this.bank = new BankApi(transport);

@@ -118,6 +118,31 @@ describe('checkRequirement', () => {
     );
     expect(checkRequirement({ role: 'Eyer', career: 'warrior', level: 20, map: 'forest' }, context)).toBe(false);
   });
+
+  it('自引用 / 循环构造的 $or·$and 不爆栈（超过深度上限 fail-closed）', () => {
+    const context = makeContext();
+    const selfOr: { $or: unknown[] } = { $or: [] };
+    selfOr.$or.push(selfOr);
+    expect(() => checkRequirement(selfOr, context)).not.toThrow();
+    expect(checkRequirement(selfOr, context)).toBe(false);
+
+    const selfAnd: { $and: unknown[] } = { $and: [] };
+    selfAnd.$and.push(selfAnd);
+    expect(checkRequirement(selfAnd, context)).toBe(false);
+
+    // 互相引用（A→B→A）同样不爆栈
+    const a: { $or: unknown[] } = { $or: [] };
+    const b: { $or: unknown[] } = { $or: [a] };
+    a.$or.push(b);
+    expect(checkRequirement(a, context)).toBe(false);
+  });
+
+  it('深度恰好在上限内的嵌套仍按语义判定（不误伤）', () => {
+    const context = makeContext();
+    let ok: Record<string, unknown> = { level: 20 };
+    for (let i = 0; i < 30; i += 1) ok = { $and: [ok] };
+    expect(checkRequirement(ok as never, context)).toBe(true);
+  });
 });
 
 describe('checkStory', () => {
