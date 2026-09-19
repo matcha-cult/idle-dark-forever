@@ -7,8 +7,10 @@
  *  3. `careers.expFormula` 是纯数字数组；
  *  4. `data/packages/*` 的显式注册（nightmare / year2018）真的生效；
  *  5. `createDefaultTables()` 可重入——`year2018/redbag.js` 的「全表追加红包」不会累加；
- *  6. 函数型规则被保留，且 `AffixData.generate` / `LegendData.generate` 走**注入的** `Rng`
- *     而不是裸 `Math.random()`。
+ *  6. 函数型规则被保留，且随机**全部**走注入的 `Rng` 端口：
+ *     `generate` 用形参 `rng`，技能 / buff / 强化 / 传奇 hook 用 `world.rng.skill`
+ *     （无法从参数拿到 world 的两处用 `this.world` / `this.unit.world`）；
+ *  7. 数据层**零** `Math.random()`——用函数源码扫描把它钉死，防止回归。
  */
 
 import { describe, expect, it } from 'vitest';
@@ -19,6 +21,36 @@ import { createDefaultTables } from './index.js';
 
 const tables: DataTables = createDefaultTables();
 const tables2: DataTables = createDefaultTables();
+
+/**
+ * 可重放的确定性随机源（LCG）。
+ * 只用于验证「同一 seed 两次运行产出相同结果」，与生产实现无关。
+ */
+class SeededRng implements Rng {
+  calls = 0;
+  private state: number;
+  constructor(seed: number) {
+    this.state = seed >>> 0;
+  }
+  next(): number {
+    this.calls += 1;
+    this.state = (Math.imul(this.state, 1664525) + 1013904223) >>> 0;
+    return this.state / 0x1_0000_0000;
+  }
+  range(min: number, max: number): number {
+    return min + (max - min) * this.next();
+  }
+  int(n: number): number {
+    return Math.floor(this.next() * n);
+  }
+  fork(label: string): Rng {
+    void label;
+    return new SeededRng(this.state);
+  }
+  getSeed(): number {
+    return this.state;
+  }
+}
 
 /** 只用于验证「随机来自注入端口」的探针。 */
 class CountingRng implements Rng {
@@ -224,6 +256,123 @@ describe('函数型规则', () => {
     const range = tables.affixes['maxHp']?.range;
     expect(typeof range).toBe('function');
     expect(String(range?.(10))).toContain('~');
+  });
+});
+
+/**
+ * 只搭 `skills['melee'].effect` 需要的最小 world / self。
+ * `DataTables` 里 `effect` 的 `world` / `self` 是 `unknown`，所以这里传结构体即可。
+ */
+function makeMeleeHarness(rng: Rng): { damage: number[]; run: () => void } {
+  const damage: number[] = [];
+  const target = {
+    rp: 0,
+    rpOnAttacked: 1,
+    runAttrHooks: () => 0,
+  };
+  const self = {
+    target,
+    atk: 100,
+    rp: 0,
+    rpOnAttack: 1,
+    testCrit: () => false,
+    getCritBonus: () => 1,
+  };
+  const world = {
+    rng: { skill: rng },
+    testDodge: () => false,
+    sendDamage: (_type: string, _from: unknown, _to: unknown, _skill: unknown, value: number) => {
+      damage.push(value);
+    },
+  };
+  return {
+    damage,
+    run: () => {
+      tables.skills['melee']?.effect.call({}, world, self, 1);
+    },
+  };
+}
+
+describe('随机源端口化（world.rng.skill）', () => {
+  it('数据层函数源码里不含裸 Math.random（源码扫描护栏）', () => {
+    const found: Array<{ path: string; src: string }> = [];
+    const walk = (node: unknown, path: string): void => {
+      if (typeof node === 'function') {
+        found.push({ path, src: String(node) });
+        return;
+      }
+      if (node === null || typeof node !== 'object') return;
+      for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+        walk(v, path ? `${path}.${k}` : k);
+      }
+    };
+    walk(tables, '');
+    expect(found.length).toBeGreaterThan(600);
+    const offenders = found.filter((f) => f.src.includes('Math.random'));
+    expect(offenders.map((o) => o.path).join(', ')).toBe('');
+  });
+
+  it('技能 effect 走 world.rng.skill：同 seed 同结果、不同 seed 不同结果、且确实消费了该流', () => {
+    const rngA = new SeededRng(12345);
+    const a = makeMeleeHarness(rngA);
+    a.run();
+
+    const rngB = new SeededRng(12345);
+    const b = makeMeleeHarness(rngB);
+    b.run();
+
+    const rngC = new SeededRng(999);
+    const c = makeMeleeHarness(rngC);
+    c.run();
+
+    expect(a.damage).toHaveLength(1);
+    expect(a.damage).toEqual(b.damage);
+    expect(a.damage[0]).not.toBeCloseTo(c.damage[0] ?? Number.NaN, 6);
+    // 每次施放恰好消费一次 skill 流
+    expect(rngA.calls).toBe(1);
+    expect(rngC.calls).toBe(1);
+    // 没有 world 时不应静默退化（护栏：world.rng 缺失会抛）
+    expect(() => tables.skills['melee']?.effect.call({}, {}, {}, 1)).toThrow();
+  });
+
+  it('拿不到 world 形参的传奇 hook 用 this.world.rng.skill', () => {
+    const hook = tables.legends['mithrilRing-1']?.hooks?.['holyCombo'];
+    expect(typeof hook).toBe('function');
+
+    const hits: string[] = [];
+    const makeThis = (value: number) => ({
+      world: { rng: { skill: new CountingRng(value) } },
+      useExtraSkill: (key: string) => {
+        hits.push(key);
+      },
+    });
+
+    // 0.1 < 0.9 → 触发
+    hook?.call(makeThis(0.1), 0.9, 5);
+    expect(hits).toEqual(['knight.whirlwind']);
+    // 0.95 >= 0.9 → 不触发，但返回值仍是原 count
+    expect(hook?.call(makeThis(0.95), 0.9, 5)).toBe(5);
+    expect(hits).toHaveLength(1);
+  });
+
+  it('拿不到 world 形参的 buff hook 用 this.unit.world.rng.skill', () => {
+    const hook = tables.buffs['iceShield']?.hooks?.['attacked'];
+    expect(typeof hook).toBe('function');
+
+    const stunned: Array<{ ms: number; type?: string }> = [];
+    const from = {
+      buffs: [] as Array<{ group?: string }>,
+      stun: (ms: number, type?: string) => {
+        stunned.push({ ms, type });
+        return true;
+      },
+      addBuff: () => undefined,
+    };
+    // soCold = true → 走 100% 冻结分支（无需再消费随机）
+    const rng = new CountingRng(0.5);
+    hook?.call({ unit: { world: { rng: { skill: rng } }, runAttrHooks: () => true } }, from);
+    expect(rng.calls).toBe(1);
+    expect(stunned).toEqual([{ ms: 3, type: 'freezed' }]);
   });
 });
 

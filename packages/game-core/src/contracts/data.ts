@@ -223,6 +223,14 @@ export interface MapData {
   loots?: LootEntry[];
   /** 无尽副本分组，如 'nightmare.3'。 */
   group?: string;
+  /**
+   * 是否为无尽副本。
+   *
+   * ⚠️ 原版数据里真实存在（`data/packages/nightmare/*.js` 的 `isEndless: true`），
+   * 且 `Player.fromJSON` 补齐 `dungeonTickets` 时会跳过无尽地图 —— 漏了它会导致
+   * 钥石键空间多出一批不该存在的条目。
+   */
+  isEndless?: boolean;
   defaultTicketCount?: number;
 }
 

@@ -4,7 +4,8 @@
  * 移植规则见 `ai-docs/pending-data-port.md`：
  *  - 原版 CommonJS 数据文件整体包进 IIFE，`module.exports = X` 变为 `return X`；
  *  - 函数体的 `this` / `world` / `self` 由 `_shapes.ts` 的视图类型提供上下文，契约参数类型不变；
- *  - 词缀 / 传奇的 `generate(level)` 改为 `generate(level, rng)`，内部 `Math.random()` → `rng()`。
+ *  - 随机一律走注入的 `Rng` 端口，本文件**零** `Math.random()`：
+ *    词缀 / 传奇的 `generate` 用形参 `rng`；技能 / buff / 强化 hook 用 `world.rng.skill`（标签 `'skill'`）。
  */
 
 import type { AffixEntry, AttackLike, BuffStateLike, ComboLike, UnitLike, WorldLike } from './_shapes.js';

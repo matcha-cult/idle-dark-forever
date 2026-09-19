@@ -49,6 +49,17 @@ export interface TimelineLike {
 }
 
 /**
+ * 数据表函数可用的**确定性子随机源**。
+ *
+ * 与 `combat/battle-world.ts` 的 `CombatRngStreams` 对齐：技能 / buff / 强化 / 传奇 hook 里
+ * 原本的 `Math.random()` 一律改走 `world.rng.skill`（标签 `'skill'`），
+ * 与 `crit` / `dodge` / `loot` 等判定流**互不扰动**，保证金样回归可解释、可重放。
+ */
+export interface DataRngStreams {
+  skill: Rng;
+}
+
+/**
  * buff hook 的额外参数（第 2 个及以后）的兜底联合：原版签名差异极大
  * （`(value)` / `(val, type)` / `(value, to, damageType)` / `(skill, world)`……）。
  */
@@ -147,6 +158,8 @@ export interface UnitLike {
   casting: CastingLike | null;
   stopped: boolean;
   // 关系
+  /** 原版 `Unit` 上是 `readonly world: BattleWorld`，数据层用它取确定性子随机源。 */
+  world: WorldLike;
   /** 原版 `self.target` 在函数体内被直接解引用（只在 `canUse` 里判空），因此这里不标 null。 */
   target: UnitLike;
   summoner: UnitLike;
@@ -213,6 +226,8 @@ export interface UnitList extends Array<UnitLike> {
 
 /** 世界（所有 `world` 参数）。 */
 export interface WorldLike {
+  /** `BattleWorld.rng`：数据层只用 `skill` 通道。 */
+  rng: DataRngStreams;
   units: UnitList;
   playerUnit: UnitLike;
   /** 当前地图 **key**（原版 `world.map` 是字符串，不是 MapData）。 */

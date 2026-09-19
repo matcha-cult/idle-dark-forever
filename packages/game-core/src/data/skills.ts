@@ -4,7 +4,8 @@
  * 移植规则见 `ai-docs/pending-data-port.md`：
  *  - 原版 CommonJS 数据文件整体包进 IIFE，`module.exports = X` 变为 `return X`；
  *  - 函数体的 `this` / `world` / `self` 由 `_shapes.ts` 的视图类型提供上下文，契约参数类型不变；
- *  - 词缀 / 传奇的 `generate(level)` 改为 `generate(level, rng)`，内部 `Math.random()` → `rng()`。
+ *  - 随机一律走注入的 `Rng` 端口，本文件**零** `Math.random()`：
+ *    词缀 / 传奇的 `generate` 用形参 `rng`；技能 / buff / 强化 hook 用 `world.rng.skill`（标签 `'skill'`）。
  */
 
 import type { AttackLike, BuffStateLike, ComboLike, SkillEntry, UnitLike, WorldLike } from './_shapes.js';
@@ -48,7 +49,7 @@ return  [
       if (world.testDodge(self, target, this)) {
         return;
       }
-      const val = atk * (Math.random() * 0.5 + 0.75) * (level * 0.2 + 1);
+      const val = atk * (world.rng.skill.next() * 0.5 + 0.75) * (level * 0.2 + 1);
       const isCrit = self.testCrit();
       world.sendDamage('melee', self, target, this, self.getCritBonus(isCrit) * val, isCrit);
 
@@ -81,7 +82,7 @@ return  [
     },
     effect(world, self, level) {
       const { leech = 0, atk } = self;
-      const val = atk * (Math.random() * 0.5 + 0.75) * (level * 0.2 + 1);
+      const val = atk * (world.rng.skill.next() * 0.5 + 0.75) * (level * 0.2 + 1);
 
       for (const target of world.units.filter(v => self.willAttack(v))) {
         if (world.testDodge(self, target, this)) {
@@ -142,7 +143,7 @@ return  [
       if (world.testDodge(self, target, this)) {
         return;
       }
-      const val = atk * (Math.random() + 2.5) * (level / 5 + 1);
+      const val = atk * (world.rng.skill.next() + 2.5) * (level / 5 + 1);
       const isCrit = self.testCrit();
       world.sendDamage(
         'melee',
@@ -182,7 +183,7 @@ return  [
       const { atk, target, leech = 0, critRate = 0, critBonus = 1.5 } = self;
       const damageRate = self.runAttrHooks(1, 'cleaveDamageRate');
       const val =
-        atk * (Math.random() * 0.2 + 0.4) * (level / 5 + 1) * damageRate;
+        atk * (world.rng.skill.next() * 0.2 + 0.4) * (level / 5 + 1) * damageRate;
       const isCrit = self.testCrit();
       world.sendDamage(
         'melee',
@@ -203,7 +204,7 @@ return  [
           return;
         }
         const val =
-          atk * (Math.random() * 0.2 + 0.4) * (level / 10 + 1) * damageRate;
+          atk * (world.rng.skill.next() * 0.2 + 0.4) * (level / 10 + 1) * damageRate;
         leechRatio += 0.4;
         world.sendDamage(
           'melee',
@@ -257,7 +258,7 @@ return  [
         if (world.testDodge(self, target, this)) {
           return;
         }
-        const val = atk * (Math.random() * 0.2 + 0.4);
+        const val = atk * (world.rng.skill.next() * 0.2 + 0.4);
         const isCrit = self.testCrit();
         world.sendDamage(
           'melee',
@@ -333,7 +334,7 @@ return  [
         return;
       }
       const atk = self.atk;
-      const val = atk * (Math.random() * 10 + 10) * (1 + 0.2 * level);
+      const val = atk * (world.rng.skill.next() * 10 + 10) * (1 + 0.2 * level);
       const isCrit = self.testCrit();
       world.sendDamage(
         'melee',
@@ -373,7 +374,7 @@ return  [
       if (world.testDodge(self, target, this)) {
         return;
       }
-      const val = atk * (Math.random() * 0.4 + 0.6) * (level * 0.2 + 1);
+      const val = atk * (world.rng.skill.next() * 0.4 + 0.6) * (level * 0.2 + 1);
       const { critRate = 0, critBonus = 1.5 } = self;
       const isCrit = self.testCrit();
       world.sendDamage(
@@ -421,7 +422,7 @@ return  [
       if (world.testDodge(self, target, this)) {
         return;
       }
-      const val = atk * (Math.random() * 0.4 + 0.6) * (level * 0.2 + 1);
+      const val = atk * (world.rng.skill.next() * 0.4 + 0.6) * (level * 0.2 + 1);
       const isCrit = self.testCrit();
       world.sendDamage(
         'melee',
@@ -469,7 +470,7 @@ return  [
       if (world.testDodge(self, target, this)) {
         return;
       }
-      const val = atk * (Math.random() * 0.8 + 2) * (1 + 0.2 * level);
+      const val = atk * (world.rng.skill.next() * 0.8 + 2) * (1 + 0.2 * level);
       const isCrit = self.testCrit();
       world.sendDamage(
         'melee',
@@ -517,7 +518,7 @@ return  [
       const { target, atk, leech = 0, critRate = 0, critBonus = 1.5 } = self;
       const damageRate = self.runAttrHooks(1, 'cleaveDamageRate');
       const val =
-        atk * (Math.random() * 0.15 + 0.35) * (level * 0.2 + 1) * damageRate;
+        atk * (world.rng.skill.next() * 0.15 + 0.35) * (level * 0.2 + 1) * damageRate;
 
       let kills = 0;
       const isCrit = self.testCrit();
@@ -544,7 +545,7 @@ return  [
           return;
         }
         const val =
-          atk * (Math.random() * 0.15 + 0.35) * (level / 10 + 1) * damageRate;
+          atk * (world.rng.skill.next() * 0.15 + 0.35) * (level / 10 + 1) * damageRate;
         const isCrit = self.testCrit();
         leechRatio += 0.4;
         world.sendDamage(
@@ -568,7 +569,7 @@ return  [
             return;
           }
           const val =
-            atk * (Math.random() * 0.1 + 0.15) * (level / 10 + 1) * damageRate;
+            atk * (world.rng.skill.next() * 0.1 + 0.15) * (level / 10 + 1) * damageRate;
           const isCrit = self.testCrit();
           world.sendDamage(
             'melee',
@@ -660,7 +661,7 @@ return  [
         if (world.testDodge(self, target, this)) {
           return;
         }
-        const val = atk * (Math.random() * 0.1 + 0.3);
+        const val = atk * (world.rng.skill.next() * 0.1 + 0.3);
         const isCrit = self.testCrit();
         totalDmg += self.getCritBonus(isCrit) * val;
         world.sendDamage(
@@ -740,7 +741,7 @@ return  [
         if (world.testDodge(self, target, this)) {
           return;
         }
-        const val = atk * (Math.random() * 0.4 + 0.6) * (1 + 0.2 * level);
+        const val = atk * (world.rng.skill.next() * 0.4 + 0.6) * (1 + 0.2 * level);
         const isCrit = self.testCrit();
         world.sendDamage(
           'melee',
@@ -895,7 +896,7 @@ return  [
         (int * 0.01 + 1) *
         (level * 0.3 + 1) *
         self.dmgAdd;
-      if (Math.random() < Number(self.runAttrHooks(false, 'soCold'))) {
+      if (world.rng.skill.next() < Number(self.runAttrHooks(false, 'soCold'))) {
         target.stun(3, 'freezed');
       } else {
         target.addBuff('cold', 3000, null, 'cold');
@@ -1008,10 +1009,10 @@ return  [
           return;
         }
         // 如果self.target为空，是当前目标已死亡，有其它目标的情况下，剩下的秘法球都去打随机目标。
-        if (validTargets.length > 0 && (!self.target || Math.random() < 0.2)) {
+        if (validTargets.length > 0 && (!self.target || world.rng.skill.next() < 0.2)) {
           // 更换目标
           target =
-            validTargets[Math.floor(Math.random() * validTargets.length)]!;
+            validTargets[Math.floor(world.rng.skill.next() * validTargets.length)]!;
         }
         const isCrit = self.testCrit();
         world.sendDamage(
@@ -1249,7 +1250,7 @@ return  [
           self.willAttack(v) &&
           v.runAttrHooks(false, 'transformed') === false
       );
-      const target = targets[Math.floor(Math.random() * targets.length)]!;
+      const target = targets[Math.floor(world.rng.skill.next() * targets.length)]!;
       if (world.testDodge(self, target, this)) {
         return;
       }
@@ -1257,7 +1258,7 @@ return  [
       let time = 5000 + level * 1000;
       if (self.runAttrHooks(false, 'randomTransform')) {
         type =
-          TRANFORM_TYPES[Math.floor(Math.random() * TRANFORM_TYPES.length)]!;
+          TRANFORM_TYPES[Math.floor(world.rng.skill.next() * TRANFORM_TYPES.length)]!;
         time *= 1.5;
       }
       target.addBuff('transform', time, type, 'transform');
@@ -1574,7 +1575,7 @@ return  [
         return;
       }
       const rate = level * 0.2 + 1;
-      const val = atk * (Math.random() * 0.4 + 0.6) * rate;
+      const val = atk * (world.rng.skill.next() * 0.4 + 0.6) * rate;
       const isCrit = self.testCrit();
       const critBonus = self.getCritBonus(isCrit);
       world.sendDamage('melee', self, target, this, val * critBonus, isCrit);
@@ -1616,7 +1617,7 @@ return  [
         critRate = 0,
         critBonus = 1.5,
       } = self;
-      const val = atk * (Math.random() + 1.5) * (level / 5 + 1) * atkSpeed;
+      const val = atk * (world.rng.skill.next() + 1.5) * (level / 5 + 1) * atkSpeed;
 
       const atkInfo: AttackLike = {
         dmg: val,
@@ -1673,7 +1674,7 @@ return  [
         return;
       }
       const rate = level * 0.2 + 1;
-      const val = atk * (Math.random() * 0.5 + 1) * rate * atkSpeed;
+      const val = atk * (world.rng.skill.next() * 0.5 + 1) * rate * atkSpeed;
       const isCrit = self.testCrit();
       world.sendDamage(
         'melee',
@@ -1720,7 +1721,7 @@ return  [
         return;
       }
       const rate = level * 0.2 + 1;
-      const val = atk * (Math.random() * 0.5 + 1) * rate * atkSpeed;
+      const val = atk * (world.rng.skill.next() * 0.5 + 1) * rate * atkSpeed;
       const isCrit = self.testCrit();
       world.sendDamage(
         'melee',
@@ -1824,7 +1825,7 @@ return  [
       );
 
       const atk = self.atk;
-      const val = atk * (Math.random() * 2 + 4) * (1 + 0.2 * level);
+      const val = atk * (world.rng.skill.next() * 2 + 4) * (1 + 0.2 * level);
       world.sendDamage(
         'melee',
         self,
@@ -1866,7 +1867,7 @@ return  [
     effect(world, self, level) {
       const { leech = 0, atk, atkSpeed } = self;
       const rate = level * 0.2 + 1;
-      const val = atk * (Math.random() * 0.4 + 0.6) * rate * atkSpeed;
+      const val = atk * (world.rng.skill.next() * 0.4 + 0.6) * rate * atkSpeed;
 
       let haveTarget = false;
       for (const target of world.units.filter((v) => self.willAttack(v))) {
@@ -1952,7 +1953,7 @@ return  [
       if (world.testDodge(self, target, this)) {
         return;
       }
-      const val = atk * (Math.random() * 0.4 + 0.6) * (level * 0.2 + 1);
+      const val = atk * (world.rng.skill.next() * 0.4 + 0.6) * (level * 0.2 + 1);
       const isCrit = self.testCrit();
       world.sendDamage(
         'melee',
@@ -2141,7 +2142,7 @@ return  [
       if (world.testDodge(self, target, this)) {
         return;
       }
-      const val = atk * (Math.random() * 0.5 + 0.75) * (level * 0.2 + 1);
+      const val = atk * (world.rng.skill.next() * 0.5 + 0.75) * (level * 0.2 + 1);
       const isCrit = self.testCrit();
       world.sendDamage('melee', self, target, this, self.getCritBonus(isCrit) * val, isCrit);
 
@@ -2178,7 +2179,7 @@ return  [
       if (world.testDodge(self, target, this)) {
         return;
       }
-      const val = atk * (Math.random() + 2.5) * (level/5 + 1);
+      const val = atk * (world.rng.skill.next() + 2.5) * (level/5 + 1);
       const isCrit = self.testCrit();
       world.sendDamage('melee', self, target, this, self.getCritBonus(isCrit) * val, isCrit);
       if (leech) {
@@ -2207,7 +2208,7 @@ return  [
     effect(world, self, level) {
       const { atk, target, leech = 0 } = self;
       const damageRate = self.runAttrHooks(1, 'cleaveDamageRate');
-      const val = atk * (Math.random()* 0.12 + 0.3) * (level / 5 + 1) * damageRate;
+      const val = atk * (world.rng.skill.next()* 0.12 + 0.3) * (level / 5 + 1) * damageRate;
       const isCrit = self.testCrit();
       world.sendDamage('melee', self, target, this, self.getCritBonus(isCrit) * val, isCrit);
 
@@ -2218,7 +2219,7 @@ return  [
         if (world.testDodge(self, target, this)) {
           return;
         }
-        const val = atk * (Math.random()* 0.12 + 0.3) * (level / 10 + 1);
+        const val = atk * (world.rng.skill.next()* 0.12 + 0.3) * (level / 10 + 1);
         leechRatio += 0.4;
         world.sendDamage('melee', self, target, this, self.getCritBonus(isCrit) * val, isCrit);
         target.runAttrHooks(self, 'attacked');
@@ -2264,7 +2265,7 @@ return  [
         if (world.testDodge(self, target, this)) {
           return;
         }
-        const val = atk * (Math.random()* 0.2 + 0.6) ;
+        const val = atk * (world.rng.skill.next()* 0.2 + 0.6) ;
         const isCrit = self.testCrit();
         world.sendDamage('melee', self, target, this, self.getCritBonus(isCrit) * val, isCrit);
         target.runAttrHooks(self, 'attacked');
@@ -2358,7 +2359,7 @@ return  [
       if (world.testDodge(self, target, this)) {
         return;
       }
-      let val = atk * (Math.random() * 0.75 + 1);
+      let val = atk * (world.rng.skill.next() * 0.75 + 1);
       const isCrit = self.testCrit();
       world.sendDamage('melee', self, self, this, self.getCritBonus(isCrit) * val * 0.15, isCrit);
       val *= (level * 0.2 + 1);
@@ -2486,7 +2487,7 @@ return  [
       if (world.testDodge(self, target, this)) {
         return;
       }
-      const val = atk * (Math.random() * 0.5 + 1) * (level * 0.2 + 1);
+      const val = atk * (world.rng.skill.next() * 0.5 + 1) * (level * 0.2 + 1);
       const { critRate = 0, critBonus = 1.5 } = self;
       const isCrit = self.testCrit();
       world.sendDamage('melee', self, target, this, self.getCritBonus(isCrit) * val, isCrit);
@@ -2571,10 +2572,10 @@ return  [
         }
         const isCrit = self.testCrit();
         // 如果self.target为空，是当前目标已死亡，有其它目标的情况下，剩下的秘法球都去打随机目标。
-        if (validTargets.length > 0 && (!self.target || Math.random() < 0.2)) {
+        if (validTargets.length > 0 && (!self.target || world.rng.skill.next() < 0.2)) {
           // 更换目标
           target =
-            validTargets[Math.floor(Math.random() * validTargets.length)]!;
+            validTargets[Math.floor(world.rng.skill.next() * validTargets.length)]!;
         }
         world.sendDamage(
           'magic',
@@ -2715,7 +2716,7 @@ return  [
       const summoners = world.units.filter(
         v => v.summoner === self && v.target,
       );
-      const summoner = summoners[Math.floor(Math.random() * summoners.length)]!;
+      const summoner = summoners[Math.floor(world.rng.skill.next() * summoners.length)]!;
 
       const dmgType = summoner.runAttrHooks('magic', 'elementType');
 
@@ -2885,7 +2886,7 @@ return  [
         return;
       }
       const target =
-        validSummons[Math.floor(Math.random() * validSummons.length)]!;
+        validSummons[Math.floor(world.rng.skill.next() * validSummons.length)]!;
       world.sendSkillUsage(self, [target], this);
       const summmonedBuff = target.runAttrHooks(null, 'getSummonedBuff');
       if (summmonedBuff) {
@@ -3132,7 +3133,7 @@ return  [
       if (world.testDodge(self, target, this)) {
         return;
       }
-      const val = atk * (Math.random() * 0.8 + 2);
+      const val = atk * (world.rng.skill.next() * 0.8 + 2);
       const isCrit = self.testCrit();
       world.sendDamage(
         'melee',
@@ -3411,7 +3412,7 @@ return  [
       if (world.testDodge(self, target, this)) {
         return;
       }
-      const val = atk * (Math.random() * 0.8 + 2);
+      const val = atk * (world.rng.skill.next() * 0.8 + 2);
       const isCrit = self.testCrit();
       world.sendDamage(
         'melee',
@@ -3472,12 +3473,12 @@ return  [
     effect(world, self, level) {
       const { atk } = self;
       const targets = world.units.filter((v) => v.camp === 'player');
-      const target = targets[Math.floor(Math.random() * targets.length)]!;
+      const target = targets[Math.floor(world.rng.skill.next() * targets.length)]!;
       if (!target || world.testDodge(self, target, this)) {
         self.kill();
         return;
       }
-      const val = atk * (Math.random() * 0.8 + 2);
+      const val = atk * (world.rng.skill.next() * 0.8 + 2);
       world.sendDamage('cold', self, target, this, val, false);
       target.breakCasting();
       target.stun((level + 5) / 2);
@@ -3777,7 +3778,7 @@ return  [
         if (targets.length < 1) {
           break;
         }
-        const id = Math.floor(Math.random() * targets.length);
+        const id = Math.floor(world.rng.skill.next() * targets.length);
         const target = targets.splice(id, 1)[0];
         if (world.testDodge(self, target, this)) {
           continue;
@@ -3802,7 +3803,7 @@ return  [
     effect(world, self, level) {
       const { atk, critRate = 0, critBonus = 1.5 } = self;
 
-      const isCrit = Math.random() < critRate;
+      const isCrit = world.rng.skill.next() < critRate;
 
       const targets = world.units.filter((v) => self.canAttack(v));
       let value = isCrit ? atk * critBonus : atk;
@@ -3810,7 +3811,7 @@ return  [
         if (targets.length < 1) {
           break;
         }
-        const id = Math.floor(Math.random() * targets.length);
+        const id = Math.floor(world.rng.skill.next() * targets.length);
         const target = targets.splice(id, 1)[0];
         if (world.testDodge(self, target, this)) {
           continue;
@@ -3837,7 +3838,7 @@ return  [
         if (world.testDodge(self, target, this)) {
           return;
         }
-        const val = atk * (Math.random() * 0.4 + 0.6) * (1 + 0.2 * level);
+        const val = atk * (world.rng.skill.next() * 0.4 + 0.6) * (1 + 0.2 * level);
         const isCrit = self.testCrit();
         world.sendDamage(
           'lightning',
@@ -4092,7 +4093,7 @@ return  [
         'chapter4.humans.trigger.5.3',
         'chapter4.humans.trigger.5.4',
       ];
-      const type = types[Math.floor(Math.random() * types.length)]!;
+      const type = types[Math.floor(world.rng.skill.next() * types.length)]!;
 
       world.addEnemy(type, null, 0, self);
 

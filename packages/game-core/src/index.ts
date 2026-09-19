@@ -23,3 +23,5 @@ export * from './data/index.js';
 export * from './rules/index.js';
 // 存档编解码（导入《永夜2016典藏重置版》本地存档）
 export * from './serialize/index.js';
+// 战斗模拟内核（BattleWorld / Unit / EnemyBorn …）
+export * from './combat/index.js';
