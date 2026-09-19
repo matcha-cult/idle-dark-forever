@@ -12,6 +12,7 @@
  */
 
 import type { Quality } from '@idle-dark/protocol';
+import type { Rng } from './ports.js';
 
 // ────────────────────────────── 通用 ──────────────────────────────
 
@@ -76,9 +77,12 @@ export interface AffixData {
   maxLevel?: number;
   validClasses?: string[];
   validPositions?: string[];
-  /** 数值生成：`(level) => value`。 */
-  generate: (level: number) => number;
-  /** 数值区间展示：`(level) => [min, max]`。 */
+  /**
+   * 数值生成：`(level, rng) => value`。
+   * ⚠️ 原版内部直接调用 `Math.random()`；移植后**必须**改为注入 `Rng`，否则掉落不可重放。
+   */
+  generate: (level: number, rng: Rng) => number;
+  /** 数值区间展示：`(level) => [min, max]`（纯展示，无随机）。 */
   range?: (level: number) => [number, number];
   /** 生效 hook：`this` = 单位。 */
   hooks?: AttrHooks;
@@ -94,7 +98,8 @@ export interface LegendData {
   maxLevel?: number;
   special?: boolean;
   display: (effect: number, level?: number) => string;
-  generate: (level: number) => number;
+  /** 同 `AffixData.generate`：随机必须注入。 */
+  generate: (level: number, rng: Rng) => number;
   range?: (level: number) => [number, number];
   hooks?: AttrHooks;
 }
