@@ -132,6 +132,16 @@ export interface LootEvent {
   handled: 'pickup' | 'sell' | 'decompose';
   gold?: number;
   materials?: Array<{ key: string; count: number }>;
+  /**
+   * 副本钥匙所属分组（如 `nightmare.3`）。
+   * ⚠️ 原版 `InventorySlot.dungeonKey`；不带上它则丢失「这把钥匙属于哪个副本」的信息。
+   */
+  dungeonKey?: string;
+  /**
+   * 是否应在客户端弹出获得提示。
+   * ⚠️ 原版 `world.loots(..., showToast)` 的参数；服务端聚合推送时用它决定是否置顶单条提示。
+   */
+  showToast?: boolean;
 }
 
 /**

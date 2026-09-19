@@ -312,7 +312,9 @@ describe('getGoodOrder', () => {
     const other = createTestTables();
     delete other.goods.stickSword;
     const order = getGoodOrder(other);
+    const remaining = Object.keys(other.goods);
     expect(order.stickSword).toBeUndefined();
-    expect(order.dress).toBe(0);
+    expect(order[remaining[0]!]).toBe(0);
+    expect(order[remaining[1]!]).toBe(1);
   });
 });

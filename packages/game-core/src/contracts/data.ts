@@ -129,10 +129,53 @@ export interface EnemyData {
   skills: Array<{ key: string; level: number }>;
   affixes?: Record<string, number>;
   loots?: LootEntry[];
-  buffs?: string[];
+  /**
+   * 初始 Buff。
+   * ⚠️ 真实数据是**对象数组**（如 `data/enemies/chapter3.beast.js` 的 `{ type: 'simba.goodFriends' }`），
+   * 不是字符串数组；这里放宽为联合以兼容两种写法。
+   */
+  buffs?: Array<string | { type: string; time?: number; arg?: unknown }>;
+  /** v2 技能表（部分敌人用它替代 `skills`）。 */
+  v2Skills?: Array<{ key: string; level: number }>;
   /** 点击交互（剧情单位用）。 */
   onPress?: (world: unknown) => void;
   hooks?: Record<string, (this: unknown, world: unknown, value: number) => number>;
+
+  // ── 以下为原版实际读取、但此前未在契约声明的可选属性（按原版数据统计补全） ──
+  maxMp?: number;
+  maxRp?: number;
+  maxEp?: number;
+  mpRecovery?: number;
+  rpRecovery?: number;
+  epRecovery?: number;
+  /** 攻击方回怒 / 受击方回怒。 */
+  rpOnAttack?: number;
+  rpOnAttacked?: number;
+  def?: number;
+  /** 抗性 / 吸收（按伤害类型，键为 `allResist`、`fireResist`、`fireAbsorb`…）。 */
+  allResist?: number;
+  fireResist?: number;
+  coldResist?: number;
+  lightningResist?: number;
+  iceResist?: number;
+  darkResist?: number;
+  fireAbsorb?: number;
+  coldAbsorb?: number;
+  lightningAbsorb?: number;
+  iceAbsorb?: number;
+  darkAbsorb?: number;
+  critRate?: number;
+  critBonus?: number;
+  /** 吸血比例。 */
+  leech?: number;
+  /** 增伤。 */
+  dmgAdd?: number;
+  /** 免控 / 免疫概率。 */
+  stunResist?: number;
+  /** 攻速倍率（正数；用于替代 `atkSpeed` 的乘算）。 */
+  speedRate?: number;
+  /** 死亡后是否清理尸体。 */
+  willClean?: boolean;
 }
 
 // ────────────────────────────── 地图 ──────────────────────────────
@@ -149,6 +192,17 @@ export interface MonsterSpawnConfig {
   randomPosition?: boolean;
 }
 
+/**
+ * 地城阶段里的刷怪条目。
+ *
+ * ⚠️ 真实数据不止 `type` / `total`：`data/maps/silver/warrior.js` 还有 `max` / `delay`，
+ * 因此这里扩为 `MonsterSpawnConfig` 的超集（`type` / `total` 收紧为必填）。
+ */
+export interface PhaseMonsterConfig extends MonsterSpawnConfig {
+  type: string;
+  total: number;
+}
+
 export interface MapData {
   key: string;
   name: string;
@@ -159,7 +213,7 @@ export interface MapData {
   /** 地城专属。 */
   isDungeon?: boolean;
   outside?: string;
-  phases?: Array<{ description: string; monsters: Array<{ type: string; total: number }> }>;
+  phases?: Array<{ description: string; monsters: PhaseMonsterConfig[] }>;
   coolDown?: number;
   maxCoolDownStack?: number;
   coolDownOffset?: number;

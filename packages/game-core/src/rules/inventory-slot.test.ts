@@ -170,8 +170,11 @@ describe('InventorySlot.fromJSON 隐式兼容', () => {
   it('count 采用 `v.count ? Math.ceil(v.count) : null`', () => {
     expect(slot().fromJSON({ key: 'dust1', count: 2.2 }).count).toBe(3);
     expect(slot().fromJSON({ key: 'dust1', count: null }).count).toBeNull();
-    // count 为 0/null 直接清空格子
-    expect(slot().fromJSON({ key: 'dust1', count: 0 }).key).toBeNull();
+    // ⚠️ 原版：`count = v.count ? ceil : null`，随后判断 `count === 0` 才会 clear。
+    // 由于 0 已经被归一成 null，`count === 0` 永不成立 → 有 key 的格子**不会**因为 count=0 被清空。
+    const zero = slot().fromJSON({ key: 'dust1', count: 0 });
+    expect(zero.key).toBe('dust1');
+    expect(zero.count).toBeNull();
   });
 
   it('缺 key / key 为空串 → 空格子', () => {

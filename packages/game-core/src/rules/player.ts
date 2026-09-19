@@ -737,11 +737,12 @@ export class Player extends PlayerMeta {
   /**
    * 原版 `sortInventory(target)`：整理背包（类型 → 钥石地图等级 → 品质 → 部位/等级 → goodOrder）。
    *
-   * ⚠️ 逐行保留原版的一个笔误：比较两张钥石地图等级时，`level2` 也用 `mapData1`。
-   * 这会退化成「按 key 排序」，但为了数值/顺序完全一致，此处不修正。
+   * ⚠️ 原版比较两张钥石地图等级时写作 `(mapData1 && mapData2.level)`：
+   * 守卫用 `a` 的地图、取值用 `b` 的地图。取值逻辑是正确的，只有守卫写错了
+   * （a 的地图不存在时 `level2` 会退化为 0），此处逐行保留。
    *
-   * ⚠️ 原版把**每个**格子都复制成 `position='inventory'` 的临时格子（即使整理的是银行），
-   * 因此整理后所有格子 `position` 都变成 `'inventory'`。同样逐行保留。
+   * 注：临时格子统一用 `position='inventory'` 构造，但最终是写回 `target` 的**原有格子**
+   * （`loot` 只覆盖内容，不覆盖 `position`），因此目标容器的格子归属不会改变。
    */
   sortInventory(target: InventorySlot[] = this.inventory): void {
     const goodOrder = getGoodOrder(this.tables);
@@ -767,9 +768,11 @@ export class Player extends PlayerMeta {
       if (atype === 'ticket' && a.dungeonKey !== b.dungeonKey) {
         // 地图的话，比较地图等级和key
         const mapData1 = a.dungeonKey === null ? undefined : this.tables.maps[a.dungeonKey];
+        const mapData2 = b.dungeonKey === null ? undefined : this.tables.maps[b.dungeonKey];
         const level1 = getEndlessMapLevel(a.dungeonKey) || mapData1?.level || 0;
-        // 原版笔误：这里用的是 mapData1（而非 mapData2），逐行保留
-        const level2 = getEndlessMapLevel(b.dungeonKey) || mapData1?.level || 0;
+        // 原版写作 `(mapData1 && mapData2.level)`：**守卫**用 mapData1、**取值**用 mapData2。
+        // 取值是对的，只有守卫对象写错了（当 a 的地图缺失、b 的等级 >0 时会退化为 0），逐行保留。
+        const level2 = getEndlessMapLevel(b.dungeonKey) || (mapData1 ? mapData2?.level : undefined) || 0;
         if (level1 !== level2) {
           return level1 - level2;
         }
