@@ -4,7 +4,7 @@
  * 背景：`contracts/data.ts` 把数据表函数的 `this` / `world` / `self` / hook 参数一律冻结成
  * `unknown`（这是对的：契约只描述「表里有什么」，不描述「运行时引擎提供什么」）。
  * 但 183 个原始数据文件里有近千个函数直接对这些参数做鸭子类型调用
- * （`world.sendDamage(...)` / `self.runAttrHooks(...)` / `this.unit.timeline...`）。
+ * （`world.sendDamage(...)` / `self.runAttrHooks(...)` / `this.unit.clock...`）。
  *
  * 因此这里按「数据层实际访问到的最小面」逐个声明视图接口，让移植后的函数体保持原样即可通过
  * `strict` + `noUncheckedIndexedAccess` 检查；**没有使用 `any`**：
@@ -168,7 +168,8 @@ export interface UnitLike {
   skills: SkillStateLike[];
   /** 刺客连击（`combos`）由技能系统在运行时挂上。 */
   combos: ComboLike[];
-  timeline: TimelineLike;
+  /** 单位自身时钟（原版 `unit.timeline`，移植后为 `Unit.clock`）。 */
+  clock: TimelineLike;
   // 方法
   addBuff(type: string, duration?: number | null, arg?: HookArg, group?: string | null, ...extra: HookArg[]): BuffStateLike;
   removeBuff(buff: HookArg): void;

@@ -61,7 +61,7 @@ define(tables, 'legends', 'year2018.yearBeastWeapon-1', {
         for (const buff of buffs) {
           this.removeBuff(buff);
         }
-        this.timeline.setTimeout(() => {
+        this.clock.setTimeout(() => {
           this.addBuff('year2018.yearBeastWeapon-1-Buff2');
         }, 0);
       } else {

@@ -63,11 +63,11 @@ return  [
     name: '昏迷',
     description: '不能行动',
     didRemove() {
-      this.unit.timeline.resume();
+      this.unit.clock.resume();
       this.unit.tryUseSkill(this.unit.canUseSkill());
     },
     didAppear() {
-      this.unit.timeline.pause();
+      this.unit.clock.pause();
     },
     hooks: {
       stunned(val) {
@@ -305,11 +305,11 @@ return  [
       },
     },
     willRemove() {
-      this.unit.timeline.resume();
+      this.unit.clock.resume();
       this.unit.tryUseSkill(this.unit.canUseSkill());
     },
     didAppear() {
-      this.unit.timeline.pause();
+      this.unit.clock.pause();
     }
   },
   {
@@ -385,11 +385,11 @@ return  [
       }
     },
     willRemove() {
-      this.unit.timeline.resume();
+      this.unit.clock.resume();
       this.unit.tryUseSkill(this.unit.canUseSkill());
     },
     didAppear() {
-      this.unit.timeline.pause();
+      this.unit.clock.pause();
     }
   },
   {
