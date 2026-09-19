@@ -39,6 +39,13 @@ export interface BuildWorldOptions {
   lootRecorder?: LootRecorder;
   /** 掉落词缀随机流的派生标签（默认 `equipLoot`）。 */
   lootStreamLabel?: string;
+  /**
+   * 恢复刷怪器状态（秘境 run 相位；M7）。
+   *
+   * 由 `DungeonState.dumpState()` 产出、服务端从 `account_state.data.dungeonRuns` 取回；
+   * 传入后 `onMapChanged` 会据此恢复 `currentPhase` / `phaseBorn`（含"已付费"标记）。
+   */
+  enemyBornState?: unknown;
 }
 
 export interface BuiltWorld {
@@ -71,7 +78,9 @@ export function buildBattleWorld(options: BuildWorldOptions): BuiltWorld {
   });
 
   const playerUnit = world.addPlayer(like);
-  world.onMapChanged();
+  world.onMapChanged(
+    options.enemyBornState === undefined ? undefined : { enemyBorn: options.enemyBornState },
+  );
   return { world, playerUnit };
 }
 

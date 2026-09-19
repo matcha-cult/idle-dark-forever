@@ -14,6 +14,7 @@
  */
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import {
+  DungeonState,
   RealClock,
   type Clock,
   type DataTables,
@@ -94,6 +95,11 @@ interface WorldSession {
   realMs: number;
   /** 生命周期（`active → closing → destroyed`；空闲回收与 dispose 幂等）。 */
   lifecycle: SessionLifecycle;
+  /**
+   * 进行中的秘境 run（M7）：进图扣票后建档，run 结束 / 离开该图即清空。
+   * 非秘境会话恒为 `null`。
+   */
+  run: { runId: string; mapKey: string; endlessLevel: number } | null;
 }
 
 /** 世界调度指标快照（07 T-A1；全部为进程内累计/瞬时值，无数据时为 0 或 1，绝不 NaN）。 */
@@ -130,6 +136,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
   private readonly activeByUser = new Map<number, string>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private tickCursor = 0;
+  private runSeq = 0;
   private persisting = false;
   private destroyed = false;
   // ── 调度指标（07 T-A1/T-A2；进程内累计/瞬时，无数据时为 0 而非 NaN） ──
@@ -274,6 +281,13 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     // 离线角色：不推送、不推进（离线收益由 idle 域结算）。
     if (!this.onlineSessions.isOnline(session.userId, now)) return 0;
     session.lifecycle = markOnline(session.lifecycle, now);
+
+    // M7：run 已离开自己的地图（通关 → outside / 死亡 / 切图）→ 清档。
+    if (session.run !== null && session.world.map !== session.run.mapKey) {
+      const endedRunId = session.run.runId;
+      session.run = null;
+      this.clearRunArchive(session, endedRunId);
+    }
 
     const advance = planAdvance({
       now,
@@ -546,6 +560,17 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     const now = this.now();
     const clock = new RealClock(this.now);
     const collector = new BattleCollector();
+    // M7：位置是秘境且存在**匹配的持久化 run** → 恢复相位与"已付费"标记；
+    // 否则按未付费 run 起（通关不结算，避免重登白刷）。
+    const storedRun = extras.dungeonRuns[characterId];
+    const isDungeonPosition = this.tables.maps[position.map]?.isDungeon === true;
+    const resumeRun =
+      storedRun !== undefined &&
+      isDungeonPosition &&
+      storedRun.mapKey === position.map &&
+      storedRun.endlessLevel === position.endlessLevel
+        ? storedRun
+        : undefined;
     const session: WorldSession = {
       userId,
       characterId,
@@ -561,6 +586,10 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       advancedMs: 0,
       realMs: 0,
       lifecycle: createLifecycle(now),
+      run:
+        resumeRun === undefined
+          ? null
+          : { runId: resumeRun.runId, mapKey: resumeRun.mapKey, endlessLevel: resumeRun.endlessLevel },
     };
 
     const built = buildBattleWorld({
@@ -581,8 +610,11 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
           session.pendingLoot.push(toLootDto(slot, handled));
         },
       },
+      ...(resumeRun?.enemyBorn === undefined ? {} : { enemyBornState: resumeRun.enemyBorn }),
     });
     session.world = built.world;
+    // 恢复的 run 一定是已付费的（只持久化已付费 run）；显式再标一次更稳。
+    if (resumeRun !== undefined) markDungeonPaid(session);
 
     clock.pause();
     player.timestamp = now;
@@ -708,7 +740,47 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       map: session.world.map,
       endlessLevel: session.world.endlessLevel,
     };
+    // M7：run 档案随位置一起落库 —— 仍在该 run 的地图上则记相位，否则清档。
+    const onRunMap =
+      session.run !== null &&
+      session.world.map === session.run.mapKey &&
+      this.tables.maps[session.world.map]?.isDungeon === true;
+    if (onRunMap && session.run !== null) {
+      const enemyBorn = session.world.enemyBorn?.dumpState();
+      extras.dungeonRuns[session.characterId] = {
+        runId: session.run.runId,
+        mapKey: session.run.mapKey,
+        endlessLevel: session.run.endlessLevel,
+        ...(enemyBorn === undefined ? {} : { enemyBorn }),
+      };
+    } else {
+      delete extras.dungeonRuns[session.characterId];
+      session.run = null;
+    }
     this.playerContext.markAccountDirty(session.userId);
+  }
+
+  /**
+   * run 结束（通关 / 死亡 / 被 outside 弹回）后清档。
+   *
+   * `tickSession` 是同步的、`extrasOf` 是异步的，因此 fire-and-forget；
+   * 按 `runId` 守卫，避免与"同一 tick 内又开了一场新 run"互相覆盖。
+   */
+  private clearRunArchive(session: WorldSession, runId: string): void {
+    void this.playerContext
+      .extrasOf(session.userId)
+      .then((extras) => {
+        if (extras.dungeonRuns[session.characterId]?.runId !== runId) return;
+        delete extras.dungeonRuns[session.characterId];
+        this.playerContext.markAccountDirty(session.userId);
+      })
+      .catch(() => undefined);
+  }
+
+  /** 生成 runId（`characterId#now#seq`；opId 幂等由 `enterMap` 负责）。 */
+  private nextRunId(characterId: string): string {
+    this.runSeq = (this.runSeq + 1) % 1_000_000;
+    return `${characterId}#${this.now()}#${this.runSeq}`;
   }
 
   /**
@@ -749,7 +821,10 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     if (!map) return fail(BusinessErrorCode.MAP_LOCKED, '地图不存在');
     // 重复进入当前地图 = 「重置本图」（原版重新进入地图会重置刷怪与战斗），
     // 不报 ALREADY_IN_MAP、也不重复扣钥匙 —— 这样前端 select 后直接 enterMap 永远可用。
-    if (session.world.map === mapKey) {
+    // 重复进入当前地图 = 「重置本图」。
+    // ⚠️ 秘境**不走这条捷径**（RC2）：重复进秘境 = 新的一场 run，必须走扣票 + 建档路径；
+    // 否则会出现「免费重置已付费 run」。
+    if (session.world.map === mapKey && map.isDungeon !== true) {
       session.world.onMapChanged();
       return ok(await this.snapshotOf(session));
     }
@@ -782,10 +857,22 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
           this.opIds.abort(userId, opId ?? '');
           return fail(BusinessErrorCode.NO_TICKET);
         }
+        // RC2 / M5：**唯一扣费点**（进图）；通关只结算、不再扣票。
         player.costTicket(ticketGroup);
       }
 
       session.world.map = mapKey;
+      if (map.isDungeon) {
+        // M7：建档 + 标记已付费 —— 通关结算与重登恢复都以此为准。
+        session.run = {
+          runId: this.nextRunId(characterId),
+          mapKey,
+          endlessLevel: session.world.endlessLevel,
+        };
+        markDungeonPaid(session);
+      } else {
+        session.run = null;
+      }
       await this.persistPosition(session);
       // 进图剧情推进必须在 flush 之前：击杀任务登记落在 extras 里，要一起落库。
       // 由 quest 服务订阅 `MapEntered` 同步处理（08 §2.3 解环）。
@@ -914,6 +1001,12 @@ function toLootDto(slot: InventorySlot, handled: string): LootDto {
   const dto: LootDto = { slot: slotDtoOf(slot, 0), handled: action };
   if (action === 'sell' && slot.key === 'gold') dto.gold = slot.count ?? 0;
   return dto;
+}
+
+/** 把会话当前的秘境刷怪器标记为「已付费」（RC2/M5：进图扣票后调用，通关据此结算）。 */
+function markDungeonPaid(session: WorldSession): void {
+  const spawner = session.world.enemyBorn;
+  if (spawner instanceof DungeonState) spawner.ticketPaid = true;
 }
 
 function safeCountTicket(player: Player, group: string): number {

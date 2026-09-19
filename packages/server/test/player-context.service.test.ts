@@ -110,6 +110,12 @@ describe('PlayerContextService', () => {
     extras.dungeonCooldowns['c1'] = {
       'town.cave2': { stacks: 1, lastResetAt: 1_700_000_000_000, lastUsedAt: 1_699_999_000_000 },
     };
+    extras.dungeonRuns['c1'] = {
+      runId: 'run-1',
+      mapKey: 'town.cave2',
+      endlessLevel: 0,
+      enemyBorn: { currentPhase: 2, ticketPaid: true },
+    };
     ctx.markAccountDirty(1);
     await ctx.flushAccount(1);
 
@@ -123,6 +129,12 @@ describe('PlayerContextService', () => {
       stacks: 1,
       lastResetAt: 1_700_000_000_000,
       lastUsedAt: 1_699_999_000_000,
+    });
+    expect(reloaded.dungeonRuns['c1']).toEqual({
+      runId: 'run-1',
+      mapKey: 'town.cave2',
+      endlessLevel: 0,
+      enemyBorn: { currentPhase: 2, ticketPaid: true },
     });
   });
 

@@ -44,6 +44,19 @@ export interface DungeonCooldownEntry {
   lastUsedAt: number;
 }
 
+/**
+ * 进行中的秘境 run（M7；09 §5.2）。
+ *
+ * `enemyBorn` 是 `DungeonState.dumpState()` 的产物（相位 / 相位刷怪器 / 已付费标记），
+ * 只随 run 存在；run 结束（通关/死亡/离图）即删除。
+ */
+export interface DungeonRunEntry {
+  runId: string;
+  mapKey: string;
+  endlessLevel: number;
+  enemyBorn?: unknown;
+}
+
 /** 账号级、`Player` 之外的附加状态（服务端侧车，落在 `account_state.data`）。 */
 export interface AccountExtras {
   /** 剧情三态：`'task'` / `'done'`（原版 `game.storiesMap`）。 */
@@ -83,6 +96,11 @@ export interface AccountExtras {
    * 这里是「本周期还能挑战几次」。
    */
   dungeonCooldowns: Record<string, Record<string, DungeonCooldownEntry>>;
+  /**
+   * 进行中的秘境 run（characterId → run 档）—— M7：相位此前完全不落库，
+   * 导致重登后从 phase 0 重跑。**只在本 run 仍停留在其地图时存在**。
+   */
+  dungeonRuns: Record<string, DungeonRunEntry>;
 }
 
 export function createAccountExtras(): AccountExtras {
@@ -95,6 +113,7 @@ export function createAccountExtras(): AccountExtras {
     worldMaps: {},
     challengeQueue: {},
     dungeonCooldowns: {},
+    dungeonRuns: {},
   };
 }
 

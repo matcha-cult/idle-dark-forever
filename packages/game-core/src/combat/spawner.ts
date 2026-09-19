@@ -241,14 +241,27 @@ export interface DungeonSavedState {
   borns?: BornSavedState[];
   phaseBorn?: BornSavedState[];
   currentPhase?: number | null;
+  /** 本 run 已付费（RC2/M5）；恢复时由服务端置位。 */
+  ticketPaid?: boolean;
 }
 
 export class DungeonState extends EnemyBorn {
   currentPhase: number | null = 0;
   disposed = false;
+  /**
+   * 本 run 是否**已在进图时付费**（RC2 / 修 M5 双扣票）。
+   *
+   * 由服务端在扣票成功后置位（`WorldService.enterMap`）；通关只**结算**、不再扣票。
+   * 未付费的 run（重登后从持久化位置重建、重复进同图重置、离线重建）不发放通关奖励，
+   * 避免「免费刷秘境」。
+   */
+  ticketPaid = false;
 
   constructor(world: BattleWorld, clock: Clock, map: string, savedState?: DungeonSavedState | null) {
     super(world, clock, map, savedState);
+    // 付费标记必须在 switchToPhase 之前恢复：恢复点若已在"通关"位置，
+    // switchToPhase 会当场走结算分支，晚设会导致已付费的 run 被判成未付费。
+    this.ticketPaid = savedState?.ticketPaid === true;
     this.switchToPhase(
       savedState ? (savedState.currentPhase ?? 0) : 0,
       savedState && savedState.phaseBorn,
@@ -280,14 +293,9 @@ export class DungeonState extends EnemyBorn {
     const phaseData = this.phaseData;
     if (!phaseData) {
       // I'm over!
-      const player = this.world.player;
-      const ticketType = this.world.endlessLevel
-        ? 'nightmare.' + this.world.endlessLevel
-        : this.mapData?.group || this.map;
-
-      const ticketCount = player?.countTicket?.(ticketType) ?? 0;
-
-      if (ticketCount > 0) {
+      // RC2 / M5：票在**进图**时已扣（服务端唯一扣费点），通关**不再二次扣票**，
+      // 也不再按"当前票数"放行 —— 否则进图扣光最后一张票后，通关反而拿不到奖励。
+      if (this.ticketPaid) {
         this.world.sink.general({
           text: `dungeon.clear:${this.mapData?.name ?? this.map}`,
         });
@@ -298,7 +306,6 @@ export class DungeonState extends EnemyBorn {
         );
         this.world.loots(loots ?? [], level, 0);
         this.world.lootEndless();
-        player?.costTicket?.(ticketType);
       } else {
         this.world.sink.general({
           text: `dungeon.noTicket:${this.mapData?.name ?? this.map}`,
@@ -346,6 +353,7 @@ export class DungeonState extends EnemyBorn {
     const ret = super.dumpState();
     ret.phaseBorn = this.phaseBorn && this.phaseBorn.map((v) => v && v.dumpState());
     ret.currentPhase = this.currentPhase;
+    ret.ticketPaid = this.ticketPaid;
     return ret;
   }
 

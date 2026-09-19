@@ -29,6 +29,7 @@ import {
   type AccountExtras,
   type ChallengeEntry,
   type DungeonCooldownEntry,
+  type DungeonRunEntry,
 } from './player-dto.js';
 import { normalizeChallengeQueue } from './challenge-queue.js';
 
@@ -73,6 +74,7 @@ interface AccountDataJson {
   worldMaps?: Record<string, { map?: unknown; endlessLevel?: unknown }>;
   challengeQueue?: Record<string, unknown>;
   dungeonCooldowns?: Record<string, unknown>;
+  dungeonRuns?: Record<string, unknown>;
 }
 
 @Injectable()
@@ -312,6 +314,7 @@ export class PlayerContextService {
       worldMaps: cloneWorldMaps(entry.extras.worldMaps),
       challengeQueue: cloneChallengeQueue(entry.extras.challengeQueue),
       dungeonCooldowns: cloneDungeonCooldowns(entry.extras.dungeonCooldowns),
+      dungeonRuns: cloneDungeonRuns(entry.extras.dungeonRuns),
     };
     await this.db.query(
       `INSERT INTO account_state (user_id, diamonds, highest_endless_level, data, updated_at)
@@ -489,6 +492,37 @@ function applyAccountData(
       if (Object.keys(out).length > 0) extras.dungeonCooldowns[characterId] = out;
     }
   }
+  if (data.dungeonRuns && typeof data.dungeonRuns === 'object') {
+    const runByCharacter = data.dungeonRuns as Record<string, unknown>;
+    for (const characterId of Object.keys(runByCharacter)) {
+      const runRaw: unknown = runByCharacter[characterId];
+      if (!runRaw || typeof runRaw !== 'object' || Array.isArray(runRaw)) continue;
+      const run = runRaw as {
+        runId?: unknown;
+        mapKey?: unknown;
+        endlessLevel?: unknown;
+        enemyBorn?: unknown;
+      };
+      const mapKey = run.mapKey;
+      // run 只对其所在秘境有意义；非秘境 / 未知图 → 丢弃（存档漂移）
+      if (typeof mapKey !== 'string' || mapKey === '' || tables.maps[mapKey]?.isDungeon !== true) {
+        continue;
+      }
+      if (typeof run.runId !== 'string' || run.runId === '') continue;
+      const endlessLevel =
+        typeof run.endlessLevel === 'number' && Number.isFinite(run.endlessLevel)
+          ? Math.max(0, Math.trunc(run.endlessLevel))
+          : 0;
+      const enemyBorn =
+        run.enemyBorn && typeof run.enemyBorn === 'object' ? run.enemyBorn : undefined;
+      extras.dungeonRuns[characterId] = {
+        runId: run.runId,
+        mapKey,
+        endlessLevel,
+        ...(enemyBorn === undefined ? {} : { enemyBorn }),
+      };
+    }
+  }
 }
 
 function cloneTasks(source: Record<string, Record<string, number>>): Record<string, Record<string, number>> {
@@ -507,6 +541,21 @@ function cloneWorldMaps(
   for (const key of Object.keys(source)) {
     const entry = source[key];
     if (entry) out[key] = { map: entry.map, endlessLevel: entry.endlessLevel };
+  }
+  return out;
+}
+
+function cloneDungeonRuns(source: Record<string, DungeonRunEntry>): Record<string, DungeonRunEntry> {
+  const out: Record<string, DungeonRunEntry> = {};
+  for (const characterId of Object.keys(source)) {
+    const run = source[characterId];
+    if (!run) continue;
+    out[characterId] = {
+      runId: run.runId,
+      mapKey: run.mapKey,
+      endlessLevel: run.endlessLevel,
+      ...(run.enemyBorn === undefined ? {} : { enemyBorn: run.enemyBorn }),
+    };
   }
   return out;
 }
