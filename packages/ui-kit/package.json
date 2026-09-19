@@ -31,6 +31,7 @@
   },
   "devDependencies": {
     "@ant-design/icons": "^6.3.4",
+    "@idle-dark/protocol": "workspace:*",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "antd": "^6.6.3",

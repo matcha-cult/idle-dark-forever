@@ -895,7 +895,7 @@ return  [
         (int * 0.01 + 1) *
         (level * 0.3 + 1) *
         self.dmgAdd;
-      if (Math.random() < self.runAttrHooks(false, 'soCold')) {
+      if (Math.random() < Number(self.runAttrHooks(false, 'soCold'))) {
         target.stun(3, 'freezed');
       } else {
         target.addBuff('cold', 3000, null, 'cold');
@@ -1011,7 +1011,7 @@ return  [
         if (validTargets.length > 0 && (!self.target || Math.random() < 0.2)) {
           // 更换目标
           target =
-            validTargets[Math.floor(Math.random() * validTargets.length)];
+            validTargets[Math.floor(Math.random() * validTargets.length)]!;
         }
         const isCrit = self.testCrit();
         world.sendDamage(
@@ -1249,7 +1249,7 @@ return  [
           self.willAttack(v) &&
           v.runAttrHooks(false, 'transformed') === false
       );
-      const target = targets[Math.floor(Math.random() * targets.length)];
+      const target = targets[Math.floor(Math.random() * targets.length)]!;
       if (world.testDodge(self, target, this)) {
         return;
       }
@@ -1257,7 +1257,7 @@ return  [
       let time = 5000 + level * 1000;
       if (self.runAttrHooks(false, 'randomTransform')) {
         type =
-          TRANFORM_TYPES[Math.floor(Math.random() * TRANFORM_TYPES.length)];
+          TRANFORM_TYPES[Math.floor(Math.random() * TRANFORM_TYPES.length)]!;
         time *= 1.5;
       }
       target.addBuff('transform', time, type, 'transform');
@@ -1519,7 +1519,7 @@ function clearCombo(world: WorldLike, self: UnitLike, target: UnitLike, limit: n
 
 class Combo {
   value: number;
-  constructor(value: number) {
+  constructor(value: number = 0) {
     this.value = value;
   }
 
@@ -1618,7 +1618,7 @@ return  [
       } = self;
       const val = atk * (Math.random() + 1.5) * (level / 5 + 1) * atkSpeed;
 
-      const atkInfo = {
+      const atkInfo: AttackLike = {
         dmg: val,
         critRate,
         critBonus,
@@ -1759,7 +1759,7 @@ return  [
     },
     effect(world, self, level) {
       const { target, leech = 0, critRate = 0, critBonus = 1.5 } = self;
-      const atkInfo = {
+      const atkInfo: AttackLike = {
         dmg: 0,
         critRate,
         critBonus,
@@ -2001,7 +2001,7 @@ return  [
     },
     effect(world, self, level) {
       const { target, leech = 0, critRate = 0, critBonus = 1.5 } = self;
-      const atkInfo = {
+      const atkInfo: AttackLike = {
         dmg: 0,
         critRate,
         critBonus,
@@ -2574,7 +2574,7 @@ return  [
         if (validTargets.length > 0 && (!self.target || Math.random() < 0.2)) {
           // 更换目标
           target =
-            validTargets[Math.floor(Math.random() * validTargets.length)];
+            validTargets[Math.floor(Math.random() * validTargets.length)]!;
         }
         world.sendDamage(
           'magic',
@@ -2715,7 +2715,7 @@ return  [
       const summoners = world.units.filter(
         v => v.summoner === self && v.target,
       );
-      const summoner = summoners[Math.floor(Math.random() * summoners.length)];
+      const summoner = summoners[Math.floor(Math.random() * summoners.length)]!;
 
       const dmgType = summoner.runAttrHooks('magic', 'elementType');
 
@@ -2856,7 +2856,7 @@ return  [
       const upgrades = summons.filter(v =>
         v.runAttrHooks(false, 'summon.upgraded'),
       );
-      const map = {};
+      const map: Record<string, boolean> = {};
       for (const v of upgrades) {
         map[v.runAttrHooks('magic', 'elementType')] = true;
       }
@@ -2874,7 +2874,7 @@ return  [
       const upgrades = summons.filter(v =>
         v.runAttrHooks(false, 'summon.upgraded'),
       );
-      const map = {};
+      const map: Record<string, boolean> = {};
       for (const v of upgrades) {
         map[v.runAttrHooks('magic', 'elementType')] = true;
       }
@@ -2885,7 +2885,7 @@ return  [
         return;
       }
       const target =
-        validSummons[Math.floor(Math.random() * validSummons.length)];
+        validSummons[Math.floor(Math.random() * validSummons.length)]!;
       world.sendSkillUsage(self, [target], this);
       const summmonedBuff = target.runAttrHooks(null, 'getSummonedBuff');
       if (summmonedBuff) {
@@ -3472,7 +3472,7 @@ return  [
     effect(world, self, level) {
       const { atk } = self;
       const targets = world.units.filter((v) => v.camp === 'player');
-      const target = targets[Math.floor(Math.random() * targets.length)];
+      const target = targets[Math.floor(Math.random() * targets.length)]!;
       if (!target || world.testDodge(self, target, this)) {
         self.kill();
         return;
@@ -4092,7 +4092,7 @@ return  [
         'chapter4.humans.trigger.5.3',
         'chapter4.humans.trigger.5.4',
       ];
-      const type = types[Math.floor(Math.random() * types.length)];
+      const type = types[Math.floor(Math.random() * types.length)]!;
 
       world.addEnemy(type, null, 0, self);
 

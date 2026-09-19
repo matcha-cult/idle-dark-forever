@@ -265,8 +265,9 @@ export function md5(message: Uint8Array): Uint8Array {
   buffer.set(message, 0);
   buffer[length] = 0x80;
   const view = new DataView(buffer.buffer);
-  view.setUint32(total - 8, Math.floor(bitLength / 0x100000000) >>> 0, true);
-  view.setUint32(total - 4, bitLength >>> 0, true);
+  // MD5 的长度字段是 **64 位小端**：低 32 位在前（offset 56），高 32 位在后（offset 60）。
+  view.setUint32(total - 8, bitLength >>> 0, true);
+  view.setUint32(total - 4, Math.floor(bitLength / 0x100000000) >>> 0, true);
 
   let a0 = 0x67452301;
   let b0 = 0xefcdab89;
@@ -344,8 +345,6 @@ export interface WorldStopOptions {
    * **深度相等**；需要逐字节复刻原版存档时置 true。
    */
   injectRandom?: boolean;
-  /** 分片大小，默认 16（原版硬编码）。 */
-  chunkSize?: number;
 }
 
 /**
@@ -370,14 +369,11 @@ export function worldStop(data: unknown, options: WorldStopOptions = {}): string
   const body = utf8Encode(JSON.stringify(payload));
   xorObfuscateInPlace(body);
 
-  const chunkSize = options.chunkSize ?? WORLD_SAVE_CHUNK_SIZE;
-  if (!Number.isInteger(chunkSize) || chunkSize <= 0) {
-    throw new Error('worldStop: chunkSize must be a positive integer');
-  }
-
+  // ⚠️ 分片大小固定 16：格式里**不记录** chunkSize，写入端可配、读取端却无从得知，
+  // 因此不提供该选项（原版也是硬编码 16）。
   const parts: Uint8Array[] = [secret];
-  for (let offset = 0; offset < body.length; offset += chunkSize) {
-    const chunk = body.subarray(offset, offset + chunkSize);
+  for (let offset = 0; offset < body.length; offset += WORLD_SAVE_CHUNK_SIZE) {
+    const chunk = body.subarray(offset, offset + WORLD_SAVE_CHUNK_SIZE);
     parts.push(md5(concatBytes(chunk, secret)));
     parts.push(chunk);
   }
@@ -401,18 +397,19 @@ export function worldStart(encrypted: string): unknown {
   const body = data.subarray(WORLD_SAVE_SECRET_SIZE);
 
   const stride = WORLD_SAVE_CHUNK_SIZE + 16;
-  if (body.length % stride !== 0) {
-    throw new Error('worldStart: corrupt blob (unexpected body length)');
-  }
-
   const pieces: Uint8Array[] = [];
-  for (let offset = 0; offset < body.length; offset += stride) {
-    const digest = body.subarray(offset, offset + 16);
-    const chunk = body.subarray(offset + 16, offset + stride);
+  // 与原版同样的扫描方式：`i * stride < body.length`，
+  // 最后一片允许短于 16 字节（因此正文总长**不是** stride 的整数倍）。
+  for (let i = 0; i * stride < body.length; i++) {
+    const digest = body.subarray(i * stride, i * stride + 16);
+    const chunk = body.subarray(i * stride + 16, (i + 1) * stride);
     if (!bytesEqual(digest, md5(concatBytes(chunk, secret)))) {
       throw new Error('Invalid data');
     }
     pieces.push(chunk);
+  }
+  if (pieces.length === 0) {
+    throw new Error('worldStart: corrupt blob (empty body)');
   }
 
   const json = concatBytes(...pieces);

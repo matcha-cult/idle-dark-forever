@@ -105,7 +105,8 @@ export class BuffState {
   get effectInterval(): number {
     const { effectInterval } = this.buffData;
     if (typeof effectInterval === 'function') {
-      return effectInterval.call(this);
+      // 契约把 effectInterval 标为 `(level) => number`，原版实际以 0 参调用。
+      return (effectInterval as (level?: number) => number).call(this);
     }
     return effectInterval ?? 0;
   }
@@ -128,7 +129,7 @@ export class BuffState {
     const { willAppear } = this.buffData;
     if (willAppear) {
       // 契约把返回类型标为 void，但原版数据用 `return false` 否决附加。
-      return willAppear.call(this, this.world) !== false;
+      return (willAppear.call(this, this.world) as unknown) !== false;
     }
     return true;
   }

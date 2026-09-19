@@ -52,7 +52,7 @@ export interface TimelineLike {
  * buff hook 的额外参数（第 2 个及以后）的兜底联合：原版签名差异极大
  * （`(value)` / `(val, type)` / `(value, to, damageType)` / `(skill, world)`……）。
  */
-export type HookArg = UnitLike | BuffStateLike | string | number | boolean | null | undefined;
+export type HookArg = UnitLike | BuffStateLike | SkillStateLike | string | number | boolean | number[] | null | undefined;
 
 /**
  * 原版 hook 的 `value` 参数在少数条目里承载的是「单位」而不是数值
@@ -68,6 +68,13 @@ export type HookNumber = number & UnitLike;
  * （`(val, from)` / `(skill, world)` / `(val, type)`）。同样用交叉类型收敛。
  */
 export type HookExtra = UnitLike & WorldLike & string;
+
+/** 施法/读条中的技能（原版 `unit.casting` / `unit.reading`）。 */
+export interface CastingLike {
+  notBreakable?: boolean;
+  skill?: CastingLike | null;
+  [k: string]: unknown;
+}
 
 /** buff 状态（`this` = BuffState 的场景）。 */
 export interface BuffStateLike {
@@ -89,8 +96,8 @@ export interface BuffStateLike {
 export interface SkillStateLike {
   unit: UnitLike;
   /** 施法者（召唤物的技能状态上才有）。 */
-  summoner?: UnitLike | null;
-  skillData?: Loose<SkillData>;
+  summoner: UnitLike;
+  skillData: Loose<SkillData>;
   notBreakable?: boolean;
   reduceCoolDown(ms: number): void;
   runAttrHooks(value: number, name: string, ...extra: HookArg[]): number;
@@ -127,22 +134,23 @@ export interface UnitLike {
   rpOnAttack: number;
   rpOnAttacked: number;
   atkSpeed: number;
-  leech?: number;
-  stunResist?: number;
-  coldAbsorb?: number;
-  fireAbsorb?: number;
-  iceAbsorb?: number;
-  lightningAbsorb?: number;
-  darkAbsorb?: number;
-  allResist?: number;
+  leech: number;
+  stunResist: number;
+  coldAbsorb: number;
+  fireAbsorb: number;
+  iceAbsorb: number;
+  lightningAbsorb: number;
+  darkAbsorb: number;
+  allResist: number;
   // 施法 / 读条状态
-  reading?: unknown;
-  casting?: unknown;
-  stopped?: boolean;
+  reading: CastingLike | null;
+  casting: CastingLike | null;
+  stopped: boolean;
   // 关系
-  target: UnitLike | null;
-  summoner?: UnitLike | null;
-  player?: UnitLike;
+  /** 原版 `self.target` 在函数体内被直接解引用（只在 `canUse` 里判空），因此这里不标 null。 */
+  target: UnitLike;
+  summoner: UnitLike;
+  player: UnitLike;
   buffs: BuffStateLike[];
   skills: SkillStateLike[];
   /** 刺客连击（`combos`）由技能系统在运行时挂上。 */
@@ -150,13 +158,14 @@ export interface UnitLike {
   timeline: TimelineLike;
   // 方法
   addBuff(type: string, duration?: number | null, arg?: HookArg, group?: string | null, ...extra: HookArg[]): BuffStateLike;
-  removeBuff(buff: BuffStateLike | string): void;
+  removeBuff(buff: HookArg): void;
   hasBuff(type: string): boolean;
   canAttack(unit: UnitLike): boolean;
   willAttack(unit: UnitLike): boolean;
   willAssist(unit: UnitLike): boolean;
   runAttrHooks(value: number, name: string, ...extra: HookArg[]): number;
   runAttrHooks(value: boolean, name: string, ...extra: HookArg[]): boolean;
+  runAttrHooks(value: null, name: string, ...extra: HookArg[]): BuffStateLike | null;
   runAttrHooks<T>(value: T, name: string, ...extra: HookArg[]): T;
   kill(all?: boolean, ...extra: HookArg[]): void;
   stun(ms: number, type?: string, force?: boolean, ...extra: HookArg[]): boolean;
@@ -166,11 +175,14 @@ export interface UnitLike {
   testCrit(rate?: number, ...extra: HookArg[]): boolean;
   getCritBonus(crit?: HookArg, bonus?: number): number;
   getSkillLevel(key: string): number;
-  summonSkill(key: string, level?: number): void;
+  /** 原版里 `summonSkill` 既是方法（`unit.summonSkill('x')`）又会被当成技能状态读 `.skillData`。 */
+  summonSkill: ((key: string, level?: number) => void) & { skillData: Loose<SkillData>; notBreakable?: boolean };
+  useExtraSkill(key: string): void;
   setCamp(camp: string): void;
   setTarget(target: UnitLike | null): void;
   findTarget(): UnitLike | null;
   tryUseSkill(state?: SkillStateLike): void;
+  setCleanTimer(ms?: number): void;
   canUseSkill(): SkillStateLike;
 }
 
@@ -186,12 +198,18 @@ export interface AttackLike {
   dmg: number;
   critRate: number;
   critBonus: number;
-  atkAdd?: number;
-  isCrit: boolean;
+  atkAdd?: number | null;
+  isCrit?: boolean;
 }
 
-/** 单位列表（原版给数组挂了 `remove`）。 */
-export type UnitList = UnitLike[] & { remove?(unit: UnitLike): void };
+/**
+ * 单位列表：原版给数组挂了 `remove`，且 `find` 的结果在数据层被直接解引用
+ * （不看 `undefined`），所以这里把 `find` 重载成必然返回单位。
+ */
+export interface UnitList extends Array<UnitLike> {
+  remove(unit: UnitLike): void;
+  find(predicate: (value: UnitLike, index: number, obj: UnitLike[]) => unknown, thisArg?: unknown): UnitLike;
+}
 
 /** 世界（所有 `world` 参数）。 */
 export interface WorldLike {
@@ -202,11 +220,11 @@ export interface WorldLike {
   time?: number;
   addEnemy(type: string, arg?: HookArg, level?: number, summoner?: UnitLike | null, ...extra: HookArg[]): UnitLike;
   removeUnit(unit: UnitLike): void;
-  sendDamage(type: string, from: UnitLike | null, to: UnitLike | null, skill: unknown, value: number, crit?: boolean, ...extra: HookArg[]): void;
-  sendHeal(from: UnitLike | null, to: UnitLike | null, skill?: unknown, value?: number): void;
+  sendDamage(type: string, from: UnitLike | null | undefined, to: UnitLike | null | undefined, skill: unknown, value: number, crit?: boolean | number, ...extra: HookArg[]): void;
+  sendHeal(from: UnitLike | null | undefined, to: UnitLike | null | undefined, skill?: unknown, value?: number): void;
   sendSkillUsage(self: UnitLike, targets?: UnitLike[] | null, state?: SkillStateLike | unknown): void;
   sendGeneralMsg(msg: string): void;
-  testDodge(from: UnitLike, to: UnitLike | null, state?: SkillStateLike | unknown): boolean;
+  testDodge(from: UnitLike, to: UnitLike | null | undefined, state?: SkillStateLike | unknown): boolean;
 }
 
 // ────────────────────────────── hook 签名 ──────────────────────────────
@@ -223,7 +241,7 @@ export type UnitAttrHook = (
   target?: UnitLike,
   damageType?: string,
   source?: string,
-) => number;
+) => number | boolean | void;
 export type UnitAttrHooks = Record<string, UnitAttrHook>;
 
 /** `enemies.hooks` / `enemyAffixes.hooks` / `passives.hooks` / `enhances.hooks`：`(world, value, ...) => value`。 */
@@ -233,7 +251,7 @@ export type UnitWorldHook = (
   value: number,
   target: UnitLike,
   damageType: string,
-) => number | boolean;
+) => number | boolean | string;
 export type UnitWorldHooks = Record<string, UnitWorldHook>;
 
 /** `buffs.hooks`：`(value, ...) => value`，`this` = BuffState。原版返回值有数字 / 布尔 / 甚至 `this`。 */
@@ -244,8 +262,8 @@ export type BuffHooks = Record<string, BuffHook>;
 export type SkillCostEntry = number | ((self: UnitLike) => number);
 export type SkillCostKey = 'hp' | 'mp' | 'rp' | 'ep' | 'comboPoint';
 
-/** 掉落条目（允许原版额外字段）。 */
-export type Loot = Loose<LootEntry>;
+/** 掉落条目（允许原版额外字段；`maxLevel` 在原版用的是 `{ type, value }` 而不是 `count`）。 */
+export type Loot = Loose<LootEntry> | Loose<{ type: 'maxLevel'; value: number; rate?: number }>;
 
 /** 怪物刷新配置（允许原版额外字段）。 */
 export type SpawnConfig = Loose<MonsterSpawnConfig>;
@@ -279,10 +297,11 @@ export type AffixEntry = Loose<Omit<AffixData, 'generate' | 'range' | 'hooks' | 
   hooks?: UnitAttrHooks;
 };
 
-export type LegendEntry = Loose<Omit<LegendData, 'generate' | 'range'>> & {
+export type LegendEntry = Loose<Omit<LegendData, 'generate' | 'range' | 'hooks'>> & {
   generate: (level: number, rng: Rng) => number;
   /** 同 {@link AffixEntry.range}。 */
   range?: (level: number) => RangeValue;
+  hooks?: UnitAttrHooks;
 };
 
 export type EnemyAffixEntry = Loose<Omit<EnemyAffixData, 'hooks'>> & {
@@ -326,13 +345,25 @@ export type BuffEntry = Loose<Omit<BuffData, 'description' | 'effectInterval' | 
   onOver?: (this: BuffStateLike, world: WorldLike) => void;
 };
 
-export type SkillEntry = Loose<Omit<SkillData, 'description' | 'cost' | 'canUse' | 'shouldUse' | 'effect' | 'coolDown' | 'cost'>> & {
+export type SkillEntry = Loose<
+  Omit<
+    SkillData,
+    'description' | 'cost' | 'canUse' | 'shouldUse' | 'effect' | 'coolDown' | 'isAttack' | 'group' | 'antiBreak' | 'maxExp'
+  >
+> & {
+  /** 契约把 `isAttack` / `group` 标成必填，但原版不少技能（被动触发的敌方技能）没写。 */
+  isAttack?: boolean;
+  group?: string;
+  /** 契约写的是 `boolean`，原版实际用的是 0~1 的抗打断概率。 */
+  antiBreak?: boolean | number;
   description?: string | ((level: number, self: UnitLike) => string);
+  /** 契约把 `maxExp` 标成必填，但原版有 30 条技能没写（敌方/被动技能）。 */
+  maxExp?: (level: number) => number;
   cost?: Partial<Record<SkillCostKey, SkillCostEntry>> | ((level: number) => Partial<Record<SkillCostKey, SkillCostEntry>>);
-  coolDown?: number | ((level: number) => number);
-  canUse?: (this: SkillStateLike, world: WorldLike, self: UnitLike, level?: number) => boolean;
-  shouldUse?: (this: SkillStateLike, world: WorldLike, self: UnitLike, level?: number) => boolean;
-  effect: (this: SkillStateLike, world: WorldLike, self: UnitLike, level?: number) => void;
+  coolDown?: number | ((level: number, unit: UnitLike) => number);
+  canUse?: (this: SkillStateLike, world: WorldLike, self: UnitLike, level: number) => boolean;
+  shouldUse?: (this: SkillStateLike, world: WorldLike, self: UnitLike, level: number) => boolean;
+  effect: (this: SkillStateLike, world: WorldLike, self: UnitLike, level: number) => void;
 };
 
 export type MedicineEntry = Loose<Omit<MedicineData, 'hooks'>> & {
@@ -364,10 +395,13 @@ export type MapEntry = Loose<Omit<MapData, 'monsters' | 'phases' | 'loots'>> & {
   loots?: Loot[];
 };
 
-export type StoryEntry = Loose<Omit<DataTables['stories'][string], 'taskType' | 'awards'>> & {
+export type StoryEntry = Loose<Omit<DataTables['stories'][string], 'taskType' | 'awards' | 'group' | 'name'>> & {
   /** 原版 33 条剧情里只有 17 条带 taskType、2 条带 awards。 */
   taskType?: 'kill' | 'purchase';
   awards?: DataTables['stories'][string]['awards'];
+  /** `data/stories/purchaseRates.js` 两条只有 key + script + requirement。 */
+  group?: string;
+  name?: string;
 };
 
 /** 各表条目类型的查表（供 `packages/*` 的 `define` / `extend` 泛型使用）。 */

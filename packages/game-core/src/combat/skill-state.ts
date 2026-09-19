@@ -92,7 +92,7 @@ export class SkillState {
     const coolDown =
       cd ||
       (typeof skillData.coolDown === 'function'
-        ? skillData.coolDown(this.getLevel(), this.unit)
+        ? (skillData.coolDown as (level: number, unit: Unit) => number)(this.getLevel(), this.unit)
         : skillData.coolDown);
     if (!force && this.coolDownAt - this.clock.getTime() >= coolDown) {
       // 如果由于打断等原因重复叠加冷却，选择最长的
@@ -226,6 +226,6 @@ export class SkillState {
     if (!antiBreak) {
       return true;
     }
-    return this.world.rng.break.next() < 1 - antiBreak;
+    return this.world.rng.break.next() < 1 - (antiBreak as unknown as number);
   }
 }

@@ -211,7 +211,6 @@ export class GameClient {
       url: options.url ?? resolveWsUrl(),
       authHandler: options.getToken,
       onStateChange: options.callbacks.onStateChange,
-      onNotification: (notification) => this.notifications.dispatch(notification as PushFrame),
       ...(options.callbacks.onBusinessError === undefined
         ? {}
         : { onBusinessError: options.callbacks.onBusinessError }),
@@ -233,8 +232,8 @@ export class GameClient {
       options.getToken,
       options.fetchImpl ?? ((...args: Parameters<typeof fetch>) => globalThis.fetch(...args)),
     );
-    // 双通道订阅：`onNotification` 回调与 `client.notifications` 总线都会命中，
-    // 本地总线按 handler 去重（Set），因此不会重复分发。
+    // 推送只有一个入口：transport 的 `client.notifications` 总线（`kind='notification'` 的唯一出口）。
+    // ⚠️ 不能同时订阅构造参数 `onNotification` —— 那会让同一条推送被分发两次（日志重复）。
     this.unsubscribeNotifications = this.ionet.notifications.subscribe((notification) => {
       this.notifications.dispatch(notification as PushFrame);
     });

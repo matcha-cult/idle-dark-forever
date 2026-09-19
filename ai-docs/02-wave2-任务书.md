@@ -96,3 +96,55 @@ src/combat/
 - 端到端：REST 登录 → WS 连接（`?token=`）→ `player.create` → `world.enterMap` → 收到 `world.tick` 推送 → `inventory.list` 有掉落。
 - 旧存档导入：用 `dark-forever-memorize` 真实导出的存档（`'save'` 编码与明文 JSON 两种）导入成功，角色属性与原版逐字段一致。
 - 边界：并发同角色请求、断线重连后状态一致、`opId` 重复提交被拒、离线时长为 0 / 负数 / 超 72h。
+
+---
+
+## 附录 A · 前端已实测的**载荷契约**（服务端必须按此实现）
+
+> 来源：`packages/web` 交付时的实际适配清单 + `packages/ionet-transport/src/api/game-api.ts`。
+> **这些是前端已经写死在调用点的形状**，服务端若返回别的形状会导致面板空白或运行时错误。
+> 新增/调整载荷时必须同步改这三处：`@idle-dark/protocol` DTO → transport `game-api.ts` → web store。
+
+### A.1 各 Action 的返回形状
+
+| Action | 服务端应返回 |
+|---|---|
+| `system.ping` | `ActionResult<SystemPingDto>`（**必须含 `serverTime`**，客户端据此算时钟偏移） |
+| `system.version` | `ActionResult<SystemVersionDto>` |
+| `auth.login` / `logout` / `me` | `ActionResult<LoginResponseDto>` / `ActionResult<null>` / `ActionResult<MeDto>` |
+| `player.list` | `ActionResult<PlayerMetaDto[]>`（**数组**，不是 `{players}`） |
+| `player.create` | `ActionResult<PlayerMetaDto>`（**单个对象**，不是 `{player}`） |
+| `player.remove` | `ActionResult<null>` |
+| `player.select` | `ActionResult<PlayerStateDto>`（并让服务端开始该角色的世界推进） |
+| `player.importSave` / `exportSave` | `ActionResult<PlayerMetaDto>` / `ActionResult<PlayerExportSaveDto>` |
+| `world.snapshot` / `enterMap` | `ActionResult<WorldSnapshotDto>` |
+| `world.leave` / `skipOffline` | `ActionResult<null>` / `ActionResult<OfflineReportDto>` |
+| `battle.focus` | 入参 `{ targetId }`（**没有 `unitId`**）→ `ActionResult<null>` |
+| `inventory.list` | `ActionResult<InventorySlotDto[]>`（**扁平数组**，靠每项的 `position` 分容器；**没有**容器分组 DTO） |
+| `inventory.equip` / `unequip` | `unequip` 入参是 `{ id }`（**按实例 id，不是按部位**） |
+| `inventory.expand` / `bank.expand` | 入参 `{ count }` |
+| `career.list` | `ActionResult<CareerPanelDto>`（`{careers,skills,enhances,maxSkillCount,maxEnhanceCount}`；**不含** `currentCareer/selectedSkills`，那些在 `PlayerStateDto`） |
+| `produce.enchantCosts` | `ActionResult<EnchantCostsDto>` |
+| `produce.medicineUse` | 入参 `{ material, count }` |
+| `produce.medicineReset` | 入参 `{ currency }` |
+| `story.list` / `play` / `finish` | `finish` 返回 `ActionResult<StoryDto>` |
+| `idle.report` / `claim` | `ActionResult<OfflineReportDto>` |
+| `lootrule.*` | 域名在前端是 `api.lootrule`（**单数小写**） |
+
+### A.2 未闭合项（服务端定稿后须回填）
+
+1. **`RebuildCostsDto` 协议里有定义，但没有任何 typed API 返回它** → 重铸页当前不显示价格，只显示「可重铸词缀 + 二次确认」。
+   **服务端需在 `produce.rebuild` 之前提供一个费用查询**（或让 `enchantCosts` 一并返回）。
+2. **`inventory.changed` / `story.unlock` / `career.levelup` 的推送载荷形状未冻结**：
+   web store 目前做防御式处理（数组则整体替换，否则触发刷新）。**服务端定稿后应收紧为明确 DTO 并回填协议**。
+3. **建角角色列表是前端常量**（`Eyer` / `Aleanor`）：需要一个「可选角色」只读接口
+   （建议放 `player` 段新增 subCmd，返回 `RoleData` 的展示投影）。
+4. **`GET /api/auth/me`**：web 自建了 `RestClient` 打 `POST /api/auth/login` 与 `GET /api/auth/me`；
+   服务端需确认这两个 REST 路由的形状与 web 的假设一致（`{token,expiresAt,userId,displayName}`）。
+
+### A.3 前端已落实的硬约束（服务端不要指望前端补算）
+
+- 前端**不本地推进**任何数值：`world.tick` 只做整体替换 + 日志追加；`gainedExp`/`gainedGold` 只作 HUD 角标，
+  **不回写** `player.gold/exp`（已有测试显式断言推送后 `player.gold` 不变）。
+- 前端**不做**任何掉落/伤害/成长计算，全部等 `world.tick` / `battle.loot` / `career.levelup` 推送或重新拉取。
+- `WorldTickDto` 缺 `serverTime` 时前端用 `Date.now()` 仅作**日志展示时间戳**（不是数值推导）。

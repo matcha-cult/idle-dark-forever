@@ -45,8 +45,6 @@ export class EnemyUnit extends Unit {
   type: string;
   quality: number;
   affixes: string[] = [];
-  summoner: Unit | null = null;
-  summonSkill: SkillState | null = null;
   /** 刷怪器，用于判断刷怪上限。 */
   borner: Born | null = null;
 

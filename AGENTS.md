@@ -131,11 +131,24 @@ antd-zh token Menu --format markdown
 - `XDG_CACHE_HOME` 指向工作区是必需的：沙箱 `~/.cache` 只读，不加会喷 `EROFS`（exit 0，非失败）。
 - 已知 v6 弃用：`Space split→separator`、`Space direction→orientation`、`Divider type→orientation`、
   `Alert message→title`、`Card bordered→variant`、`Statistic valueStyle→styles`、`Drawer width→size`、
-  `InputNumber addonAfter→suffix`。
+  `InputNumber addonAfter→suffix`、**`Progress trailColor→railColor`**（6.6.x 运行期告警，
+  `.d.ts` 也标了 `@deprecated`）、**`List`→`Listy`**（6.6 起 `[antd: List]` 弃用告警；
+  本仓 src 无直接使用，告警来自 antd 内部组件，属上游噪声）。
+- 另注意：antd 默认 `autoInsertSpaceInButton` 会把**两个汉字**的按钮文案插空格（「攻击」→「攻 击」），
+  写断言时必须归一化空白。
 - 官方示例必须按本仓规则改写：颜色只用 token（禁内联 hex）、不传 `size`（全局 `compactAlgorithm` 承担紧凑）、
   组件禁 `export default`。
 
-### 7.4 Vite dev server 会缓存「工作区外源码」的旧版
+### 7.4 workspace 包必须显式声明依赖（pnpm 隔离布局）
+`packages/ui-kit` 用 `import type { ... } from '@idle-dark/protocol'`（type-only，运行时被擦除），
+但**仍必须**在 `package.json` 里声明 `"@idle-dark/protocol": "workspace:*"`，否则 pnpm 隔离布局下
+`tsc` 会报 `Cannot find module`。**不要用软链绕过** —— `pnpm install` 会清掉它，
+且会掩盖真实的依赖缺失。（已发生一次：ui-kit 用软链绕过，集成时才修。）
+
+加依赖后必须重跑 `pnpm install --no-frozen-lockfile --config.confirmModulesPurge=false`，
+并确认 `node_modules/@idle-dark/<pkg>` 指向 workspace 包（`../../../<pkg>`）而非手工软链。
+
+### 7.5 Vite dev server 会缓存「工作区外源码」的旧版
 `packages/web` 是 vite root，而 `ui-kit/src`、`ionet-transport/src` 在 root 之外（经 `resolve.alias` 指过去）。
 **新增文件**总是从磁盘首读；**改写老文件**可能被缓存住旧版甚至读到撕裂内容 → 表现为「磁盘对、单测绿、
 浏览器就是看不到新东西」。
@@ -147,7 +160,7 @@ antd-zh token Menu --format markdown
   先看状态码：`curl -s -o /dev/null -w '%{http_code}'`；`000` 说明 server 压根没监听，
   和"缓存旧版"是完全不同的处置。
 
-### 7.5 开发中的页面一律包 `ErrorBoundary`
+### 7.6 开发中的页面一律包 `ErrorBoundary`
 模块级异常会把整棵 React 树卸载成白屏。`panel-registry` 对每个域包一层（key 跟域走，错误态不粘下一个面板）。
 
 ## 8. 新增一个游戏域要改哪些文件

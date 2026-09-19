@@ -1,7 +1,6 @@
 /**
- * layout 分组渲染测试（无 jsdom）。
- * 覆盖：HudBar 数值/经验/倍速、SideNav 配置聚合与选中、AppShell 桌面/移动形态、
- *       PageShell / SectionCard / Toolbar 结构。
+ * layout 分组渲染测试（无 jsdom）：HudBar 数值/经验/倍速、SideNav 配置聚合与选中、
+ * AppShell 桌面与移动形态、PageShell / SectionCard / Toolbar 结构。
  */
 import { describe, expect, it } from 'vitest';
 import { htmlToText, renderToHtml } from '../testing/index.js';

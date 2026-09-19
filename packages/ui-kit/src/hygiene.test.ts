@@ -11,24 +11,31 @@
  *    `@idle-dark/protocol` **只允许 `import type`**（运行时零依赖）；禁止 mobx / node:* /
  *    任何其他裸包（含 `@ant-design/icons` —— 它不是 peer 依赖）；
  * 2. 目录纪律：相对 import 必须带 `.js` 后缀（`verbatimModuleSyntax` + ESM 输出）；
- * 3. 颜色纪律：源码零内联 hex（注释除外）；
+ * 3. 颜色纪律：源码（去注释后）零内联 hex；
  * 4. 样式纪律：零 `!important`、零组件内 `<style>`；
- * 5. 反馈纪律：禁止静态 `message.*` / `notification.*` / `Modal.confirm`（必须走 `App.useApp()`）；
- * 6. 结构纪律：单文件 ≤200 行、`.tsx` 只导出一个组件、禁止 `export default`；
- * 7. 一致性：本地 `QUALITY_LABELS` 与 protocol 的 `QUALITY_NAMES` 必须逐字一致
- *    （协议是唯一真相，但**值**不能 import —— 用源码比对代替运行时依赖）。
+ * 5. 反馈纪律：禁止静态 `message.*` / `notification.*` / `Modal.confirm`（须走 `App.useApp()`）；
+ * 6. 结构纪律：单文件 ≤200 行、`.tsx` 只导出一个组件、禁止 `export default`。
+ *
+ * 品质 7 档与 protocol `QUALITY_NAMES` 的一致性断言在 `game/quality.test.ts`
+ * （它是那条规则的天然归属地，也避免本文件膨胀）。
+ *
+ * 测试文件（`*.test.ts(x)`）自身**不在扫描范围内**：它们允许 import `node:`、
+ * 允许出现用于比对的 hex 正则字面量，且不受行数上限约束（上限针对会被拆分的组件源码）。
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { collectImports, isAllowedBare, stripComments } from './testing/hygiene-scan.js';
 
 const SRC_ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PKG_ROOT = join(SRC_ROOT, '..');
-const PROTOCOL_DTO = join(SRC_ROOT, '..', '..', 'protocol', 'src', 'dto.ts');
 
 /** 单文件行数上限（用户硬约束）。 */
 const MAX_LINES = 200;
+
+/** 组件文件必须落在约定分组内。 */
+const GROUPS = ['theme/', 'layout/', 'game/', 'data/', 'feedback/', 'form/', 'format/', 'testing/'];
 
 function walk(dir: string): string[] {
   const out: string[] = [];
@@ -48,96 +55,16 @@ const TSX = SOURCE.filter((file) => file.endsWith('.tsx'));
 const read = (file: string): string => readFileSync(join(SRC_ROOT, file), 'utf8');
 const lineCount = (file: string): number => read(file).split('\n').length;
 
-/**
- * 去掉注释（保留字符串字面量），避免文档里的示例文字被当成真实代码。
- *
- * 局限：模板字符串里的 `${}` 不单独解析（本包源码中模板内不会出现注释分隔符）。
- */
-function stripComments(code: string): string {
-  let out = '';
-  let index = 0;
-  let state: 'code' | 'line' | 'block' | 'single' | 'double' | 'template' = 'code';
-  while (index < code.length) {
-    const char = code[index];
-    const next = code[index + 1];
-    if (state === 'code') {
-      if (char === '/' && next === '/') {
-        state = 'line';
-        index += 2;
-        continue;
-      }
-      if (char === '/' && next === '*') {
-        state = 'block';
-        index += 2;
-        continue;
-      }
-      if (char === "'") state = 'single';
-      else if (char === '"') state = 'double';
-      else if (char === '`') state = 'template';
-      out += char ?? '';
-      index += 1;
-      continue;
-    }
-    if (state === 'line') {
-      if (char === '\n') {
-        state = 'code';
-        out += char;
-      }
-      index += 1;
-      continue;
-    }
-    if (state === 'block') {
-      if (char === '*' && next === '/') {
-        state = 'code';
-        index += 2;
-      } else index += 1;
-      continue;
-    }
-    // 字符串 / 模板：转义符整对跳过，遇同引号回 code
-    const quote = state === 'single' ? "'" : state === 'double' ? '"' : '`';
-    if (char === '\\') {
-      out += `${char ?? ''}${next ?? ''}`;
-      index += 2;
-      continue;
-    }
-    if (char === quote) state = 'code';
-    out += char ?? '';
-    index += 1;
-  }
-  return out;
-}
-
-interface ImportRecord {
-  file: string;
-  specifier: string;
-  typeOnly: boolean;
-}
-
-/** 抽取所有 `import` / `export ... from` 语句（已去注释）。 */
-function collectImports(file: string, code: string): ImportRecord[] {
-  const records: ImportRecord[] = [];
-  const STATEMENT = /(?:^|[;\s}])(?:import|export)\s+(type\s+)?([^;]*?)\s*from\s*['"]([^'"]+)['"]/g;
-  for (const match of code.matchAll(STATEMENT)) {
-    records.push({ file, specifier: match[3] ?? '', typeOnly: match[1] !== undefined });
-  }
-  // 副作用 import：`import 'x'`
-  for (const match of code.matchAll(/(?:^|[;\s])import\s*['"]([^'"]+)['"]/g)) {
-    records.push({ file, specifier: match[1] ?? '', typeOnly: false });
-  }
-  return records;
-}
-
-const ALLOWED_BARE = new Set(['antd', 'react', 'react-dom', 'react-dom/server']);
-const isAllowedBare = (specifier: string): boolean =>
-  ALLOWED_BARE.has(specifier) || specifier.startsWith('antd/') || specifier.startsWith('react-dom/');
-
+/** 去注释后的源码（字符串字面量保留，因此字符串里的 hex 依然会被抓到）。 */
 const CODE = new Map(SOURCE.map((file) => [file, stripComments(read(file))]));
 const IMPORTS = SOURCE.flatMap((file) => collectImports(file, CODE.get(file) ?? ''));
 
 describe('红线 1 · 依赖面（只允许 antd + react）', () => {
   it('src 下不存在被禁依赖（mobx / node: / @ant-design/icons / 任何第三方裸包）', () => {
     const offenders = IMPORTS.filter(
-      (record) => !record.specifier.startsWith('.') && !isAllowedBare(record.specifier) &&
+      (record) =>
+        !record.specifier.startsWith('.') &&
+        !isAllowedBare(record.specifier) &&
         !record.specifier.startsWith('@idle-dark/'),
     ).map((record) => `${record.file} → ${record.specifier}`);
     expect(offenders).toEqual([]);
@@ -167,7 +94,7 @@ describe('红线 1 · 依赖面（只允许 antd + react）', () => {
     expect(Object.keys(pkg.peerDependencies ?? {}).sort()).toEqual(['antd', 'react', 'react-dom']);
   });
 
-  it('每个 .ts / .tsx 都有相对 import 且带 .js 后缀', () => {
+  it('相对 import 必须带 .js 后缀', () => {
     const offenders = IMPORTS.filter(
       (record) => record.specifier.startsWith('.') && !record.specifier.endsWith('.js'),
     ).map((record) => `${record.file} → ${record.specifier}`);
@@ -187,8 +114,13 @@ describe('红线 2 · 颜色不得内联 hex', () => {
   });
 
   it('主题缺省主色来自 antd seed token，而不是本仓写死的色值', () => {
-    const config = read('theme/build-theme-config.ts');
-    expect(config).toContain('theme.defaultSeed.colorPrimary');
+    expect(read('theme/build-theme-config.ts')).toContain('theme.defaultSeed.colorPrimary');
+  });
+
+  it('组件取色一律经 theme.useToken()', () => {
+    const colorUsers = TSX.filter((file) => /color[A-Z]|color:|background:/.test(CODE.get(file) ?? ''));
+    const missing = colorUsers.filter((file) => !(CODE.get(file) ?? '').includes('theme.useToken()'));
+    expect(missing).toEqual([]);
   });
 });
 
@@ -221,7 +153,7 @@ describe('红线 4 · 结构与规模', () => {
   });
 
   it('一个 .tsx 只导出一个组件', () => {
-    const offenders = TSX.filter((file) => ((read(file).match(/^export function [A-Z]\w*/gm) ?? []).length > 1));
+    const offenders = TSX.filter((file) => (read(file).match(/^export function [A-Z]\w*/gm) ?? []).length > 1);
     expect(offenders).toEqual([]);
     expect(TSX.length).toBeGreaterThan(0);
   });
@@ -230,42 +162,11 @@ describe('红线 4 · 结构与规模', () => {
     expect(SOURCE.filter((file) => /^export default/m.test(read(file)))).toEqual([]);
   });
 
-  it('组件文件必须在 src 的约定分组内', () => {
-    const groups = ['theme/', 'layout/', 'game/', 'data/', 'feedback/', 'form/', 'format/', 'testing/'];
-    const offenders = TSX.filter((file) => !groups.some((group) => file.startsWith(group)));
-    expect(offenders).toEqual([]);
-  });
-});
-
-describe('红线 5 · 品质 7 档与 protocol 一致（协议是唯一真相）', () => {
-  const protocolSource = readFileSync(PROTOCOL_DTO, 'utf8');
-
-  const protocolQualityUnion = /export type Quality = ([^;]+);/.exec(protocolSource)?.[1] ?? '';
-  const protocolNames = (/QUALITY_NAMES[^=]*=\s*\[([^\]]*)\]/.exec(protocolSource)?.[1] ?? '')
-    .split(',')
-    .map((part) => part.trim().replace(/^['"]|['"]$/g, ''))
-    .filter((part) => part !== '');
-  const localLabels = (/QUALITY_LABELS[^=]*=\s*\[([^\]]*)\]/s.exec(read('game/quality.ts'))?.[1] ?? '')
-    .split(',')
-    .map((part) => part.trim().replace(/^['"]|['"]$/g, ''))
-    .filter((part) => part !== '');
-
-  it('protocol 的 Quality 是 0..6 共 7 档', () => {
-    const members = protocolQualityUnion.split('|').map((part) => part.trim());
-    expect(members).toEqual(['0', '1', '2', '3', '4', '5', '6']);
+  it('组件文件落在约定分组内', () => {
+    expect(TSX.filter((file) => !GROUPS.some((group) => file.startsWith(group)))).toEqual([]);
   });
 
-  it('本地 QUALITY_LABELS 与 protocol QUALITY_NAMES 逐字一致', () => {
-    expect(protocolNames).toHaveLength(7);
-    expect(localLabels).toEqual(protocolNames);
-  });
-
-  it('品质色全部取自 antd token 名（7 档各不相同）', () => {
-    const names = (/QUALITY_COLOR_TOKEN_NAMES[^=]*=\s*\[([^\]]*)\]/s.exec(read('game/quality.ts'))?.[1] ?? '')
-      .split(',')
-      .map((part) => part.trim().replace(/^['"]|['"]$/g, ''))
-      .filter((part) => part !== '');
-    expect(names).toHaveLength(7);
-    expect(new Set(names).size).toBe(7);
+  it('子路径 barrel 不导出 testing 工具（testing 只走 ./testing 子路径）', () => {
+    expect(read('index.ts')).not.toContain('testing/');
   });
 });

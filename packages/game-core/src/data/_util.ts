@@ -70,6 +70,16 @@ export function extend<K extends DictTableName>(
 }
 
 /**
+ * 把函数类型的全部形参变成可选。
+ *
+ * 原版 `extend` 的变换器经常「少调」原始 hook（`origin.call(this, world, self)` 而不是补上 level），
+ * 这里让 `origin` 的形参可选，从而在不放宽**条目本身**签名的前提下兼容原版写法。
+ */
+export type LooseOrigin<F> = F extends (...args: infer A) => infer R
+  ? (...args: Partial<A>) => R
+  : never;
+
+/**
  * `extend` 的更新体类型：对象递归、函数退化为「变换器」、数组整体替换。
  *
  * 原版 `extend('skills', 'a', 'b', { canUse(origin) { return function (...) {...} } })` 里的
@@ -77,7 +87,7 @@ export function extend<K extends DictTableName>(
  */
 export type DeepUpdate<T> = {
   [K in keyof T]?: NonNullable<T[K]> extends (...args: never[]) => unknown
-    ? (origin: NonNullable<T[K]>, merged: T) => T[K]
+    ? (origin: LooseOrigin<NonNullable<T[K]>>, merged: T) => T[K]
     : NonNullable<T[K]> extends readonly unknown[]
       ? T[K]
       : NonNullable<T[K]> extends object

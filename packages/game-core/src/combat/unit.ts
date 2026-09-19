@@ -14,7 +14,8 @@
  * 属性系统仍然是 **hook 链**：`Map<hookKey, Map<id, fn>>` + 插入序执行（原版第 856–890 行）。
  */
 
-import type { AttrHook, Clock, TimerHandle } from '../contracts/ports.js';
+import type { Clock, TimerHandle } from '../contracts/ports.js';
+import type { AttrHook } from '../contracts/data.js';
 import { Timeline } from '../sim/index.js';
 import { Camps, type Camp, assistsCamp, canAttackCamp, hatesCamp } from './camps.js';
 import type { BattleWorld } from './battle-world.js';
@@ -69,6 +70,11 @@ export class Unit {
 
   // 攻击目标
   target: Unit | null = null;
+
+  /** 召唤者（原版 `Unit` 基类即可空字段，`EnemyUnit` 会写入）。 */
+  summoner: Unit | null = null;
+  /** 召唤来源技能（用于 `SkillState.dispose` 连带击杀）。 */
+  summonSkill: SkillState | null = null;
 
   skills: SkillState[] = [];
   buffs: BuffState[] = [];
@@ -293,6 +299,12 @@ export class Unit {
   get skillExpInc(): number {
     return 1;
   }
+
+  /**
+   * 结算经验。基类单位不收经验（原版只有 `PlayerUnit` 覆写）；
+   * `world.gotExp` 会先按 `canGetExp` 过滤，因此基类实现是安全兜底。
+   */
+  gotExp(_v: number, _level: number): void {}
 
   get noDodgeRate(): number {
     return this.runAttrHooks(0.95, 'noDodgeRate');

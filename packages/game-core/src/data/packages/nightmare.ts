@@ -776,7 +776,7 @@ define(tables, 'skills', 'nightmare.kobold.2', {
     return !!world.units.find((v) => v.key === 'nightmare.kobold.altar');
   },
   effect(world, self, level) {
-    const target = world.units.find((v) => v.type === 'nightmare.kobold.altar');
+    const target = world.units.find((v) => v.type === 'nightmare.kobold.altar')!;
     target.startRead('nightmare.kobold.2.2', 5000, null, this);
     self.startRead('nightmare.kobold.2.1', 5000, null, this);
   },

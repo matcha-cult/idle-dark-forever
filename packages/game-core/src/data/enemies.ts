@@ -3698,7 +3698,7 @@ const elementV2 = elements.map((v) => ({
   ...v,
   key: v.key + '.2',
   name: 'II型' + v.name,
-  skills: [...v.skills, ...(v.v2Skills ?? [])],
+  skills: [...(v.skills ?? []), ...(v.v2Skills ?? [])],
 }));
 
 return  [...elements, ...elementV2];

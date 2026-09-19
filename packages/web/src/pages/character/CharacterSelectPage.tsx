@@ -5,7 +5,7 @@
  * 「进入」调用 `RootStore.selectCharacter`（会拉完整角色态并并发拉面板）。
  */
 import { observer } from 'mobx-react-lite';
-import { App as AntApp, Button, Card, Flex, List, Popconfirm, Space, Tag, Typography } from 'antd';
+import { App as AntApp, Button, Card, Empty, Flex, Space, Spin, Tag, Typography } from 'antd';
 import { useState } from 'react';
 import { useRootStore } from '../../app/root-context.js';
 import { AppThemeToggle } from '../../theme/theme-root.js';
@@ -50,48 +50,54 @@ export const CharacterSelectPage = observer(function CharacterSelectPage({ onCre
       data-testid="character-select-page"
     >
       <Card style={{ width: 560 }} variant="outlined" title="选择角色" extra={<AppThemeToggle />}>
-        <List
-          dataSource={root.session.players}
-          loading={root.session.playersLoading}
-          locale={{ emptyText: '还没有角色' }}
-          renderItem={(player) => (
-            <List.Item
-              key={player.key}
-              data-testid={`character-item-${player.key}`}
-              actions={[
-                <Button
-                  key="enter"
-                  type="primary"
-                  loading={enteringKey === player.key}
-                  onClick={() => void enter(player.key)}
-                  data-testid={`character-enter-${player.key}`}
-                >
-                  进入
-                </Button>,
-                <Button
-                  key="delete"
-                  danger
-                  onClick={() => remove(player.key, player.name)}
-                  data-testid={`character-remove-${player.key}`}
-                >
-                  删除
-                </Button>,
-              ]}
-            >
-              <List.Item.Meta
-                title={
+        {root.session.playersLoading ? (
+          <Flex justify="center" style={{ padding: 24 }}>
+            <Spin />
+          </Flex>
+        ) : root.session.players.length === 0 ? (
+          <Empty description="还没有角色" />
+        ) : (
+          <Flex vertical gap={8}>
+            {root.session.players.map((player) => (
+              <Flex
+                key={player.key}
+                align="center"
+                justify="space-between"
+                wrap
+                gap={8}
+                data-testid={`character-item-${player.key}`}
+                style={{ padding: 8, border: '1px solid rgba(128,128,128,0.25)', borderRadius: 6 }}
+              >
+                <Flex vertical gap={2} style={{ minWidth: 0 }}>
                   <Space wrap>
                     <Typography.Text strong>{player.name}</Typography.Text>
                     <Tag>{player.roleName}</Tag>
                     <Tag color="blue">{`Lv.${player.level}${player.peakLevel > 0 ? ` · 巅峰 ${player.peakLevel}` : ''}`}</Tag>
                     {player.inBattle ? <Tag color="red">战斗中</Tag> : null}
                   </Space>
-                }
-                description={`职业：${player.currentCareerName || '—'}`}
-              />
-            </List.Item>
-          )}
-        />
+                  <Typography.Text type="secondary">{`职业：${player.currentCareerName || '—'}`}</Typography.Text>
+                </Flex>
+                <Space>
+                  <Button
+                    type="primary"
+                    loading={enteringKey === player.key}
+                    onClick={() => void enter(player.key)}
+                    data-testid={`character-enter-${player.key}`}
+                  >
+                    进入
+                  </Button>
+                  <Button
+                    danger
+                    onClick={() => remove(player.key, player.name)}
+                    data-testid={`character-remove-${player.key}`}
+                  >
+                    删除
+                  </Button>
+                </Space>
+              </Flex>
+            ))}
+          </Flex>
+        )}
 
         <Flex gap={8} style={{ marginTop: 12 }}>
           <Button onClick={onCreateNew} data-testid="character-select-create">

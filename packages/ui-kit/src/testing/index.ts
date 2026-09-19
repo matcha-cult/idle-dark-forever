@@ -9,7 +9,6 @@
  */
 import type { ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { installViewportMock, resetViewport, setViewportWidth } from './viewport.js';
 
 export {
   DEFAULT_VIEWPORT_WIDTH,

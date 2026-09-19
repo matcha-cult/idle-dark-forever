@@ -408,7 +408,7 @@ extend(tables, 'buffs', 'year2018.summonMinimal', 'murloc.thumpHead', {
   name: '呼唤幼崽',
   effect() {
     return function (world) {
-      const enemy = MINIMALS[Math.floor(Math.random() * 3)];
+      const enemy = MINIMALS[Math.floor(Math.random() * 3)]!;
       world.addEnemy(enemy, null, 0, this.unit);
     };
   },

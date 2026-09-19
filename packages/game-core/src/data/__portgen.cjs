@@ -32,6 +32,13 @@ const HEADER = `/**
 const COMMON = [
   // 词缀 / 传奇：generate 的签名按冻结契约改为注入 Rng
   [/generate\(level\)\s*\{/g, 'generate(level, rng) {'],
+  // 原版把布尔 hook 当数值参与 `<` 比较（false→0 / true→1），Number() 保持语义等价。
+  [
+    /Math\.random\(\) < ([A-Za-z_$][\w$]*)\.runAttrHooks\(false, '([^']*)'\)/g,
+    "Math.random() < Number($1.runAttrHooks(false, '$2'))",
+  ],
+  // 原版大量 `ARR[Math.floor(Math.random() * ARR.length)]` 无越界保护；加非空断言保持行为。
+  [/([A-Za-z_$][\w$]*)\[Math\.floor\(Math\.random\(\) \* \1\.length\)\]/g, '$1[Math.floor(Math.random() * $1.length)]!'],
 ];
 
 /** @type {Record<string, Array<[RegExp, string]>>} */
@@ -72,20 +79,25 @@ const PATCHES = {
   ],
   'skills/elementSummoner.js': [
     [/function getLevelBonus\(level\)/g, 'function getLevelBonus(level: number)'],
+    [/const map = \{\};/g, 'const map: Record<string, boolean> = {};'],
   ],
+  'skills/assassin.js' : [],
   'enemies/summon.element.js': [
     [/function getLevelBonus\(level\)/g, 'function getLevelBonus(level: number)'],
     [/^const elements = \[/m, 'const elements: EnemyEntry[] = ['],
     [/\.\.\.v\.v2Skills/g, '...(v.v2Skills ?? [])'],
+    [/\.\.\.v\.skills/g, '...(v.skills ?? [])'],
   ],
   'skills/assassin.js': [
+    // 原版 `const atkInfo = { dmg, critRate, critBonus }` 随后被 clearCombo 写入 isCrit。
+    [/const atkInfo = \{/g, 'const atkInfo: AttackLike = {'],
     [/function addCombo\(target, combo\)/g, 'function addCombo(target: UnitLike, combo: ComboLike)'],
     [/function comboCount\(target\)/g, 'function comboCount(target: UnitLike)'],
     [
       /function clearCombo\(world, self, target, limit, finalAttack\)/g,
       'function clearCombo(world: WorldLike, self: UnitLike, target: UnitLike, limit: number, finalAttack: AttackLike)',
     ],
-    [/ {2}value;\n {2}constructor\(value\) \{/g, '  value: number;\n  constructor(value: number) {'],
+    [/ {2}value;\n {2}constructor\(value\) \{/g, '  value: number;\n  constructor(value: number = 0) {'],
     [
       /\n {2}effect\(world, self, finalAttack\) \{\}/g,
       '\n  effect(world: WorldLike, self: UnitLike, finalAttack: AttackLike): void {}',
@@ -414,7 +426,17 @@ function emitNightmare() {
     'packages/nightmare/fire.js',
     'packages/nightmare/knight.js',
   ];
-  const body = files.map((f) => `// ── ${f} ──\n${transformPackage(f)}`).join('\n');
+  const extra = {
+    'packages/nightmare/kobold.js': [
+      [
+        /const target = world\.units\.find\(\(v\) => v\.type === 'nightmare\.kobold\.altar'\);/g,
+        "const target = world.units.find((v) => v.type === 'nightmare.kobold.altar')!;",
+      ],
+    ],
+  };
+  const body = files
+    .map((f) => `// ── ${f} ──\n${transformPackage(f, extra[f])}`)
+    .join('\n');
   const content = `${HEADER.replace('{DIR}', 'packages/nightmare/')}
 import type { MutableDataTables } from '../../contracts/data.js';
 import { define, extend } from '../_util.js';
@@ -448,7 +470,15 @@ function emitYear2018() {
         [/const map = maps\[key\];\n/, 'const map = maps[key];\n  if (!map) continue;\n'],
       ],
     ],
-    ['packages/year2018/dungeon.js', null],
+    [
+      'packages/year2018/dungeon.js',
+      [
+        [
+          /MINIMALS\[Math\.floor\(Math\.random\(\) \* 3\)\]/g,
+          'MINIMALS[Math.floor(Math.random() * 3)]!',
+        ],
+      ],
+    ],
   ];
   const body = files.map(([f, extra]) => `// ── ${f} ──\n${transformPackage(f, extra)}`).join('\n');
   const content = `${HEADER.replace('{DIR}', 'packages/year2018/')}

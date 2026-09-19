@@ -69,6 +69,10 @@ export const IsAlien: Record<Camp, Partial<Record<Camp, true>>> = {
     enemy: true,
   },
   shrine: {},
+  // 原版 `IsAlien` **没有** story 键；但契约 `Camp` 联合包含 `story`。
+  // 补空对象与原版语义等价：`IsAlien.story` 缺失 → `undefined` → `!!undefined === false`，
+  // 而空对象同样没有任何 camp 键命中 → 也是 false。故不改变行为。
+  story: {},
 };
 
 /** 原版 `CampRelation[camp][target]`（可能 undefined）。 */

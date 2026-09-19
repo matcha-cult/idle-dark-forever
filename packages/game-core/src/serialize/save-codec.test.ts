@@ -119,7 +119,7 @@ describe('base64', () => {
 
   it('base64url 无填充且往返一致', () => {
     const value = bytesToBase64Url(Uint8Array.from([0xfb, 0xff, 0xfe]));
-    expect(value).toBe('-___');
+    expect(value).toBe('-__-');
     expect(base64UrlToText(bytesToBase64Url(utf8Encode('中文')))).toBe('中文');
   });
 });
@@ -195,14 +195,10 @@ describe('worldStop / worldStart', () => {
     expect(a).not.toBe(b);
   });
 
-  it('自定义 chunkSize 仍可往返', () => {
-    const blob = worldStop(sample, { randomSeed: 3, chunkSize: 7 });
-    expect(worldStart(blob)).toEqual(sample);
-  });
-
-  it('非法 chunkSize 抛错', () => {
-    expect(() => worldStop(sample, { chunkSize: 0 })).toThrow(/chunkSize/);
-    expect(() => worldStop(sample, { chunkSize: 1.5 })).toThrow(/chunkSize/);
+  it('同一个 seed 下，正文长度不整除 16 时也能往返（最后一片是短片）', () => {
+    // JSON 长度刻意取 17 字节边界：'{"a":"bbbbbbbbbb"}' 正好 17
+    const odd = { a: 'bbbbbbbbbb' };
+    expect(worldStart(worldStop(odd, { randomSeed: 3 }))).toEqual(odd);
   });
 
   it('缺失 / 非法前缀抛错', () => {
@@ -211,11 +207,13 @@ describe('worldStop / worldStart', () => {
     expect(() => worldStart(undefined as unknown as string)).toThrow(/missing prefix/);
   });
 
-  it('secret 不完整或正文长度不对抛错', () => {
+  it('secret 不完整或被截断的正文抛错', () => {
     expect(() => worldStart('save' + bytesToBase64(new Uint8Array(4)))).toThrow(/shorter than secret/);
-    // 合法 secret + 长度不是 32 的倍数的正文
-    const bad = concatBytes(new Uint8Array(16), new Uint8Array(5));
-    expect(() => worldStart('save' + bytesToBase64(bad))).toThrow(/unexpected body length/);
+    // 合法 secret + 5 字节残片（不足一个摘要）
+    const truncated = concatBytes(new Uint8Array(16), new Uint8Array(5));
+    expect(() => worldStart('save' + bytesToBase64(truncated))).toThrow(/Invalid data/);
+    // 合法 secret + 空正文
+    expect(() => worldStart('save' + bytesToBase64(new Uint8Array(16)))).toThrow(/empty body/);
   });
 
   it('篡改正文/摘要/secret 的任意一个字节都必须抛错', () => {
