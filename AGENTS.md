@@ -183,6 +183,7 @@ antd-zh token Menu --format markdown
 | **完整游戏流程冒烟 22/22** | `scripts/game-flow-smoke.mjs`，**已在本地实跑通过** |
 | **拾取规则冒烟 18/18** | `scripts/loot-rule-smoke.mjs`（真实战斗掉落 → `(battle,loot)` 推送；本地以 `LOOT_WINDOW_MS=300000` 实跑通过） |
 | **进图剧情冒烟 14/14** | `scripts/story-entry-smoke.mjs`（进图自动播放 + 击杀任务静默登记，已本地实跑通过） |
+| **角色归属冒烟 7/7** | `scripts/character-scope-smoke.mjs`（同账号两条 WS 连接不串号，见 §15） |
 
 > 无数据库时的行为：`/api/health` 返回 `503 degraded`（正确降级），协议层断言仍可通过；
 > 但依赖 `users`/`characters` 的 Action 会返回 `INTERNAL`。
@@ -333,6 +334,7 @@ node scripts/route-probe.mjs 3000 "$JWT_SECRET"    # 20/20 域 Action 是否都�
 node scripts/game-flow-smoke.mjs 3000              # 完整流程（22 项断言）
 LOOT_WINDOW_MS=300000 node scripts/loot-rule-smoke.mjs 3000   # 拾取规则 → 真实掉落（18 项）
 node scripts/story-entry-smoke.mjs 3000                       # 进图自动触发剧情（14 项）
+node scripts/character-scope-smoke.mjs 3000                   # 角色归属 / 推送范围（7 项）
 ```
 
 > ⚠️ **不要占用 3000 端口做验证前先确认它是不是 xiuxian 的服务端**：
@@ -454,3 +456,51 @@ __IDLE_DARK__                   // 根 store（临时排查）
 生产包里 `grep __idleDarkTickRate dist/assets/*.js` 应为 **0 命中**（已验证）。
 纯汇总逻辑在 `web/src/services/tick-rate.ts#summarizeTickRate`，单测覆盖空样本/单帧/乱序/
 重复 `serverTime`/窗口非法等边界。
+
+---
+
+## 15. 角色会话归属：一个账号同一时刻只有一个活跃角色
+
+**语义**（原版是单存档单玩家，没有"同账号同时玩两个角色"的概念）：
+
+- 选角是 WS Action（`player.select`，cmd 20/6）；握手只认**账号**（`?token=` → userId），
+  所以「先连 WS 再选角色」是协议决定的，不是 bug。
+- `player.select` 是**切换**：`PlayerLogicService.select` 会 `start(新角色)` 后
+  `stop(旧角色)`，保证同一账号**只有一个活跃世界会话**。
+- `WorldService.stop()` 在指针仍指向该角色时清理 `activeByUser`（切人流程是
+  `start(新) → stop(旧)`，所以不能无条件清）。
+
+**角色归属校验**（唯一入口 `WorldService.resolveActiveCharacter(userId, rawKey)`）：
+
+| 入参 | 结果 |
+|---|---|
+| 未选角 + 不给 key | 失败（`NOT_IN_MAP`，'尚未选择角色'） |
+| 已选角 + 不给 key / 空串 | 回退到当前角色 |
+| key === 当前角色 | 通过 |
+| key ≠ 当前角色 | **失败**（`PLAYER_NOT_FOUND`，'该角色不是当前选择的角色'） |
+
+`world.*` / `battle.focus` / `idle.*` 都走这一个入口，**不要再各写一份 `?? activeCharacterOf`**。
+
+> ⚠️ **为什么必须这样**：框架的定向推送 `sendNotification(userId, …)` 会发给该 userId 的
+> **全部 OPEN 连接**。如果允许"一个账号两个角色会话"或"A 连接操作 B 角色"，就会出现
+> 「两条连接互相收到/推进对方的角色」= 串号 + 双份 tick 推送（实测过：
+> A 选 X、B 选 Y，A 不带 key 的 `world.snapshot` 解析到 Y；2 秒内 A=9 B=10 帧且 serverTime 相同）。
+> 单会话 + 归属校验之后，**推送到该账号任何连接的消息都只属于当前角色**。
+
+**回归验证**：
+
+- 单测 `server/test/character-switch.test.ts`（切人停旧会话 / tick 只含当前角色 /
+  `stop` 清指针 / `resolveActiveCharacter` 四种入参 / 每 tick 至多一帧）。
+  去掉"停旧会话"那两行 → 3/6 用例失败（已实测）。
+- 端到端 `server/scripts/character-scope-smoke.mjs`（真实 REST+WS+DB，同账号两条连接）
+  7/7 通过。
+- 面板域（inventory/shop/… 的 `characterId` 可选、走 `PanelCharacterService`）**尚未**做
+  同样的显式化 —— 见交接文档的后续项。
+
+### 15.1 别在 `pnpm dev:server` 运行时手动 build
+
+`pnpm dev:server` 已经在跑 `tsc --watch` + `node --watch dist/main.js`。
+再手动 `pnpm --filter idle-dark-server run build`（或 `pnpm run verify` 里的 build）会与 watcher
+抢写 dist → `node --watch` 连续重启，期间**端口短暂不可用**（实测出现过
+`ECONNREFUSED` 与 `Cannot use a pool after calling end on the pool`）。
+要跑全量门禁就**先停 dev**，或跑完后再确认 `/api/health` 已恢复。

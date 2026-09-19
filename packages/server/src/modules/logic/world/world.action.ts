@@ -29,9 +29,9 @@ export class WorldAction {
   async snapshot(ctx: FlowContext, data: unknown): Promise<ActionResult<WorldSnapshotDto>> {
     const userId = requireUserId(ctx);
     if (typeof userId !== 'number') return userId;
-    const key = this.resolveKey(userId, dataOf(data)['key']);
-    if (!key) return ActionError.invalidParam('缺少角色 key');
-    return guardAction(() => this.world.snapshot(userId, key));
+    const resolved = this.resolveKey(userId, dataOf(data)['key']);
+    if (!resolved.ok) return resolved.fail;
+    return guardAction(() => this.world.snapshot(userId, resolved.key));
   }
 
   @ActionMethod(WORLD_CMD.enterMap)
@@ -39,14 +39,15 @@ export class WorldAction {
     const userId = requireUserId(ctx);
     if (typeof userId !== 'number') return userId;
     const body = dataOf(data);
-    const key = this.resolveKey(userId, body['key']);
+    const resolved = this.resolveKey(userId, body['key']);
     const map = toNonEmptyString(body['map']);
-    if (!key || !map) return ActionError.invalidParam('缺少角色 key 或地图');
+    if (!resolved.ok) return resolved.fail;
+    if (!map) return ActionError.invalidParam('缺少地图');
     const limited = this.rateLimiter.consumeOrFail(`world:enterMap:${userId}`, 30);
     if (limited) return limited;
     const opId = toNonEmptyString(body['opId']);
     return guardAction(() =>
-      this.world.enterMap(userId, key, map, ...(opId !== undefined ? [opId] : [])),
+      this.world.enterMap(userId, resolved.key, map, ...(opId !== undefined ? [opId] : [])),
     );
   }
 
@@ -54,22 +55,28 @@ export class WorldAction {
   async leave(ctx: FlowContext, data: unknown): Promise<ActionResult<null>> {
     const userId = requireUserId(ctx);
     if (typeof userId !== 'number') return userId;
-    const key = this.resolveKey(userId, dataOf(data)['key']);
-    if (!key) return ActionError.invalidParam('缺少角色 key');
-    return guardAction(() => this.world.leave(userId, key));
+    const resolved = this.resolveKey(userId, dataOf(data)['key']);
+    if (!resolved.ok) return resolved.fail;
+    return guardAction(() => this.world.leave(userId, resolved.key));
   }
 
   @ActionMethod(WORLD_CMD.skipOffline)
   async skipOffline(ctx: FlowContext, data: unknown): Promise<ActionResult<OfflineReportDto>> {
     const userId = requireUserId(ctx);
     if (typeof userId !== 'number') return userId;
-    const key = this.resolveKey(userId, dataOf(data)['key']);
-    if (!key) return ActionError.invalidParam('缺少角色 key');
-    return guardAction(() => this.world.skipOffline(userId, key));
+    const resolved = this.resolveKey(userId, dataOf(data)['key']);
+    if (!resolved.ok) return resolved.fail;
+    return guardAction(() => this.world.skipOffline(userId, resolved.key));
   }
 
-  /** 前端不带 key 时回退到「最近一次 select 的角色」。 */
-  private resolveKey(userId: number, raw: unknown): string | undefined {
-    return toNonEmptyString(raw) ?? this.world.activeCharacterOf(userId);
+  /**
+   * 角色归属校验：见 `WorldService.resolveActiveCharacter`。
+   * 显式 key 必须等于本账号当前角色，否则直接失败（不允许操作别的角色）。
+   */
+  private resolveKey(
+    userId: number,
+    raw: unknown,
+  ): { ok: true; key: string } | { ok: false; fail: ActionResult<never> } {
+    return this.world.resolveActiveCharacter(userId, raw);
   }
 }

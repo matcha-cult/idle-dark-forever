@@ -96,8 +96,16 @@ export class PlayerLogicService {
   }
 
   async select(userId: number, characterId: string): Promise<ActionResult<PlayerStateDto>> {
+    // ⚠️ 一个账号同一时刻**只能有一个活跃角色会话**。
+    // 旧实现只 `start(新角色)` 不停旧会话 → 两个角色的世界同时 tick，而框架的定向推送
+    // 是按 userId 扇出到该账号的**全部**连接，于是会出现「两条连接互相收到/推进对方的角色」
+    // = 串号 + 双份推送。
+    const previous = this.world.activeCharacterOf(userId);
     const session = await this.world.start(userId, characterId);
     if (!session) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);
+    if (previous !== undefined && previous !== characterId) {
+      await this.world.stop(userId, previous);
+    }
     const player = this.playerContext.peek(userId, characterId);
     if (!player) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);
     // 同步面板域的「当前角色」注册表。面板请求的载荷不带 characterId，

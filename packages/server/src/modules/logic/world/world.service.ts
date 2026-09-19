@@ -380,6 +380,11 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
 
   /** 停会话并落库（切人 / 登出 / 离开地图）。 */
   async stop(userId: number, characterId: string): Promise<void> {
+    // 「当前角色」指针只在它仍指向本角色时才清 —— 切人流程是
+    // `start(新角色)` 之后再 `stop(旧角色)`，此处不能把刚设好的新指针抹掉。
+    if (this.activeByUser.get(userId) === characterId) {
+      this.activeByUser.delete(userId);
+    }
     const key = this.keyOf(userId, characterId);
     const session = this.sessions.get(key);
     if (!session) return;
@@ -392,6 +397,43 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       this.playerContext.markDirty(userId, characterId);
     }
     await this.playerContext.flush(userId, characterId);
+  }
+
+  /**
+   * 解析「本次请求要操作哪个角色」——**角色归属校验的唯一入口**。
+   *
+   * 规则（fail-closed）：
+   * - 显式给了 key：必须**等于本账号的当前角色**，否则拒绝。这样客户端不可能
+   *   用一条连接去操作账号里另一个角色的世界 / 离线收益。
+   * - 没给 key：回退到当前角色（前端 `world.snapshot` 等暂不带 key）；
+   * - 两者都没有（尚未选角）→ 拒绝。
+   *
+   * ⚠️ 为什么必须校验：推送与推进都是**按角色会话**产生的，而框架的定向推送是
+   * **按 userId 扇出到这个账号的全部连接**。若允许「A 连接操作 B 角色」，就会出现
+   * 「同一个账号的两条连接互相看到/推进对方的角色」——即串号与双份推送。
+   * 配合 `PlayerLogicService.select` 的「切人即停旧会话」，保证**同一账号同一时刻
+   * 只有一个活跃角色会话**，因此推送到该账号任何连接的消息都只属于当前角色。
+   */
+  resolveActiveCharacter(
+    userId: number,
+    raw: unknown,
+  ): { ok: true; key: string } | { ok: false; fail: ActionResult<never> } {
+    const explicit = typeof raw === 'string' ? raw.trim() : '';
+    const active = this.activeByUser.get(userId);
+    if (explicit === '') {
+      if (active === undefined) return { ok: false, fail: fail(BusinessErrorCode.NOT_IN_MAP, '尚未选择角色') };
+      return { ok: true, key: active };
+    }
+    if (active === undefined) {
+      return { ok: false, fail: fail(BusinessErrorCode.NOT_IN_MAP, '尚未选择角色') };
+    }
+    if (active !== explicit) {
+      return {
+        ok: false,
+        fail: fail(BusinessErrorCode.PLAYER_NOT_FOUND, '该角色不是当前选择的角色'),
+      };
+    }
+    return { ok: true, key: explicit };
   }
 
   private disposeSession(session: WorldSession): void {
