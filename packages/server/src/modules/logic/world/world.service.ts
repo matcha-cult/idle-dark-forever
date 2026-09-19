@@ -282,13 +282,6 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     if (!this.onlineSessions.isOnline(session.userId, now)) return 0;
     session.lifecycle = markOnline(session.lifecycle, now);
 
-    // M7：run 已离开自己的地图（通关 → outside / 死亡 / 切图）→ 清档。
-    if (session.run !== null && session.world.map !== session.run.mapKey) {
-      const endedRunId = session.run.runId;
-      session.run = null;
-      this.clearRunArchive(session, endedRunId);
-    }
-
     const advance = planAdvance({
       now,
       lastTickAt: session.lastTickAt,
@@ -347,7 +340,8 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       session.carryMs = 0;
     }
 
-    this.emitTick(session, now);
+    const tickEvents = this.emitTick(session, now);
+    this.reconcileRunEnd(session, tickEvents);
 
     if (now - session.lastPersistAt >= WORLD_CONFIG.persistIntervalMs) {
       session.lastPersistAt = now;
@@ -387,7 +381,8 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private emitTick(session: WorldSession, now: number): void {
+  /** 推一帧 `(world, tick)`；返回本帧的战斗事件（供 run 结束原因判定）。 */
+  private emitTick(session: WorldSession, now: number): WorldTickDto['events'] {
     const frame = session.collector.drain();
     const units = session.world.units.map((unit) =>
       unitStateDtoOf(unit, session.world.playerUnit),
@@ -415,6 +410,35 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
         });
       }
     }
+    return frame.events;
+  }
+
+  /**
+   * run 结束对账（M7 + 09 §4.2 的 `battle --RunEnded--> dungeon`）：
+   * 本帧内核把 `world.map` 切离 run 地图（通关 → outside / 阵亡）→ 清档并发布事件，
+   * **下一跳由 dungeon 控制器决定**（RC4/RD3/RD5）。
+   */
+  private reconcileRunEnd(session: WorldSession, events: WorldTickDto['events']): void {
+    const run = session.run;
+    if (run === null || session.world.map === run.mapKey) return;
+    session.run = null;
+    const reason: 'clear' | 'death' = events.some(
+      (event) => event.kind === 'general' && event.text.startsWith('dungeon.clear:'),
+    )
+      ? 'clear'
+      : 'death';
+    const outside = this.tables.maps[run.mapKey]?.outside;
+    this.events.emit({
+      type: 'RunEnded',
+      userId: session.userId,
+      characterId: session.characterId,
+      runId: run.runId,
+      mapKey: run.mapKey,
+      endlessLevel: run.endlessLevel,
+      ...(outside === undefined ? {} : { outside }),
+      reason,
+    });
+    this.clearRunArchive(session, run.runId);
   }
 
   private schedulePersist(session: WorldSession): void {

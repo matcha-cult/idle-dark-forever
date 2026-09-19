@@ -42,11 +42,31 @@ export interface CombatHooksDirtyEvent {
   readonly characterId: string;
 }
 
+/**
+ * 秘境 run 结束：由 battle 会话宿主发布（run 地图被内核切走：通关 / 阵亡），dungeon 订阅。
+ *
+ * 09 §4.2 的 `battle --RunEnded--> dungeon`：battle 只报告事实，
+ * **队列推进 / 下一跳由 dungeon 控制器决定**（RC4/RD3/RD5）。
+ */
+export interface RunEndedEvent {
+  readonly type: 'RunEnded';
+  readonly userId: number;
+  readonly characterId: string;
+  readonly runId: string;
+  /** 刚结束的 run 所在地图。 */
+  readonly mapKey: string;
+  readonly endlessLevel: number;
+  /** 该秘境的 `outside`（队列耗尽时 RD4 的第一档候选）。 */
+  readonly outside?: string;
+  readonly reason: 'clear' | 'death';
+}
+
 /** 事件名 → 载荷 的映射（订阅端的类型来源）。 */
 export interface DomainEventMap {
   MapEntered: MapEnteredEvent;
   EnemyKilled: EnemyKilledEvent;
   CombatHooksDirty: CombatHooksDirtyEvent;
+  RunEnded: RunEndedEvent;
 }
 
 export type DomainEventName = keyof DomainEventMap;

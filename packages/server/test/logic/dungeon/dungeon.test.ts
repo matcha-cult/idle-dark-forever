@@ -7,7 +7,9 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultTables, maxStacksOf } from '@idle-dark/game-core';
 import { DungeonLogicService } from '../../../src/modules/logic/dungeon/dungeon.logic.service.js';
+import type { MapLogicService } from '../../../src/modules/logic/map/map.logic.service.js';
 import type { WorldService } from '../../../src/modules/logic/world/world.service.js';
+import { InProcessEventBus } from '../../../src/modules/logic/shared/event-bus.js';
 import { FIXED_NOW, makeFakeContexts, makeFixture } from '../_helpers.js';
 
 const tables = createDefaultTables();
@@ -15,6 +17,7 @@ const tables = createDefaultTables();
 interface WorldCalls {
   enterMap: Array<{ mapKey: string; opId?: string }>;
   leave: number;
+  openWorld: Array<string | undefined>;
 }
 
 function makeWorld(calls: WorldCalls): WorldService {
@@ -30,12 +33,49 @@ function makeWorld(calls: WorldCalls): WorldService {
   } as unknown as WorldService;
 }
 
+function makeMaps(calls: WorldCalls): MapLogicService {
+  return {
+    continueOpenWorld: async (_u: number, _c: string, candidate?: string) => {
+      calls.openWorld.push(candidate);
+      return { success: true as const, data: { map: candidate ?? 'home' } as never };
+    },
+  } as unknown as MapLogicService;
+}
+
 function makeService(diamonds = 0) {
   const fixture = makeFixture();
   fixture.account.diamonds = diamonds;
-  const calls: WorldCalls = { enterMap: [], leave: 0 };
-  const service = new DungeonLogicService(makeFakeContexts(fixture), makeWorld(calls), () => FIXED_NOW);
-  return { service, fixture, calls };
+  const calls: WorldCalls = { enterMap: [], leave: 0, openWorld: [] };
+  const events = new InProcessEventBus();
+  const service = new DungeonLogicService(
+    makeFakeContexts(fixture),
+    makeWorld(calls),
+    makeMaps(calls),
+    () => FIXED_NOW,
+    events,
+  );
+  return { service, fixture, calls, events };
+}
+
+/** 驱动一次 `RunEnded` 并等待异步处理器跑完。 */
+async function emitRunEnded(
+  service: DungeonLogicService,
+  events: InProcessEventBus,
+  mapKey: string,
+  outside = 'home',
+): Promise<void> {
+  service.onModuleInit();
+  events.emit({
+    type: 'RunEnded',
+    userId: 1,
+    characterId: 'char-1',
+    runId: 'run-1',
+    mapKey,
+    endlessLevel: 0,
+    outside,
+    reason: 'clear',
+  });
+  await new Promise((resolve) => setTimeout(resolve, 5));
 }
 
 describe('DungeonLogicService · 挑战队列（RC4）', () => {
@@ -120,5 +160,62 @@ describe('DungeonLogicService · 神力重置（RC3）', () => {
     const notDungeon = await open.service.reset(1, 'char-1', 'home');
     expect(notDungeon.success).toBe(false);
     if (!notDungeon.success) expect(notDungeon.data.code).toBe('MAP_LOCKED');
+  });
+});
+
+describe('DungeonLogicService · 队列推进（RunEnded，RD3/RD4/RD5）', () => {
+  it('队列驱动：下一条秘境可打（有票 + 冷却就绪）→ 进入它并弹出', async () => {
+    const { service, fixture, calls, events } = makeService();
+    fixture.extras.challengeQueue['char-1'] = [
+      { key: 'town.cave2', endlessLevel: 0 },
+      { key: 'town.mine.2', endlessLevel: 0 },
+    ];
+    fixture.player.dungeonTickets.set('town.mine.2', 1);
+
+    await emitRunEnded(service, events, 'town.cave2');
+
+    expect(calls.enterMap.map((c) => c.mapKey)).toEqual(['town.mine.2']);
+    expect(fixture.extras.challengeQueue['char-1']).toEqual([]);
+  });
+
+  it('无票 → 跳过并继续；全部不可用且无非秘境条目 → openWorld(run.outside)（RD4）', async () => {
+    const { service, fixture, calls, events } = makeService();
+    fixture.extras.challengeQueue['char-1'] = [
+      { key: 'town.cave2', endlessLevel: 0 },
+      { key: 'town.mine.2', endlessLevel: 0 },
+    ];
+
+    await emitRunEnded(service, events, 'town.cave2', 'town.valley');
+
+    expect(calls.enterMap).toEqual([]);
+    expect(calls.openWorld).toEqual(['town.valley']);
+    expect(fixture.extras.challengeQueue['char-1']).toEqual([]);
+  });
+
+  it('非秘境条目 → 转入该图（RD3）', async () => {
+    const { service, fixture, calls, events } = makeService();
+    fixture.extras.challengeQueue['char-1'] = [
+      { key: 'town.cave2', endlessLevel: 0 },
+      { key: 'home', endlessLevel: 0 },
+    ];
+
+    await emitRunEnded(service, events, 'town.cave2');
+
+    expect(calls.enterMap).toEqual([]);
+    expect(calls.openWorld).toEqual(['home']);
+  });
+
+  it('手动进图（队首不匹配）/ 空队列 → 不接管队列', async () => {
+    const manual = makeService();
+    manual.fixture.extras.challengeQueue['char-1'] = [{ key: 'home', endlessLevel: 0 }];
+    await emitRunEnded(manual.service, manual.events, 'town.cave2');
+    expect(manual.calls.enterMap).toEqual([]);
+    expect(manual.calls.openWorld).toEqual([]);
+    expect(manual.fixture.extras.challengeQueue['char-1']).toEqual([{ key: 'home', endlessLevel: 0 }]);
+
+    const empty = makeService();
+    await emitRunEnded(empty.service, empty.events, 'town.cave2');
+    expect(empty.calls.enterMap).toEqual([]);
+    expect(empty.calls.openWorld).toEqual([]);
   });
 });

@@ -112,6 +112,7 @@ export const ALL_SERVER_DEFINITIONS: readonly LogicServerDefinition[] = Object.v
  */
 export const TRANSITIONAL_DEEP_IMPORTS: readonly { readonly from: string; readonly to: string; readonly reason: string }[] = [
   { from: 'character', to: 'battle', reason: 'R4：player.select → StartSession/StopSession 命令' },
-  { from: 'dungeon', to: 'battle', reason: 'R4/R5：idle 结算 → battle 命令/事件' },
+  { from: 'dungeon', to: 'battle', reason: 'R4/R5：idle 结算 / 队列推进 → battle 命令/事件' },
   { from: 'map', to: 'battle', reason: 'R4：map.enter → SwitchMap/StartSession 命令（当前过渡为直接调用）' },
+  { from: 'dungeon', to: 'map', reason: 'RD3/RD4：队列耗尽 / 非秘境条目 → map.ContinueOpenWorld（09 §4.2 允许的方向）' },
 ];

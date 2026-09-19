@@ -6,10 +6,11 @@
  *   客户端只能增删查询；队列推进/通关编排在 R3-b2 落地；
  * - **冷却/每日重置/神力重置**（RC3）：状态在 `account_state.data.dungeonCooldowns`，
  *   判定用 game-core 的 `planDungeonCooldown` / `planDungeonPaidReset`（纯函数，单一实现）；
- * - `enter`/`leave` 过渡期**委托 battle 会话宿主**（`world.enterMap/leave`）；唯一扣票的收敛
- *   与 `runId` 落库在 R3-b2（修 M5/M7）。
+ * - `enter`/`leave` 过渡期**委托 battle 会话宿主**（`world.enterMap/leave`）；
+ * - **队列推进**（RD3/RD4/RD5，R4）：订阅 battle 的 `RunEnded`，决定下一跳
+ *   （秘境可打则进入 / 无票·冷却未就绪跳过 / 非秘境或耗尽转 `map.ContinueOpenWorld`）。
  */
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import type {
   ActionResult,
   ChallengeEntryDto,
@@ -20,6 +21,7 @@ import type {
 } from '@idle-dark/protocol';
 import { BusinessErrorCode, fail, ok } from '@idle-dark/protocol';
 import {
+  EVENT_BUS,
   GAME_CLOCK,
   PlayerContextService,
   normalizeChallengeQueue,
@@ -27,11 +29,16 @@ import {
   removeChallengeEntryAt,
   type AccountExtras,
   type ChallengeEntry,
-  type NowSource,
   type DungeonCooldownEntry,
+  type EventBus,
+  type NowSource,
+  type RunEndedEvent,
 } from '../shared/index.js';
 import { WorldService } from '../world/world.service.js';
+import { MapLogicService } from '../map/map.logic.service.js';
 import {
+  consumeDungeonStack,
+  decideChallengeEntry,
   maxStacksOf,
   planDungeonCooldown,
   planDungeonPaidReset,
@@ -40,12 +47,30 @@ import {
 import type { Player } from '@idle-dark/game-core';
 
 @Injectable()
-export class DungeonLogicService {
+export class DungeonLogicService implements OnModuleInit {
+  private readonly logger = new Logger(DungeonLogicService.name);
+
   constructor(
     private readonly contexts: PlayerContextService,
     private readonly world: WorldService,
+    private readonly maps: MapLogicService,
     @Inject(GAME_CLOCK) private readonly now: NowSource,
+    @Inject(EVENT_BUS) private readonly events: EventBus,
   ) {}
+
+  /**
+   * 订阅 battle 的 `RunEnded`（09 §4.2）：battle 只报告"run 结束了"，
+   * **下一跳由本控制器决定**（RC4/RD3/RD5）。事件总线是同步派发，故这里 fire-and-forget。
+   */
+  onModuleInit(): void {
+    this.events.on('RunEnded', (event) => {
+      void this.handleRunEnded(event).catch((error: unknown) => {
+        this.logger.warn(`挑战队列推进失败：${event.characterId}`, {
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      });
+    });
+  }
 
   // ────────────────────────────── 挑战队列（RC4） ──────────────────────────────
 
@@ -108,18 +133,118 @@ export class DungeonLogicService {
 
   // ────────────────────────────── 进 / 出秘境 ──────────────────────────────
 
-  /** 过渡：委托 battle 会话宿主（唯一扣票点当前仍在 `world.enterMap`）。 */
+  /**
+   * 进入秘境：控制器先做**冷却/层数**判定，再委托 battle 会话宿主执行切换
+   * （票的唯一扣费点仍在 `world.enterMap`；R4 起冷却层在此消耗）。
+   *
+   * 非秘境图直接转发（开放世界走 `map.enter`）。
+   */
   async enter(
     userId: number,
     characterId: string,
     mapKey: string,
     opId?: string,
   ): Promise<ActionResult<WorldSnapshotDto>> {
-    return this.world.enterMap(userId, characterId, mapKey, ...(opId !== undefined ? [opId] : []));
+    const map = this.contexts.tables.maps[mapKey];
+    if (map?.isDungeon !== true) {
+      return this.world.enterMap(userId, characterId, mapKey, ...(opId !== undefined ? [opId] : []));
+    }
+    const extras = await this.contexts.extrasOf(userId);
+    const ticketKey = ticketKeyOf(mapKey, map, 0);
+    const plan = planDungeonCooldown(this.cooldownOf(extras, characterId, ticketKey), map, this.now());
+    if (!plan.available) {
+      return fail(BusinessErrorCode.NO_TICKET, '本周期挑战次数已用尽（可等待每日重置或神力重置）');
+    }
+    // 先落"已重置"的状态（跨过周期边界时回满），失败不消耗层数。
+    this.setCooldown(extras, characterId, ticketKey, plan.state);
+
+    const result = await this.world.enterMap(
+      userId,
+      characterId,
+      mapKey,
+      ...(opId !== undefined ? [opId] : []),
+    );
+    if (result.success) {
+      this.setCooldown(extras, characterId, ticketKey, consumeDungeonStack(plan.state));
+      await this.persist(userId);
+    } else {
+      await this.persist(userId);
+    }
+    return result;
   }
 
   async leave(userId: number, characterId: string): Promise<ActionResult<null>> {
     return this.world.leave(userId, characterId);
+  }
+
+  // ────────────────────────────── 队列推进（RD3/RD4/RD5） ──────────────────────────────
+
+  /**
+   * battle 报告 run 结束 → 推进挑战队列。
+   *
+   * 规则（09 §5.3）：
+   * 1. 只接管**队列驱动**的 run（队首正是刚结束的地图），手动进图不打扰队列；
+   * 2. 逐条尝试队首：秘境且票/冷却就绪 → 进入；否则**跳过并继续**（RD5，不中断队列）；
+   *    非秘境条目 → `map.ContinueOpenWorld(entry.key)`；
+   * 3. 队列耗尽 → `map.ContinueOpenWorld(run.outside)`（RD4：run.outside → 持久化位置 → home）。
+   */
+  private async handleRunEnded(event: RunEndedEvent): Promise<void> {
+    const extras = await this.contexts.extrasOf(event.userId);
+    const queue = this.entriesOf(extras, event.characterId);
+    if (queue.length === 0 || queue[0]?.key !== event.mapKey) return;
+
+    let skipped = 0;
+    while (queue.length > 0) {
+      const entry = queue[0];
+      if (entry === undefined) break;
+      const map = this.contexts.tables.maps[entry.key];
+      if (!map) {
+        queue.shift();
+        skipped += 1;
+        continue;
+      }
+      if (map.isDungeon === true) {
+        const player = await this.contexts.load(event.userId, event.characterId);
+        if (player === null) return;
+        const ticketKey = ticketKeyOf(entry.key, map, entry.endlessLevel);
+        const plan = planDungeonCooldown(
+          this.cooldownOf(extras, event.characterId, ticketKey),
+          map,
+          this.now(),
+        );
+        if (decideChallengeEntry(safeTicketCount(player, ticketKey), plan.available) === 'skip') {
+          // RD5：无票 / 冷却未就绪 → 跳过该条并记录，继续下一条（不中断整个队列）
+          queue.shift();
+          skipped += 1;
+          continue;
+        }
+        queue.shift();
+        extras.challengeQueue[event.characterId] = queue;
+        await this.persist(event.userId);
+        this.logSkipped(event.characterId, skipped);
+        await this.enter(event.userId, event.characterId, entry.key);
+        return;
+      }
+      // 非秘境条目 → 转入该开放世界图（RD3）
+      queue.shift();
+      extras.challengeQueue[event.characterId] = queue;
+      await this.persist(event.userId);
+      this.logSkipped(event.characterId, skipped);
+      await this.maps.continueOpenWorld(event.userId, event.characterId, entry.key);
+      return;
+    }
+
+    // 队列耗尽 → RD4
+    extras.challengeQueue[event.characterId] = queue;
+    await this.persist(event.userId);
+    this.logSkipped(event.characterId, skipped);
+    await this.maps.continueOpenWorld(event.userId, event.characterId, event.outside);
+  }
+
+  private logSkipped(characterId: string, skipped: number): void {
+    if (skipped <= 0) return;
+    // I3：跳过是显式行为，必须可见（RD5）
+    this.logger.log(`[CHALLENGE] 跳过 ${skipped} 个不可用队列条目：${characterId}`);
   }
 
   // ────────────────────────────── 神力重置（RC3） ──────────────────────────────
@@ -184,6 +309,21 @@ export class DungeonLogicService {
     ticketKey: string,
   ): DungeonCooldownEntry | undefined {
     return extras.dungeonCooldowns[characterId]?.[ticketKey];
+  }
+
+  private setCooldown(
+    extras: AccountExtras,
+    characterId: string,
+    ticketKey: string,
+    state: DungeonCooldownEntry,
+  ): void {
+    const perChar = extras.dungeonCooldowns[characterId] ?? {};
+    perChar[ticketKey] = {
+      stacks: state.stacks,
+      lastResetAt: state.lastResetAt,
+      lastUsedAt: state.lastUsedAt,
+    };
+    extras.dungeonCooldowns[characterId] = perChar;
   }
 
   /** 本角色所有秘境票键的冷却 / 可挑战状态（按票键去重）。 */
