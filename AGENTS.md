@@ -566,7 +566,7 @@ __IDLE_DARK__                   // 根 store（临时排查）
 1. **文件级 SCC = 0**，且**逻辑服级图无环**（含 `world/story/inventory` 三条已知环的回归）；
 2. **共享层不反向依赖任何逻辑服**；
 3. **跨服深路径 import 恰好等于** `TRANSITIONAL_DEEP_IMPORTS`（**过渡债务，禁止增长**）；
-   当前为 `character → battle`、`dungeon → battle`、`map → battle` 三条，由 R4 改为正式命令后删除；
+   当前仅剩 `dungeon → map` 一条（09 §4.2 允许的方向：队列耗尽/非秘境条目 → `map.ContinueOpenWorld`）。
 4. **cmd 段唯一归属**：`CMD_SEGMENTS` 每段恰好属于一个服；
 5. 每个逻辑服根下的 `logic-server.ts` 导出 `XxxLogicServer` 且**不得出现 `@ActionMethod`**。
 
