@@ -40,9 +40,9 @@ import { OnlineSessionService } from '../../online/online-session.service.js';
 import { DATA_TABLES, GAME_CLOCK, PlayerContextService, type AccountExtras, type NowSource, slotDtoOf } from '../shared/index.js';
 import { BattleCollector } from './internal/battle-collector.js';
 import { buildBattleWorld, nextWorldSeed } from './internal/headless.js';
-import { mapListDtoOf, requirementContextOf } from './internal/map-dto.js';
+import { mapListDtoOf, pendingOfflineMsOf, requirementContextOf } from './internal/map-dto.js';
 import { unitStateDtoOf } from './internal/unit-state.js';
-import { WORLD_CONFIG } from './world.config.js';
+import { OFFLINE_MAX_MS, WORLD_CONFIG } from './world.config.js';
 
 /** Tick 上限：单一真相。 */
 export const WORLD_TICK_MS = WORLD_CONFIG.tickIntervalMs;
@@ -465,6 +465,18 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
   /** 技能可用性投影（`career` 域用；本波返回空表 = 全部未判定）。 */
   usableByKey(): Record<string, boolean> {
     return {};
+  }
+
+  /**
+   * 待结算离线时长（`player.select` → `PendingOfflineMs`）。
+   *
+   * 以 `Player.timestamp` 为锚点，**只在内存已加载时**给出；未加载时由调用方
+   * 先 `playerContext.load`。
+   */
+  pendingOfflineMs(userId: number, characterId: string): number {
+    const player = this.playerContext.peek(userId, characterId);
+    if (!player) return 0;
+    return pendingOfflineMsOf(player, this.now(), OFFLINE_MAX_MS);
   }
 
   private async snapshotOf(session: WorldSession): Promise<WorldSnapshotDto> {

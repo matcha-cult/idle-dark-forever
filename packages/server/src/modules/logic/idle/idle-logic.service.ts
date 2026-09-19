@@ -38,11 +38,12 @@ import {
 } from '../shared/index.js';
 import { BattleCollector } from '../world/internal/battle-collector.js';
 import { buildBattleWorld, nextWorldSeed } from '../world/internal/headless.js';
+import { OFFLINE_MAX_MS, OFFLINE_PAUSE_AFTER_MS } from '../world/world.config.js';
 
 /** 离线结算硬上限（保持原版 72h 语义）。 */
-export const MAX_OFFLINE_MS = 72 * 60 * 60 * 1000;
+export const MAX_OFFLINE_MS = OFFLINE_MAX_MS;
 /** 超过该离线时长即标记 `pausedByMaxOffline`（产品阈值 24h）。 */
-export const PAUSE_AFTER_MS = 24 * 60 * 60 * 1000;
+export const PAUSE_AFTER_MS = OFFLINE_PAUSE_AFTER_MS;
 /** C1 真模拟的虚拟时间预算。 */
 export const SIM_BUDGET_MS = 30 * 60 * 1000;
 /** C1 真模拟的击杀预算。 */
