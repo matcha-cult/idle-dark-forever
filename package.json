@@ -5,7 +5,7 @@
   "description": "永夜 · 服务端权威重制 — ionet-ts + NestJS + React + Antd",
   "type": "module",
   "scripts": {
-    "dev": "pnpm --parallel -r dev",
+    "dev": "pnpm --parallel --filter './packages/*' run dev",
     "dev:server": "pnpm --filter ./packages/server dev",
     "dev:web": "pnpm --filter ./packages/web dev",
     "build": "pnpm run build:protocol && pnpm run build:core && pnpm run build:transport && pnpm run build:ui-kit && pnpm run build:server && pnpm run build:web",
