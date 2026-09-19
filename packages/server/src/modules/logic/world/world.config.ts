@@ -39,7 +39,26 @@ export const WORLD_CONFIG = {
   maxCatchUpMs: DEBT_SHED_MS,
   /** 定时落库间隔（ms）：只在关键节点 + 这个周期落库，**不每 tick 写库**。 */
   persistIntervalMs: 30_000,
+  /** 空闲会话回收的扫描间隔（ms）：不必每 tick 扫。 */
+  sessionSweepIntervalMs: 30_000,
 } as const;
+
+/** 空闲会话回收缺省阈值（15 分钟）。 */
+export const SESSION_REAP_DEFAULT_MS = 15 * 60_000;
+
+/**
+ * 解析空闲会话回收阈值（`SESSION_REAP_MS` 环境变量）。
+ *
+ * - 缺省 / 非法（`NaN` / 负数 / 非数字）→ 回落 15 分钟；
+ * - **`0` = 关闭回收**（09 §7 的回滚开关）；
+ * - 只影响内存回收，不影响存档正确性（回收前必 flush）。
+ */
+export function parseSessionReapMs(raw: unknown): number {
+  if (raw === undefined || raw === null || raw === '') return SESSION_REAP_DEFAULT_MS;
+  const value = typeof raw === 'number' ? raw : Number(String(raw).trim());
+  if (!Number.isFinite(value) || value < 0) return SESSION_REAP_DEFAULT_MS;
+  return Math.trunc(value);
+}
 
 /** 单角色一次 tick 的调度参数。 */
 export interface TickBudget {

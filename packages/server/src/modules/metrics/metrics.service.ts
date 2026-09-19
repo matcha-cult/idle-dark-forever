@@ -81,6 +81,9 @@ export class MetricsService {
         // I2/I3（截断必须恒为 0；>0 即缺陷信号）
         world_truncated_ms_total: safeInt(world.truncatedMsTotal),
         world_debt_warn_total: safeInt(world.debtWarnTotal),
+        // L3（空闲回收）
+        session_reaped_total: safeInt(world.sessionReapedTotal),
+        session_idle_reap_ms: safeInt(world.sessionIdleReapMs),
         // 上下文缓存
         context_loaded: safeInt(ctx.loaded),
         context_dirty: safeInt(ctx.dirty),

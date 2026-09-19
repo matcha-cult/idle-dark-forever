@@ -32,6 +32,7 @@ const REQUIRED = [
   'world_rounds_total',
   'world_rounds_cut_off_total',
   'world_truncated_ms_total',
+  'session_reaped_total',
   'context_loaded',
 ];
 

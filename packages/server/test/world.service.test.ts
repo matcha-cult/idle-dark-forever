@@ -266,6 +266,41 @@ describe('WorldService', () => {
     expect(stats.worldTimeRatioP50).toBe(1);
     expect(Number.isNaN(stats.roundCpuMs)).toBe(false);
   });
+
+  it('空闲会话回收：离线超阈值 → 会话释放，且**先落库**（脏数据不丢）', async () => {
+    service.sessionIdleReapMs = 1_000;
+    await startInStreet();
+    expect(service.sessionCount).toBe(1);
+
+    online = false;
+    now += 1_100; // 超过阈值
+    service.tick();
+    // stop() 同步删除会话，异步 flush 落库
+    expect(service.sessionCount).toBe(0);
+    expect(service.stats.sessionReapedTotal).toBe(1);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(context.stats.dirty).toBe(0); // 已 flush，脏数据未丢
+    expect(context.peek(1, 'c1')).not.toBeNull();
+  });
+
+  it('空闲回收阈值 <= 0 → 关闭回收（会话保留）', async () => {
+    service.sessionIdleReapMs = 0;
+    await startInStreet();
+    online = false;
+    now += 10 * 60_000;
+    service.tick();
+    expect(service.sessionCount).toBe(1);
+    expect(service.stats.sessionReapedTotal).toBe(0);
+  });
+
+  it('在线会话即使超阈值也绝不回收（在线优先）', async () => {
+    service.sessionIdleReapMs = 1;
+    await startInStreet();
+    now += 10 * 60_000;
+    service.tick();
+    expect(service.sessionCount).toBe(1);
+    expect(service.stats.sessionReapedTotal).toBe(0);
+  });
 });
 
 describe('WorldService · 进图自动触发剧情（原版 MapPanel.checkStories）', () => {

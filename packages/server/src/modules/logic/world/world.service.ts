@@ -52,8 +52,17 @@ import { BattleCollector } from './internal/battle-collector.js';
 import { buildBattleWorld, nextWorldSeed } from './internal/headless.js';
 import { mapListDtoOf, pendingOfflineMsOf, requirementContextOf } from './internal/map-dto.js';
 import { nextCursor, planAdvance, planRound, shouldStopRound } from './internal/tick-scheduler.js';
+import {
+  beginClose,
+  createLifecycle,
+  isDestroyed,
+  markDestroyed,
+  markOnline,
+  shouldReap,
+  type SessionLifecycle,
+} from './internal/session-lifecycle.js';
 import { unitStateDtoOf } from './internal/unit-state.js';
-import { EXP_RATE, OFFLINE_MAX_MS, WORLD_CONFIG } from './world.config.js';
+import { EXP_RATE, OFFLINE_MAX_MS, WORLD_CONFIG, parseSessionReapMs } from './world.config.js';
 
 /** Tick 上限：单一真相。 */
 export const WORLD_TICK_MS = WORLD_CONFIG.tickIntervalMs;
@@ -78,6 +87,8 @@ interface WorldSession {
   advancedMs: number;
   /** 该会话累计真实经过的毫秒（`world_time_ratio` 分母）。 */
   realMs: number;
+  /** 生命周期（`active → closing → destroyed`；空闲回收与 dispose 幂等）。 */
+  lifecycle: SessionLifecycle;
 }
 
 /** 世界调度指标快照（07 T-A1；全部为进程内累计/瞬时值，无数据时为 0 或 1，绝不 NaN）。 */
@@ -96,6 +107,10 @@ export interface WorldStats {
   /** 被显式截断丢弃的虚拟毫秒：**正常恒为 0**（>0 即缺陷信号）。 */
   readonly truncatedMsTotal: number;
   readonly debtWarnTotal: number;
+  /** 空闲会话回收累计数（L3 生效证据）。 */
+  readonly sessionReapedTotal: number;
+  /** 当前空闲回收阈值（ms；`0` = 关闭）。 */
+  readonly sessionIdleReapMs: number;
   readonly callbackBudgetPerRound: number;
   readonly maxRoundCpuMs: number;
 }
@@ -120,6 +135,13 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
   private roundCpuMs = 0;
   private truncatedMsTotal = 0;
   private debtWarnTotal = 0;
+  private reapedTotal = 0;
+  private lastSweepAt: number | null = null;
+  /**
+   * 空闲会话回收阈值（ms）：`<= 0`（含 `0`）= 关闭回收（09 §7 回滚开关）。
+   * 默认读 `SESSION_REAP_MS`；单测可直接改写本字段。
+   */
+  sessionIdleReapMs = parseSessionReapMs(process.env.SESSION_REAP_MS);
 
   constructor(
     private readonly playerContext: PlayerContextService,
@@ -180,6 +202,11 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
   tick(): void {
     if (this.destroyed) return;
     const now = this.now();
+    // 空闲会话回收（节流）：离线且空闲超阈值的会话先落库再释放（09 §7 R1）。
+    if (this.lastSweepAt === null || now - this.lastSweepAt >= WORLD_CONFIG.sessionSweepIntervalMs) {
+      this.lastSweepAt = now;
+      this.sweepIdleSessions(now);
+    }
     const keys = [...this.sessions.keys()];
     if (keys.length === 0) {
       this.tickCursor = 0;
@@ -241,6 +268,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
   private tickSession(session: WorldSession, now: number): number {
     // 离线角色：不推送、不推进（离线收益由 idle 域结算）。
     if (!this.onlineSessions.isOnline(session.userId, now)) return 0;
+    session.lifecycle = markOnline(session.lifecycle, now);
 
     const advance = planAdvance({
       now,
@@ -312,6 +340,32 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       this.schedulePersist(session);
     }
     return callbacksUsed;
+  }
+
+  /**
+   * 空闲会话回收（09 §7 R1）：离线且空闲 ≥ 阈值 → 走 `stop()`（**先 persistPosition + flush
+   * 再 dispose**，绝不丢脏数据）。
+   *
+   * - **在线**会话（含被预算顺延、本轮未 tick 的）只刷新 `lastOnlineAt`，绝不回收；
+   * - 已在关闭流程（`closing` / `destroyed`）的会话跳过；
+   * - `sessionIdleReapMs <= 0` = 关闭回收（回滚开关）。
+   */
+  private sweepIdleSessions(now: number): void {
+    if (this.sessionIdleReapMs <= 0) return;
+    for (const session of [...this.sessions.values()]) {
+      if (this.onlineSessions.isOnline(session.userId, now)) {
+        session.lifecycle = markOnline(session.lifecycle, now);
+        continue;
+      }
+      if (session.lifecycle.state !== 'active') continue;
+      if (!shouldReap(session.lifecycle.lastOnlineAt, now, this.sessionIdleReapMs)) continue;
+      this.reapedTotal += 1;
+      void this.stop(session.userId, session.characterId).catch((error: unknown) => {
+        this.logger.warn(`空闲会话回收失败：${session.characterId}`, {
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
   }
 
   private emitTick(session: WorldSession, now: number): void {
@@ -428,6 +482,8 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       roundsCutOff: this.roundsCutOff,
       truncatedMsTotal: this.truncatedMsTotal,
       debtWarnTotal: this.debtWarnTotal,
+      sessionReapedTotal: this.reapedTotal,
+      sessionIdleReapMs: Math.max(0, Math.trunc(this.sessionIdleReapMs)),
       callbackBudgetPerRound: WORLD_CONFIG.globalCallbackBudgetPerRound,
       maxRoundCpuMs: WORLD_CONFIG.maxRoundCpuMs,
     };
@@ -499,6 +555,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       combatDirty: false,
       advancedMs: 0,
       realMs: 0,
+      lifecycle: createLifecycle(now),
     };
 
     const built = buildBattleWorld({
@@ -546,6 +603,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     const session = this.sessions.get(key);
     if (!session) return;
     this.sessions.delete(key);
+    session.lifecycle = beginClose(session.lifecycle);
     await this.persistPosition(session);
     this.disposeSession(session);
     const player = this.playerContext.peek(userId, characterId);
@@ -624,6 +682,9 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
   }
 
   private disposeSession(session: WorldSession): void {
+    // 幂等：已销毁的会话不再 dispose（空闲回收与显式 stop 可能竞争同一条会话）。
+    if (isDestroyed(session.lifecycle)) return;
+    session.lifecycle = markDestroyed(session.lifecycle);
     try {
       session.world.dispose();
     } catch {
