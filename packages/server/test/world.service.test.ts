@@ -112,6 +112,37 @@ describe('WorldService', () => {
     expect(tickFrames().length).toBe(0);
   });
 
+  it('离线时**世界不推进**：不刷怪、不结算（在线对照会变）', async () => {
+    const session = await service.start(1, 'c1');
+    expect(session).not.toBeNull();
+    if (!session) return;
+
+    // 在线对照：跑 5 个 tick，刷怪器与战斗会改变世界
+    for (let i = 0; i < 5; i += 1) {
+      now += 1000;
+      service.tick();
+    }
+    const unitsOnline = session.world.units.length;
+    const expOnline = context.peek(1, 'c1')?.exp ?? 0;
+    expect(unitsOnline).toBeGreaterThan(0);
+
+    // 离线：同一账号没有活连接 → tickSession 早退，clock 不 stepPaused
+    online = false;
+    for (let i = 0; i < 20; i += 1) {
+      now += 1000;
+      service.tick();
+    }
+    expect(session.world.units.length).toBe(unitsOnline);
+    expect(context.peek(1, 'c1')?.exp ?? 0).toBe(expOnline);
+    expect(tickFrames().length).toBeGreaterThan(0); // 只统计在线那 5 tick 的推送
+    const framesAfterOffline = tickFrames().length;
+    for (let i = 0; i < 5; i += 1) {
+      now += 1000;
+      service.tick();
+    }
+    expect(tickFrames().length).toBe(framesAfterOffline);
+  });
+
   it('enterMap 重复进入当前地图 → 成功（按「重置本图」处理，不报 ALREADY_IN_MAP）', async () => {
     await startInStreet();
     const result = await service.enterMap(1, 'c1', 'town.street');
