@@ -29,6 +29,7 @@ import {
   playerStateDtoOf,
 } from '../shared/index.js';
 import { WorldService } from '../world/world.service.js';
+import { PanelCharacterService } from '../inventory/internal/panel-character.service.js';
 import { parseLegacyPlayerSave } from './internal/save-import.js';
 
 /** `exportSave` 的返回形状（与 `@idle-dark/ionet-transport` 的 `PlayerExportSaveDto` 对齐）。 */
@@ -68,6 +69,7 @@ export class PlayerLogicService {
     private readonly playerContext: PlayerContextService,
     private readonly world: WorldService,
     private readonly opIds: OpIdempotencyService,
+    private readonly panelCharacters: PanelCharacterService,
     @Inject(GAME_CLOCK) now: NowSource,
     @Inject(DATA_TABLES) tables: DataTables,
   ) {
@@ -98,6 +100,9 @@ export class PlayerLogicService {
     if (!session) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);
     const player = this.playerContext.peek(userId, characterId);
     if (!player) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);
+    // 同步面板域的「当前角色」注册表。面板请求的载荷不带 characterId，
+    // 不同步的话多角色账号会一直操作「最近创建」的那个角色（两个注册表必须一起写）。
+    this.panelCharacters.setActive(userId, characterId);
     const extras = await this.playerContext.extrasOf(userId);
     const position = this.world.positionOf(userId, characterId) ?? { map: 'home', endlessLevel: 0 };
     return ok(

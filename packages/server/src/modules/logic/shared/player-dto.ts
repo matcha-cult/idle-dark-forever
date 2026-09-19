@@ -207,7 +207,7 @@ export function skillListDtoOf(
     if (!skill) continue;
     const unlockLevel = careerData.skills[key] ?? 0;
     const description = typeof skill.description === 'string' ? skill.description : '';
-    const coolDown = typeof skill.coolDown === 'function' ? skill.coolDown(0) : skill.coolDown;
+    const coolDown = resolveDisplayCoolDown(skill.coolDown);
     out.push({
       key,
       name: skill.name,
@@ -224,6 +224,33 @@ export function skillListDtoOf(
   }
   return out;
 }
+
+/**
+ * 求「展示用」的技能冷却数值。
+ *
+ * ⚠️ 数据表里 89 处 `coolDown` 形如 `(level, unit) => unit.runAttrHooks(8000, 'xxxCoolDown')`
+ * —— 即**第二参是战斗单位**。这些 hook 属于战斗运行时，面板展示阶段并没有真实单位，
+ * 直接 `skill.coolDown(0)` 会在 hook 内抛 `Cannot read properties of undefined (reading 'runAttrHooks')`，
+ * 把 `career.list` 变成 500（这是实际发生过的缺陷）。
+ *
+ * 因此这里传一个**最小 unit 替身**（`runAttrHooks` 直接返回原值，等价于「无任何属性加成」），
+ * 并用 try/catch 兜底：冷却只是展示值，任何异常都不该让整个面板失败。
+ */
+function resolveDisplayCoolDown(raw: unknown): number {
+  if (typeof raw === 'number') return raw;
+  if (typeof raw !== 'function') return 0;
+  try {
+    const value = (raw as (level: number, unit: unknown) => unknown)(0, DISPLAY_UNIT_STUB);
+    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** 展示阶段的单位替身：属性 hook 原值返回（= 无加成）。 */
+const DISPLAY_UNIT_STUB = {
+  runAttrHooks: (value: number, _key?: string): number => value,
+} as const;
 
 /** 强化（被动）展示态列表。 */
 export function enhanceListDtoOf(tables: DataTables, player: Player): EnhanceDto[] {
