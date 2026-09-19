@@ -24,6 +24,7 @@ import {
   type LogLevel,
 } from '@idle-dark/ui-kit';
 import { useRootStore } from '../../../app/root-context.js';
+import { isAttackableCamp } from '../../../stores/world-store.js';
 
 /** 战斗事件 → 日志条目（纯展示映射，不改变任何数值）。 */
 export function formatBattleEvent(
@@ -91,8 +92,10 @@ export const BattlePanel = observer(function BattlePanel() {
   };
 
   const focus = (unit: UnitStateDto): void => {
-    if (unit.camp !== 'enemy') return;
-    // 只发「把敌方单位设为目标」的意图；具体由哪个我方单位攻击由服务端决定。
+    // 敌方与**中立**（黄名）都可以指定：原版 `CampRelation.player.neutral === true`，
+    // 不主动攻击但可以主动打，打了它才会参战。幽灵/剧情/神龛等一律忽略。
+    if (!isAttackableCamp(unit.camp)) return;
+    // 只发「把该单位设为目标」的意图；具体由哪个我方单位攻击由服务端决定。
     void world.focus(unit.id);
   };
 
@@ -224,7 +227,9 @@ export const BattlePanel = observer(function BattlePanel() {
         title="战场单位"
         extra={
           <Typography.Text type="secondary">
-            {`我方 ${world.allies.length} · 敌方 ${world.enemies.length}`}
+            {world.neutrals.length > 0
+              ? `我方 ${world.allies.length} · 敌方 ${world.enemies.length} · 中立 ${world.neutrals.length}`
+              : `我方 ${world.allies.length} · 敌方 ${world.enemies.length}`}
           </Typography.Text>
         }
       >
@@ -238,16 +243,21 @@ export const BattlePanel = observer(function BattlePanel() {
               ))}
             </Flex>
             <Flex wrap gap={token.paddingXS} data-testid="battle-enemies">
-              {world.enemies.map((unit) => (
+              {world.attackables.map((unit) => (
                 <UnitCard
                   key={unit.id}
                   unit={unit}
                   dead={unit.hp <= 0}
                   onClick={focus}
                   extra={
-                    world.allies.some((ally) => ally.targetId === unit.id) ? (
-                      <Tag color="red">被锁定</Tag>
-                    ) : undefined
+                    <Flex gap={4}>
+                      {/* 黄名中立怪：不主动攻击、也不会被溅射打到，必须玩家手动点它才会开战
+                          （原版「单位」面板语义；`eyer-stories-4` 要求击杀大史莱姆）。 */}
+                      {unit.camp === 'neutral' ? <Tag color="gold">中立</Tag> : null}
+                      {world.allies.some((ally) => ally.targetId === unit.id) ? (
+                        <Tag color="red">被锁定</Tag>
+                      ) : null}
+                    </Flex>
                   }
                 />
               ))}

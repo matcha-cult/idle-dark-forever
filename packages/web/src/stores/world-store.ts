@@ -29,6 +29,18 @@ export interface BattleLogEntry {
 /** 日志保留上限（避免长时间挂机把内存吃满）。 */
 const MAX_LOG_ENTRIES = 200;
 
+/**
+ * 该阵营是否**允许被玩家点选为攻击目标**。
+ *
+ * 原版 `CampRelation.player.neutral === true`（可攻击但不自动选为目标）——
+ * 即黄名中立怪不主动打你、也不会被溅射命中，但**可以**被指定集火，
+ * 一旦被攻击就 `enemy-unit` 把 `camp` 翻成 `enemy` 开始反击。
+ * 幽灵 / 剧情 / 神龛 / 友军一律不可选。
+ */
+export function isAttackableCamp(camp: string): boolean {
+  return camp === 'enemy' || camp === 'neutral';
+}
+
 export class WorldStore {
   snapshot: WorldSnapshotDto | null = null;
   units: WorldSnapshotDto['units'] = [];
@@ -65,9 +77,26 @@ export class WorldStore {
     return this.units.filter((unit) => unit.camp === 'player' || unit.camp === 'ally');
   }
 
-  /** 敌方单位。 */
+  /** 敌方单位（会自动攻击玩家）。 */
   get enemies(): WorldSnapshotDto['units'] {
     return this.units.filter((unit) => unit.camp === 'enemy');
+  }
+
+  /** 中立单位（黄名：不会主动攻击，但**可以被点选攻击**）。 */
+  get neutrals(): WorldSnapshotDto['units'] {
+    return this.units.filter((unit) => unit.camp === 'neutral');
+  }
+
+  /**
+   * 可被指定为攻击目标的单位 = 敌方 + 中立。
+   *
+   * ⚠️ 为什么必须含中立：原版剧情明确教玩家「黄色名字的魔物不会主动攻击英雄们，
+   * 溅射和群体伤害也不会攻击他们。但如果英雄主动攻击他们，他们就会加入战斗」，
+   * 且 `eyer-stories-4` 的任务正是**击杀 1 只大史莱姆（中立）**。
+   * 早期前端只列 `camp === 'enemy'`，中立怪既看不到也点不动 → 主线到此卡死。
+   */
+  get attackables(): WorldSnapshotDto['units'] {
+    return this.units.filter((unit) => isAttackableCamp(unit.camp));
   }
 
   get currentMap(): string {

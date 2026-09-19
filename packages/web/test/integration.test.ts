@@ -463,3 +463,31 @@ describe('进图自动播放剧情（(story, unlock) 推送）', () => {
     expect(root.story.play).toBeNull();
   });
 });
+
+describe('中立（黄名）单位必须可被点选攻击（eyer-stories-4 的前置）', () => {
+  it('中立怪进入「可攻击」列表、但不被算作敌方；友军/幽灵不入列', async () => {
+    const { root, server } = createHarness();
+    opened.push(root);
+    await root.login('tester', 'secret123');
+    await root.selectCharacter('k1');
+
+    server.pushRoute(WORLD_CMD.cmd, WORLD_CMD.tick, {
+      serverTime: 1_700_000_000_100,
+      units: [
+        makeUnit({ id: 'p1', camp: 'player', kind: 'player', name: '守夜人', hp: 100, maxHp: 100 }),
+        makeUnit({ id: 'e1' }),
+        // 大史莱姆：中立（不会主动攻击，也不会被溅射打到）
+        makeUnit({ id: 'n1', camp: 'neutral', name: '大史莱姆', typeKey: 'slime.giant', level: 12 }),
+        makeUnit({ id: 'g1', camp: 'ghost', name: '尸体' }),
+      ],
+      events: [],
+      gainedExp: 0,
+      gainedGold: 0,
+    });
+
+    expect(root.world.enemies.map((unit) => unit.id)).toEqual(['e1']);
+    expect(root.world.neutrals.map((unit) => unit.id)).toEqual(['n1']);
+    expect(root.world.attackables.map((unit) => unit.id)).toEqual(['e1', 'n1']);
+    expect(root.world.attackables.some((unit) => unit.id === 'g1')).toBe(false);
+  });
+});

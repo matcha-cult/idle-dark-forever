@@ -12,8 +12,21 @@ import { createMemoryStorage, safeGet, resolveStorage, safeRemove, safeSet } fro
 import { LoadGuard } from '../src/stores/load-guard.js';
 import { ToastStore } from '../src/stores/toast-store.js';
 import { UiStore } from '../src/stores/ui-store.js';
-import { appendEvents, type BattleLogEntry } from '../src/stores/world-store.js';
+import { appendEvents, isAttackableCamp, type BattleLogEntry } from '../src/stores/world-store.js';
 import { THEME_STORAGE_KEY, ThemeStore, parseThemeMode } from '../src/theme/theme-store.js';
+
+describe('isAttackableCamp（可被点选为攻击目标的阵营）', () => {
+  it('敌方与中立可选 —— 中立即原版黄名怪（不主动攻击，但可以打）', () => {
+    expect(isAttackableCamp('enemy')).toBe(true);
+    expect(isAttackableCamp('neutral')).toBe(true);
+  });
+
+  it('幽灵 / 剧情 / 神龛 / 友军 / 未知值一律不可选', () => {
+    for (const camp of ['ghost', 'story', 'shrine', 'player', 'alien', 'ally', '', 'ENEMY', undefined]) {
+      expect(isAttackableCamp(camp as unknown as string)).toBe(false);
+    }
+  });
+});
 
 describe('UiStore', () => {
   it('默认无面板；设置后生效；reset 回到默认', () => {

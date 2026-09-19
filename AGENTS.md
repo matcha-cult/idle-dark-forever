@@ -385,3 +385,29 @@ node scripts/story-entry-smoke.mjs 3000                       # 进图自动触�
 玩家正在读另一段剧情时（`play !== null`）**不打断**。
 
 ⚠️ 面板 key 是 **`UiStore` 状态**（不是 `GameShellPage` 的局部 state），否则推送驱动的跳转无法发起。
+
+---
+
+## 13. 中立（黄名）单位必须可被玩家点选攻击
+
+`packages/game-core/src/combat/camps.ts` 是阵营关系的唯一真相：
+
+| 关系 | 值 | 语义 |
+|---|---|---|
+| `CampRelation.player.enemy` | `'hate'` | 自动选为目标（红名野怪） |
+| `CampRelation.player.neutral` | `true` | **可攻击，但不会被自动选中**（黄名中立） |
+| `ghost` / `story` / `shrine` | 无 | 不可攻击 |
+
+所以「战场单位」列表与点选逻辑必须是 **敌方 + 中立**：
+
+- 判定只有一个入口：`web/src/stores/world-store.ts` 的 `isAttackableCamp(camp)` /
+  `get attackables()`；`enemies` 只用于计数与展示。
+- ⚠️ **不要自己写 `unit.camp === 'enemy'`**：前端曾经只列 `enemy`，于是中立的大史莱姆
+  (`slime.giant`) 既看不见也点不动 → `eyer-stories-4`（击杀 1 只大史莱姆）直接把主线卡死。
+  这正是原版剧情要教玩家的那条规则：「黄色名字的魔物不会主动攻击英雄们……但如果英雄主动
+  攻击他们，他们就会加入战斗」。
+- 中立怪不是"点一下就变敌人"，而是**首次受到伤害**时由
+  `Unit.damage()` → `setTarget(from)` → `EnemyUnit.setTarget()` 把 `camp` 翻成 `enemy` 并反击
+  （见 `unit.ts:602-614` 与 `enemy-unit.ts:455-460`）。
+- 服务端 `battle.focus` 只拒绝 `ghost` 与不存在的目标，中立目标本就被允许 ——
+  **别在前端把它过滤掉**。
