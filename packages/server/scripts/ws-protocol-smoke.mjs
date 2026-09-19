@@ -77,11 +77,14 @@ function waitFrame(ws, predicate, timeoutMs = 5000) {
 const noToken = await openExpect401();
 check('§6 无 token 的握手被 HTTP 401 拒绝', noToken.rejected, noToken.message);
 
-const wrongToken = jwt.sign({ id: 42, username: 'smoke' }, 'wrong-secret');
+// ⚠️ 用**保证不存在**的 userId：下面的 auth.me 断言依赖「账号不存在 → 业务失败」，
+// 若用 42 这类小 id，历史冒烟注册的账号会把该 id 占用，用例随 DB 状态漂移（实测踩到过）。
+const ABSENT_USER_ID = 2_000_000_000;
+const wrongToken = jwt.sign({ id: ABSENT_USER_ID, username: 'smoke' }, 'wrong-secret');
 const wrongSig = await openExpect401(`?token=${encodeURIComponent(wrongToken)}`);
 check('§6 错签名的 token 同样被 401 拒绝', wrongSig.rejected, wrongSig.message);
 
-const token = jwt.sign({ id: 42, username: 'smoke' }, secret, { expiresIn: 60 });
+const token = jwt.sign({ id: ABSENT_USER_ID, username: 'smoke' }, secret, { expiresIn: 60 });
 const ws = await open(`?token=${encodeURIComponent(token)}`);
 check('§6 ?token=<jwt> 握手成功（升级未被拒）', true);
 

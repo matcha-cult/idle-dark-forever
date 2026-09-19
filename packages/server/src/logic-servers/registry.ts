@@ -48,6 +48,7 @@ export const SERVER_DEFINITIONS = {
       'main.ts',
       'modules/auth',
       'modules/health',
+      'modules/metrics',
       'modules/edge',
       'modules/logic/panel-actions.ts',
     ],

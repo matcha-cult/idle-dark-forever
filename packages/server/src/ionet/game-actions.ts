@@ -27,6 +27,7 @@ import { BattleAction } from '../modules/logic/battle/battle.action.js';
 import { IdleAction } from '../modules/logic/idle/idle.action.js';
 import { HealthModule } from '../modules/health/health.module.js';
 import { AuthModule } from '../modules/auth/auth.module.js';
+import { MetricsModule } from '../modules/metrics/metrics.module.js';
 import { LogicSharedModule } from '../modules/logic/shared/logic-shared.module.js';
 import { PlayerLogicModule } from '../modules/logic/player/player-logic.module.js';
 import { WorldLogicModule } from '../modules/logic/world/world-logic.module.js';
@@ -59,6 +60,7 @@ export const GAME_ACTION_CLASSES = [
 export const GAME_ACTION_MODULES = [
   HealthModule,
   AuthModule,
+  MetricsModule,
   LogicSharedModule,
   WorldLogicModule,
   PlayerLogicModule,
