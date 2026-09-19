@@ -34,7 +34,7 @@ import {
   type NowSource,
   type RunEndedEvent,
 } from '../shared/index.js';
-import { WorldService } from '../world/world.service.js';
+import { BATTLE_COMMAND, type BattleCommandPort } from '../shared/index.js';
 import { MapLogicService } from '../map/map.logic.service.js';
 import {
   consumeDungeonStack,
@@ -52,7 +52,7 @@ export class DungeonLogicService implements OnModuleInit {
 
   constructor(
     private readonly contexts: PlayerContextService,
-    private readonly world: WorldService,
+    @Inject(BATTLE_COMMAND) private readonly battle: BattleCommandPort,
     private readonly maps: MapLogicService,
     @Inject(GAME_CLOCK) private readonly now: NowSource,
     @Inject(EVENT_BUS) private readonly events: EventBus,
@@ -147,7 +147,7 @@ export class DungeonLogicService implements OnModuleInit {
   ): Promise<ActionResult<WorldSnapshotDto>> {
     const map = this.contexts.tables.maps[mapKey];
     if (map?.isDungeon !== true) {
-      return this.world.enterMap(userId, characterId, mapKey, ...(opId !== undefined ? [opId] : []));
+      return this.battle.enterMap(userId, characterId, mapKey, ...(opId !== undefined ? [opId] : []));
     }
     const extras = await this.contexts.extrasOf(userId);
     const ticketKey = ticketKeyOf(mapKey, map, 0);
@@ -158,7 +158,7 @@ export class DungeonLogicService implements OnModuleInit {
     // 先落"已重置"的状态（跨过周期边界时回满），失败不消耗层数。
     this.setCooldown(extras, characterId, ticketKey, plan.state);
 
-    const result = await this.world.enterMap(
+    const result = await this.battle.enterMap(
       userId,
       characterId,
       mapKey,
@@ -174,7 +174,7 @@ export class DungeonLogicService implements OnModuleInit {
   }
 
   async leave(userId: number, characterId: string): Promise<ActionResult<null>> {
-    return this.world.leave(userId, characterId);
+    return this.battle.leave(userId, characterId);
   }
 
   // ────────────────────────────── 队列推进（RD3/RD4/RD5） ──────────────────────────────

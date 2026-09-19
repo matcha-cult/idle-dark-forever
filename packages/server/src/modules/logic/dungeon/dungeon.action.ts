@@ -4,7 +4,7 @@
  * 只做参数校验 + 角色归属校验 + 转发；业务在 `DungeonLogicService`。
  * ⚠️ `FlowContext` **值导入**（`emitDecoratorMetadata` 鉴权可见性前提）。
  */
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ActionController, ActionMethod, FlowContext } from '@nbb-ionet/core-framework';
 import type {
   ActionResult,
@@ -22,7 +22,7 @@ import {
 } from '../../../common/kernel/action-support.js';
 import { guardAction } from '../../../common/kernel/result.js';
 import { RateLimiterService } from '../../../common/services/rate-limiter.service.js';
-import { WorldService } from '../world/world.service.js';
+import { BATTLE_COMMAND, type BattleCommandPort } from '../shared/index.js';
 import { DungeonLogicService } from './dungeon.logic.service.js';
 
 @Injectable()
@@ -30,7 +30,7 @@ import { DungeonLogicService } from './dungeon.logic.service.js';
 export class DungeonAction {
   constructor(
     private readonly dungeons: DungeonLogicService,
-    private readonly world: WorldService,
+    @Inject(BATTLE_COMMAND) private readonly battle: BattleCommandPort,
     private readonly rateLimiter: RateLimiterService,
   ) {}
 
@@ -138,6 +138,6 @@ export class DungeonAction {
     userId: number,
     raw: unknown,
   ): { ok: true; key: string } | { ok: false; fail: ActionResult<never> } {
-    return this.world.resolveActiveCharacter(userId, raw);
+    return this.battle.resolveActiveCharacter(userId, raw);
   }
 }

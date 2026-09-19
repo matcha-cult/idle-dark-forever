@@ -9,7 +9,7 @@
  *
  * `world.*`(30) 的兼容入口保持不变。
  */
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { ActionResult, MapDto, WorldSnapshotDto } from '@idle-dark/protocol';
 import { BusinessErrorCode, fail, ok } from '@idle-dark/protocol';
 import {
@@ -19,13 +19,13 @@ import {
   pickOpenWorldMap,
   resolveWorldPosition,
 } from '../shared/index.js';
-import { WorldService } from '../world/world.service.js';
+import { BATTLE_COMMAND, type BattleCommandPort } from '../shared/index.js';
 
 @Injectable()
 export class MapLogicService {
   constructor(
     private readonly contexts: PlayerContextService,
-    private readonly world: WorldService,
+    @Inject(BATTLE_COMMAND) private readonly battle: BattleCommandPort,
   ) {}
 
   /** 地图目录 + 解锁状态（客户端只渲染，不做数值推导）。 */
@@ -39,7 +39,7 @@ export class MapLogicService {
 
   /** 当前世界快照（与 `world.snapshot` 同形；控制器统一入口）。 */
   async snapshot(userId: number, characterId: string): Promise<ActionResult<WorldSnapshotDto>> {
-    return this.world.snapshot(userId, characterId);
+    return this.battle.snapshot(userId, characterId);
   }
 
   /**
@@ -62,12 +62,12 @@ export class MapLogicService {
     if (!evaluateMapUnlock(map.requirement, player, position.map, extras)) {
       return fail(BusinessErrorCode.MAP_LOCKED);
     }
-    return this.world.enterMap(userId, characterId, mapKey, ...(opId !== undefined ? [opId] : []));
+    return this.battle.enterMap(userId, characterId, mapKey, ...(opId !== undefined ? [opId] : []));
   }
 
   /** 离开当前地图（关会话）。 */
   async leave(userId: number, characterId: string): Promise<ActionResult<null>> {
-    return this.world.leave(userId, characterId);
+    return this.battle.leave(userId, characterId);
   }
 
   /**

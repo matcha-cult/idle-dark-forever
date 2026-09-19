@@ -15,11 +15,17 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { type ActionResult, BusinessErrorCode, type PlayerMetaDto, fail, ok } from '@idle-dark/protocol';
-import { DATA_TABLES, PlayerContextService, careerDisplayName, roleDisplayName } from '../logic/shared/index.js';
+import {
+  BATTLE_COMMAND,
+  DATA_TABLES,
+  PlayerContextService,
+  careerDisplayName,
+  roleDisplayName,
+  type BattleCommandPort,
+} from '../logic/shared/index.js';
 import type { DataTables, Player } from '@idle-dark/game-core';
 import { bigintToSafeNumber } from '../../common/utils/safe-bigint.js';
 import { DatabaseService } from '../database/database.service.js';
-import { WorldService } from '../logic/world/world.service.js';
 
 const NAME_MAX_LENGTH = 24;
 /** 默认角色（`DataTables.roles` 的真实 key，不是职业）。 */
@@ -57,7 +63,7 @@ export class CharacterService {
   constructor(
     private readonly database: DatabaseService,
     private readonly playerContext: PlayerContextService,
-    private readonly world: WorldService,
+    @Inject(BATTLE_COMMAND) private readonly battle: BattleCommandPort,
     @Inject(DATA_TABLES) tables: DataTables,
   ) {
     this.tables = tables;
@@ -159,7 +165,7 @@ export class CharacterService {
       level: finiteInt(player.level, 1),
       peakLevel: finiteInt(player.peakLevel, 0),
       createdAt: finiteInt(player.timestamp, 0),
-      inBattle: this.world.isInBattle(userId, player.key),
+      inBattle: this.battle.isInBattle(userId, player.key),
     };
   }
 
@@ -176,7 +182,7 @@ export class CharacterService {
       level: finiteInt(row.level, 1),
       peakLevel: finiteInt(row.peak_level, 0),
       createdAt: toEpochMs(row.created_at),
-      inBattle: this.world.isInBattle(userId, row.id),
+      inBattle: this.battle.isInBattle(userId, row.id),
     };
   }
 

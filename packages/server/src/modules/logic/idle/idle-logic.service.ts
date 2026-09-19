@@ -38,7 +38,7 @@ import {
 } from '../shared/index.js';
 import { BattleCollector } from '../world/internal/battle-collector.js';
 import { buildBattleWorld, nextWorldSeed } from '../world/internal/headless.js';
-import { EXP_RATE, OFFLINE_MAX_MS, OFFLINE_PAUSE_AFTER_MS } from '../world/world.config.js';
+import { EXP_RATE, OFFLINE_MAX_MS, OFFLINE_PAUSE_AFTER_MS } from '../shared/index.js';
 
 /** 离线结算硬上限（保持原版 72h 语义）。 */
 export const MAX_OFFLINE_MS = OFFLINE_MAX_MS;

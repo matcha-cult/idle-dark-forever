@@ -28,7 +28,7 @@ import {
   type NowSource,
   playerStateDtoOf,
 } from '../shared/index.js';
-import { WorldService } from '../world/world.service.js';
+import { BATTLE_COMMAND, type BattleCommandPort } from '../shared/index.js';
 import { PanelCharacterService } from '../shared/panel-character.service.js';
 import { parseLegacyPlayerSave } from './internal/save-import.js';
 
@@ -67,7 +67,7 @@ export class PlayerLogicService {
   constructor(
     private readonly characters: CharacterService,
     private readonly playerContext: PlayerContextService,
-    private readonly world: WorldService,
+    @Inject(BATTLE_COMMAND) private readonly battle: BattleCommandPort,
     private readonly opIds: OpIdempotencyService,
     private readonly panelCharacters: PanelCharacterService,
     @Inject(GAME_CLOCK) now: NowSource,
@@ -91,7 +91,7 @@ export class PlayerLogicService {
 
   async remove(userId: number, characterId: string): Promise<ActionResult<null>> {
     // 先停世界，避免删除后仍有内存会话在跑。
-    await this.world.stop(userId, characterId).catch(() => undefined);
+    await this.battle.stopSession(userId, characterId).catch(() => undefined);
     return this.characters.remove(userId, characterId);
   }
 
@@ -100,11 +100,11 @@ export class PlayerLogicService {
     // 旧实现只 `start(新角色)` 不停旧会话 → 两个角色的世界同时 tick，而框架的定向推送
     // 是按 userId 扇出到该账号的**全部**连接，于是会出现「两条连接互相收到/推进对方的角色」
     // = 串号 + 双份推送。
-    const previous = this.world.activeCharacterOf(userId);
-    const session = await this.world.start(userId, characterId);
-    if (!session) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);
+    const previous = this.battle.activeCharacterOf(userId);
+    const started = await this.battle.startSession(userId, characterId);
+    if (!started) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);
     if (previous !== undefined && previous !== characterId) {
-      await this.world.stop(userId, previous);
+      await this.battle.stopSession(userId, previous);
     }
     const player = this.playerContext.peek(userId, characterId);
     if (!player) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);
@@ -112,14 +112,14 @@ export class PlayerLogicService {
     // 不同步的话多角色账号会一直操作「最近创建」的那个角色（两个注册表必须一起写）。
     this.panelCharacters.setActive(userId, characterId);
     const extras = await this.playerContext.extrasOf(userId);
-    const position = this.world.positionOf(userId, characterId) ?? { map: 'home', endlessLevel: 0 };
+    const position = this.battle.positionOf(userId, characterId) ?? { map: 'home', endlessLevel: 0 };
     return ok(
       playerStateDtoOf(this.tables, player, {
         extras,
         map: position.map,
         endlessLevel: position.endlessLevel,
-        pendingOfflineMs: this.world.pendingOfflineMs(userId, characterId),
-        usableByKey: this.world.usableByKey(),
+        pendingOfflineMs: this.battle.pendingOfflineMs(userId, characterId),
+        usableByKey: this.battle.usableByKey(),
       }),
     );
   }

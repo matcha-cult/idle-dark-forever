@@ -7,8 +7,11 @@
  * 会经由 `inventory/internal/*` 形成环（见 09 §0.3 环快照）。
  */
 export * from './game-clock.js';
+export * from './exp-rate.js';
+export * from './offline.js';
 export * from './player-dto.js';
 export * from './challenge-queue.js';
+export * from './battle-command.js';
 export * from './map-dto.js';
 export * from './player-context.service.js';
 export * from './logic-shared.module.js';

@@ -4,14 +4,14 @@
  * 只做参数校验 + 限流 + 角色归属校验 + 转发；业务编排在 `MapLogicService`。
  * ⚠️ `FlowContext` **值导入**（`emitDecoratorMetadata` 鉴权可见性前提）。
  */
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ActionController, ActionMethod, FlowContext } from '@nbb-ionet/core-framework';
 import type { ActionResult, MapDto, WorldSnapshotDto } from '@idle-dark/protocol';
 import { MAP_CMD } from '@idle-dark/protocol';
 import { ActionError, dataOf, requireUserId, toNonEmptyString } from '../../../common/kernel/action-support.js';
 import { guardAction } from '../../../common/kernel/result.js';
 import { RateLimiterService } from '../../../common/services/rate-limiter.service.js';
-import { WorldService } from '../world/world.service.js';
+import { BATTLE_COMMAND, type BattleCommandPort } from '../shared/index.js';
 import { MapLogicService } from './map.logic.service.js';
 
 @Injectable()
@@ -19,7 +19,7 @@ import { MapLogicService } from './map.logic.service.js';
 export class MapAction {
   constructor(
     private readonly maps: MapLogicService,
-    private readonly world: WorldService,
+    @Inject(BATTLE_COMMAND) private readonly battle: BattleCommandPort,
     private readonly rateLimiter: RateLimiterService,
   ) {}
 
@@ -67,11 +67,11 @@ export class MapAction {
     return guardAction(() => this.maps.leave(userId, resolved.key));
   }
 
-  /** 角色归属校验：唯一入口在 `WorldService.resolveActiveCharacter`（AGENTS §15）。 */
+  /** 角色归属校验：唯一入口在 battle 命令端口（`resolveActiveCharacter`，AGENTS §15）。 */
   private resolveKey(
     userId: number,
     raw: unknown,
   ): { ok: true; key: string } | { ok: false; fail: ActionResult<never> } {
-    return this.world.resolveActiveCharacter(userId, raw);
+    return this.battle.resolveActiveCharacter(userId, raw);
   }
 }

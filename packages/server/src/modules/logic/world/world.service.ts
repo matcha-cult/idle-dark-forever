@@ -675,6 +675,16 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     await this.playerContext.flush(userId, characterId);
   }
 
+  /** 命令端口（`BATTLE_COMMAND`）：启动 / 获取会话；`true` = 会话就绪。 */
+  async startSession(userId: number, characterId: string): Promise<boolean> {
+    return (await this.start(userId, characterId)) !== null;
+  }
+
+  /** 命令端口（`BATTLE_COMMAND`）：停会话并落库。 */
+  async stopSession(userId: number, characterId: string): Promise<void> {
+    await this.stop(userId, characterId);
+  }
+
   /**
    * 把该账号视为**回到「未选角色」**：停掉活跃世界会话 + 清理两个「当前角色」注册表。
    *

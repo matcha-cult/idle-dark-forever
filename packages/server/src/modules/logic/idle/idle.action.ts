@@ -3,13 +3,13 @@
  *
  * `report` = 查看/触发离线结算报告；`claim` = 领取（清空待领取报告）。
  */
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ActionController, ActionMethod, FlowContext } from '@nbb-ionet/core-framework';
 import { type ActionResult, IDLE_CMD, type OfflineReportDto } from '@idle-dark/protocol';
 import { dataOf, requireUserId } from '../../../common/kernel/action-support.js';
 import { guardAction } from '../../../common/kernel/result.js';
 import { RateLimiterService } from '../../../common/services/rate-limiter.service.js';
-import { WorldService } from '../world/world.service.js';
+import { BATTLE_COMMAND, type BattleCommandPort } from '../shared/index.js';
 import { IdleService } from './idle-logic.service.js';
 
 @Injectable()
@@ -17,7 +17,7 @@ import { IdleService } from './idle-logic.service.js';
 export class IdleAction {
   constructor(
     private readonly idle: IdleService,
-    private readonly world: WorldService,
+    @Inject(BATTLE_COMMAND) private readonly battle: BattleCommandPort,
     private readonly rateLimiter: RateLimiterService,
   ) {}
 
@@ -43,11 +43,11 @@ export class IdleAction {
     return guardAction(() => this.idle.claim(userId, resolved.key));
   }
 
-  /** 角色归属校验：见 `WorldService.resolveActiveCharacter`（显式 key 必须等于当前角色）。 */
+  /** 角色归属校验：见 battle 命令端口 `resolveActiveCharacter`（显式 key 必须等于当前角色）。 */
   private resolveKey(
     userId: number,
     raw: unknown,
   ): { ok: true; key: string } | { ok: false; fail: ActionResult<never> } {
-    return this.world.resolveActiveCharacter(userId, raw);
+    return this.battle.resolveActiveCharacter(userId, raw);
   }
 }
