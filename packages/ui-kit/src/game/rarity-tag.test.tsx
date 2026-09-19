@@ -3,7 +3,7 @@
  * 覆盖：7 档文案 / data 属性 / 越界与非数字夹取 / labels 覆盖 / 序号模式。
  */
 import { describe, expect, it } from 'vitest';
-import { htmlToText, renderToHtml } from '../../testing/index.js';
+import { htmlToText, renderToHtml } from '../testing/index.js';
 import { QUALITY_LABELS } from './quality.js';
 import { RarityTag } from './rarity-tag.js';
 

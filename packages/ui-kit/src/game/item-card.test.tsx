@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { AffixDto } from '@idle-dark/protocol';
-import { htmlToText, makeSlot, renderToHtml } from '../../testing/index.js';
+import { htmlToText, makeSlot, renderToHtml } from '../testing/index.js';
 import { ItemCard } from './item-card.js';
 
 const affixes: AffixDto[] = Array.from({ length: 5 }, (_, index) => ({
@@ -43,10 +43,11 @@ describe('ItemCard', () => {
     expect(htmlToText(html)).toContain('还有 3 条');
   });
 
-  it('maxAffixes=0 时不显示任何词缀但仍提示总数', () => {
+  it('maxAffixes=0 时整个词缀区不渲染（含剩余提示）', () => {
     const html = renderToHtml(<ItemCard slot={makeSlot({ affixes })} maxAffixes={0} />);
     expect(htmlToText(html)).not.toContain('词缀 0');
-    expect(htmlToText(html)).toContain('还有 5 条');
+    expect(htmlToText(html)).not.toContain('还有');
+    expect(html).not.toContain('item-card-affixes');
   });
 
   it('affixes 缺省（undefined）不崩', () => {

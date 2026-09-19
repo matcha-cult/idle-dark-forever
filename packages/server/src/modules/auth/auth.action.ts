@@ -32,7 +32,8 @@ export class AuthAction {
     if (!username || !password) {
       return ActionError.invalidParam('用户名和密码不能为空');
     }
-    return this.authService.login(username, password);
+    // DB 异常 → fail(INTERNAL)，而不是让框架包成 errorCode=500 丢掉业务码语义
+    return guardAction(() => this.authService.login(username, password));
   }
 
   @ActionMethod(AUTH_CMD.logout)
@@ -47,6 +48,6 @@ export class AuthAction {
   async me(ctx: FlowContext): Promise<ActionResult<MeDto>> {
     const userId = requireUserId(ctx);
     if (typeof userId !== 'number') return userId;
-    return this.authService.me(userId);
+    return guardAction(() => this.authService.me(userId));
   }
 }

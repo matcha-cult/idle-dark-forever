@@ -54,10 +54,13 @@ export class SystemTimerHost implements TimerHost {
     if (handle.removed) {
       return;
     }
+    if (!(handle instanceof SystemTimerHandle)) {
+      return;
+    }
+    // 收窄到 SystemTimerHandle 之后 `removed` 是可写的（实现可变属性以满足只读接口）
     handle.removed = true;
-    const native = handle instanceof SystemTimerHandle ? handle.native : undefined;
-    if (native !== undefined) {
-      globalThis.clearTimeout(native as Parameters<typeof globalThis.clearTimeout>[0]);
+    if (handle.native !== undefined) {
+      globalThis.clearTimeout(handle.native as Parameters<typeof globalThis.clearTimeout>[0]);
     }
   }
 }

@@ -41,10 +41,14 @@ export const QUALITY_COLOR_TOKEN_NAMES = [
 /** 品质对应色 token 名。 */
 export type QualityColorTokenName = (typeof QUALITY_COLOR_TOKEN_NAMES)[number];
 
-/** 把任意入参夹取到合法品质 0..6（`NaN` / 小数 / 越界都不抛错）。 */
+/**
+ * 把任意入参夹取到合法品质 0..6（不抛错）：
+ * `NaN` / `undefined` → 0（未知按最低档），`+Infinity` → 6（越界按最高档），
+ * `-Infinity` / 负数 → 0，小数 `Math.trunc`。
+ */
 export function clampQuality(value: number): Quality {
   const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 0;
+  if (!Number.isFinite(numeric)) return numeric > 0 ? MAX_QUALITY : 0;
   const truncated = Math.trunc(numeric);
   if (truncated <= 0) return 0;
   if (truncated >= MAX_QUALITY) return MAX_QUALITY;
