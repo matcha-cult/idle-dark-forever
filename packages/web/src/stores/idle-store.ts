@@ -4,7 +4,7 @@
  * 服务端权威：报告（`(idle, report)`）与领取结果（`(idle, claim)`）都由服务端算好；
  * 前端只决定「要不要弹窗」。是否待领取以角色态 `pendingOfflineMs > 0` 为准。
  */
-import { makeAutoObservable, runInAction } from 'mobx';
+import { makeAutoObservable, observable, runInAction } from 'mobx';
 import { IDLE_CMD, type OfflineReportDto } from '@idle-dark/protocol';
 import { toastFailure } from '../services/game-client.js';
 import { LoadGuard } from './load-guard.js';

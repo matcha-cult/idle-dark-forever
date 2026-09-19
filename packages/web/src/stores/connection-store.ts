@@ -16,6 +16,8 @@ export class ConnectionStore {
   latencyMs: number | null = null;
   /** 心跳累计 ack 次数（存活证据）。 */
   heartbeatAcks = 0;
+  /** 最近一次心跳 ack 的本地时间（毫秒）。 */
+  lastHeartbeatAckAt: number | null = null;
   /** 服务端时间 − 本地时间（毫秒）；服务端未提供时 null。 */
   serverTimeOffsetMs: number | null = null;
   lastServerTimeMs: number | null = null;

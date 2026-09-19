@@ -51,7 +51,6 @@ export interface RootStoreOptions {
   storage?: StorageLike;
   /** 测试注入 socket 适配器。 */
   adapterFactory?: SocketAdapterFactory;
-  lifecycle?: LifecycleAdapter;
   heartbeat?: IonetClientOptions['heartbeat'];
   reconnect?: IonetClientOptions['reconnect'];
   requestTimeoutMs?: number;

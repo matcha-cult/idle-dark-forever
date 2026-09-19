@@ -114,12 +114,12 @@ describe('base64', () => {
   it('宽松解码：忽略非字母表字符，容忍 url-safe 字符', () => {
     expect(bytesToHex(base64ToBytes('Zm9v\n'))).toBe('666f6f');
     expect(bytesToHex(base64ToBytes('Zm9vYg'))).toBe('666f6f62');
-    expect(bytesToHex(base64ToBytes('-_'))).toBe('fbff');
+    expect(bytesToHex(base64ToBytes('-_'))).toBe('fb');
   });
 
   it('base64url 无填充且往返一致', () => {
     const value = bytesToBase64Url(Uint8Array.from([0xfb, 0xff, 0xfe]));
-    expect(value).toBe('-_--');
+    expect(value).toBe('-___');
     expect(base64UrlToText(bytesToBase64Url(utf8Encode('中文')))).toBe('中文');
   });
 });

@@ -49,6 +49,12 @@ export interface TimelineLike {
 }
 
 /**
+ * buff hook 的额外参数（第 2 个及以后）的兜底联合：原版签名差异极大
+ * （`(value)` / `(val, type)` / `(value, to, damageType)` / `(skill, world)`……）。
+ */
+export type HookArg = UnitLike | BuffStateLike | string | number | boolean | null | undefined;
+
+/**
  * 原版 hook 的 `value` 参数在少数条目里承载的是「单位」而不是数值
  * （如 `legends.hooks: { killed(effect, unit) }`、`enhances.hooks: { postCostComboPoint(world, value) }`）。
  *
@@ -339,9 +345,12 @@ export type HookAbilityEntry = Loose<Omit<HookAbilityData, 'hooks'>> & {
 };
 
 /** 地图阶段里的怪物项：原版既支持 `type` 也支持 `types` 权重表。 */
-export interface PhaseMonster extends SpawnConfig {
+export interface PhaseMonster extends Omit<SpawnConfig, 'delay' | 'max'> {
   type?: string;
   types?: Record<string, number>;
+  /** 契约把 `delay` / `max` 标成必填，但原版 BOSS 阶段只写 `{ type, total }`。 */
+  delay?: number;
+  max?: number;
 }
 
 export interface MapPhase {
