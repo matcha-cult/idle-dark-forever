@@ -21,11 +21,40 @@
  */
 import { HealthAction } from '../modules/health/health.action.js';
 import { AuthAction } from '../modules/auth/auth.action.js';
+import { PlayerAction } from '../modules/logic/player/player.action.js';
+import { WorldAction } from '../modules/logic/world/world.action.js';
+import { BattleAction } from '../modules/logic/battle/battle.action.js';
+import { IdleAction } from '../modules/logic/idle/idle.action.js';
 import { HealthModule } from '../modules/health/health.module.js';
 import { AuthModule } from '../modules/auth/auth.module.js';
+import { LogicSharedModule } from '../modules/logic/shared/logic-shared.module.js';
+import { PlayerLogicModule } from '../modules/logic/player/player-logic.module.js';
+import { WorldLogicModule } from '../modules/logic/world/world-logic.module.js';
+import { BattleLogicModule } from '../modules/logic/battle/battle-logic.module.js';
+import { IdleLogicModule } from '../modules/logic/idle/idle-logic.module.js';
 
 /** 已登记的 Action 类（`actions` 列表；后续任务在此追加）。 */
-export const GAME_ACTION_CLASSES = [HealthAction, AuthAction] as const;
+export const GAME_ACTION_CLASSES = [
+  HealthAction,
+  AuthAction,
+  PlayerAction,
+  WorldAction,
+  BattleAction,
+  IdleAction,
+] as const;
 
-/** 提供上述 Action 的 Nest 模块（app.module.ts 导入；后续任务在此追加）。 */
-export const GAME_ACTION_MODULES = [HealthModule, AuthModule] as const;
+/**
+ * 提供上述 Action 的 Nest 模块（app.module.ts 导入；后续任务在此追加）。
+ *
+ * 顺序：共享件 → 世界（`@Global`，仍须导入一次）→ 依赖世界的域。
+ */
+export const GAME_ACTION_MODULES = [
+  HealthModule,
+  AuthModule,
+  LogicSharedModule,
+  WorldLogicModule,
+  PlayerLogicModule,
+  BattleLogicModule,
+  IdleLogicModule,
+] as const;
+
