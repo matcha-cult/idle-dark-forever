@@ -40,6 +40,12 @@ export interface Clock {
    * @returns 仍未推进完的剩余毫秒（0 表示已推完）。
    */
   stepPaused(rest: number, budget?: number): number;
+  /**
+   * 上一次 `stepPaused` / 同步推进实际执行的到期回调数（**可选扩展**，冻结契约的加性字段）。
+   *
+   * 全局每轮回调预算需要跨角色累加**实际用量**；不实现该方法的时钟按 0 计。
+   */
+  callbacksUsed?(): number;
   dispose(): void;
 }
 

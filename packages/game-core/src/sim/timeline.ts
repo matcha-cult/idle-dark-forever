@@ -74,6 +74,8 @@ export abstract class ClockBase implements Clock {
   private updating = false;
   private wake: TimerHandle | null = null;
   private disposed = false;
+  /** 上一次 `runDue` 实际执行的回调数（全局预算记账用，见 `callbacksUsed`）。 */
+  private lastExecutedCallbacks = 0;
 
   protected constructor() {
     this.tree = new PrivQueue<TimerRecord>(compareByAt);
@@ -249,6 +251,17 @@ export abstract class ClockBase implements Clock {
   }
 
   /**
+   * 上一次 `runDue`（`stepPaused` / `sync`）实际执行的到期回调数。
+   *
+   * 用途：`WorldService` 的**全局每轮回调预算**需要精确记账 —— 单角色预算只能约束
+   * 「一个角色最多跑多少回调」，全局预算必须知道**实际跑了多少**才能跨角色累加。
+   * 可选方法（`Clock` 端口的候选扩展），实现方不提供时调用方按 0 计。
+   */
+  callbacksUsed(): number {
+    return this.lastExecutedCallbacks;
+  }
+
+  /**
    * 执行 `at <= end` 的全部到期回调，并把 `current` 推到 `end`。
    *
    * 与原版 `update()` 的关键细节对齐：
@@ -263,8 +276,8 @@ export abstract class ClockBase implements Clock {
     const startSource = this.initSource();
     const rate = this.rate;
     this.updating = true;
+    let executed = 0;
     try {
-      let executed = 0;
       for (;;) {
         const min = this.tree.minimum();
         if (!min || min.at > end) {
@@ -290,6 +303,7 @@ export abstract class ClockBase implements Clock {
       }
     } finally {
       this.updating = false;
+      this.lastExecutedCallbacks = executed;
     }
   }
 

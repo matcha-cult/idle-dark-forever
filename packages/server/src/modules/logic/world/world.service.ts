@@ -51,6 +51,7 @@ import { PanelCharacterService } from '../shared/panel-character.service.js';
 import { BattleCollector } from './internal/battle-collector.js';
 import { buildBattleWorld, nextWorldSeed } from './internal/headless.js';
 import { mapListDtoOf, pendingOfflineMsOf, requirementContextOf } from './internal/map-dto.js';
+import { nextCursor, planAdvance, planRound, shouldStopRound } from './internal/tick-scheduler.js';
 import { unitStateDtoOf } from './internal/unit-state.js';
 import { EXP_RATE, OFFLINE_MAX_MS, WORLD_CONFIG } from './world.config.js';
 
@@ -73,6 +74,30 @@ interface WorldSession {
    * 由下一次 tick 消费 —— 避免每 tick 无条件重绑，也避免面板域反向依赖世界内部结构。
    */
   combatDirty: boolean;
+  /** 该会话累计**实际推进**的虚拟毫秒（`world_time_ratio` 分子）。 */
+  advancedMs: number;
+  /** 该会话累计真实经过的毫秒（`world_time_ratio` 分母）。 */
+  realMs: number;
+}
+
+/** 世界调度指标快照（07 T-A1；全部为进程内累计/瞬时值，无数据时为 0 或 1，绝不 NaN）。 */
+export interface WorldStats {
+  readonly sessionsTotal: number;
+  readonly onlineCharacters: number;
+  /** 全局 `Σ推进虚拟时间 / Σ真实经过时间`（I1）；无样本时为 1。 */
+  readonly worldTimeRatio: number;
+  readonly worldTimeRatioMin: number;
+  readonly worldTimeRatioP50: number;
+  readonly roundCharsProcessed: number;
+  readonly roundCallbacksUsed: number;
+  readonly roundCpuMs: number;
+  readonly roundsTotal: number;
+  readonly roundsCutOff: number;
+  /** 被显式截断丢弃的虚拟毫秒：**正常恒为 0**（>0 即缺陷信号）。 */
+  readonly truncatedMsTotal: number;
+  readonly debtWarnTotal: number;
+  readonly callbackBudgetPerRound: number;
+  readonly maxRoundCpuMs: number;
 }
 
 @Injectable()
@@ -87,6 +112,14 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
   private tickCursor = 0;
   private persisting = false;
   private destroyed = false;
+  // ── 调度指标（07 T-A1/T-A2；进程内累计/瞬时，无数据时为 0 而非 NaN） ──
+  private roundsTotal = 0;
+  private roundsCutOff = 0;
+  private roundCharsProcessed = 0;
+  private roundCallbacksUsed = 0;
+  private roundCpuMs = 0;
+  private truncatedMsTotal = 0;
+  private debtWarnTotal = 0;
 
   constructor(
     private readonly playerContext: PlayerContextService,
@@ -148,33 +181,76 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     if (this.destroyed) return;
     const now = this.now();
     const keys = [...this.sessions.keys()];
-    if (keys.length === 0) return;
+    if (keys.length === 0) {
+      this.tickCursor = 0;
+      this.roundCharsProcessed = 0;
+      this.roundCallbacksUsed = 0;
+      this.roundCpuMs = 0;
+      void this.maybeFlush();
+      return;
+    }
 
-    const limit = Math.min(keys.length, WORLD_CONFIG.maxCharactersPerTick);
-    for (let i = 0; i < limit; i++) {
-      const key = keys[(this.tickCursor + i) % keys.length];
-      if (key === undefined) continue;
+    // 预算驱动（07 T-A2）：从游标起绕一圈，**不设人数上限**；
+    // 跑满全局回调预算或单轮 CPU 预算即停，剩余角色顺延到下一轮（`lastTickAt` 不变 ⇒ 时间不丢）。
+    const plan = planRound(keys, this.tickCursor);
+    let processed = 0;
+    let callbacksUsed = 0;
+    let cutOff = false;
+    for (const key of plan.order) {
+      const cpuElapsedMs = Math.max(0, this.now() - now);
+      if (
+        shouldStopRound({
+          callbacksUsed,
+          callbackBudget: WORLD_CONFIG.globalCallbackBudgetPerRound,
+          elapsedCpuMs: cpuElapsedMs,
+          cpuBudgetMs: WORLD_CONFIG.maxRoundCpuMs,
+        })
+      ) {
+        cutOff = true;
+        break;
+      }
       const session = this.sessions.get(key);
       if (!session) continue;
       try {
-        this.tickSession(session, now);
+        callbacksUsed += this.tickSession(session, now);
       } catch (error) {
         this.logger.warn(`world tick 失败：${session.characterId}`, {
           reason: error instanceof Error ? error.message : String(error),
         });
       }
+      processed += 1;
     }
-    this.tickCursor = (this.tickCursor + limit) % Math.max(keys.length, 1);
+    this.tickCursor = nextCursor(plan.startCursor, processed, keys.length);
+
+    this.roundCharsProcessed = processed;
+    this.roundCallbacksUsed = callbacksUsed;
+    this.roundCpuMs = Math.max(0, this.now() - now);
+    this.roundsTotal += 1;
+    if (cutOff) {
+      this.roundsCutOff += 1;
+      // I3：显式降级，绝不静默 —— 剩余角色在下一轮补全 elapsed。
+      this.logger.warn(
+        `[OVERLOAD] world tick 本轮预算打满：processed=${processed}/${keys.length} callbacks=${callbacksUsed} cpuMs=${this.roundCpuMs}`,
+      );
+    }
 
     void this.maybeFlush();
   }
 
-  private tickSession(session: WorldSession, now: number): void {
+  /** 推进单个会话；返回本次实际执行的回调数（供全局预算累加）。 */
+  private tickSession(session: WorldSession, now: number): number {
     // 离线角色：不推送、不推进（离线收益由 idle 域结算）。
-    if (!this.onlineSessions.isOnline(session.userId, now)) return;
+    if (!this.onlineSessions.isOnline(session.userId, now)) return 0;
 
-    const elapsed = Math.max(0, now - session.lastTickAt);
+    const advance = planAdvance({
+      now,
+      lastTickAt: session.lastTickAt,
+      carryMs: session.carryMs,
+      debtWarnMs: WORLD_CONFIG.worldTimeDebtWarnMs,
+      debtShedMs: WORLD_CONFIG.worldTimeDebtShedMs,
+    });
     session.lastTickAt = now;
+    session.realMs += advance.elapsedMs;
 
     // 面板域改过装备 / 技能 / 强化 / 词缀 → 本 tick 先重绑战斗 hook。
     // 去 MobX 后 `PlayerUnit` 不再自动追踪这些来源（见 `combat/player-unit.ts` 顶部契约表），
@@ -197,13 +273,31 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    const rest = Math.min(elapsed, WORLD_CONFIG.maxCatchUpMs) + session.carryMs;
-    if (rest > 0) {
+    if (advance.shedMs > 0) {
+      // I3：**显式**截断（metric + 日志），不是静默丢弃。`world_truncated_ms_total > 0` 即缺陷信号。
+      this.truncatedMsTotal += advance.shedMs;
+      this.logger.warn(
+        `[OVERLOAD] 世界时间截断 userId=${session.userId} characterId=${session.characterId} requestedMs=${advance.requestedMs} shedMs=${advance.shedMs}`,
+      );
+    } else if (advance.warn) {
+      this.debtWarnTotal += 1;
+      this.logger.warn(
+        `[OVERLOAD] 世界时间债务 userId=${session.userId} characterId=${session.characterId} requestedMs=${advance.requestedMs}`,
+      );
+    }
+
+    let callbacksUsed = 0;
+    if (advance.advanceMs > 0) {
       const remaining = session.clock.stepPaused(
-        rest,
+        advance.advanceMs,
         WORLD_CONFIG.callbackBudgetPerCharacterPerTick,
       );
       session.carryMs = remaining > 0 ? remaining : 0;
+      session.advancedMs += Math.max(0, advance.advanceMs - Math.max(0, remaining));
+      callbacksUsed =
+        typeof session.clock.callbacksUsed === 'function' ? session.clock.callbacksUsed() : 0;
+    } else {
+      session.carryMs = 0;
     }
 
     this.emitTick(session, now);
@@ -217,6 +311,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       this.playerContext.markDirty(session.userId, session.characterId);
       this.schedulePersist(session);
     }
+    return callbacksUsed;
   }
 
   private emitTick(session: WorldSession, now: number): void {
@@ -300,6 +395,45 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * 调度指标快照（07 T-A1/T-A2）。
+   *
+   * `worldTimeRatio` = 全部会话的 `Σ实际推进 / Σ真实经过`。无样本（或真实经过为 0）时定义为 **1**，
+   * 避免空世界 / 固定时钟（单测）产生 `NaN`。
+   */
+  get stats(): WorldStats {
+    const now = this.now();
+    let onlineCharacters = 0;
+    let advanced = 0;
+    let real = 0;
+    const ratios: number[] = [];
+    for (const session of this.sessions.values()) {
+      if (this.onlineSessions.isOnline(session.userId, now)) onlineCharacters += 1;
+      advanced += session.advancedMs;
+      real += session.realMs;
+      if (session.realMs > 0) ratios.push(session.advancedMs / session.realMs);
+    }
+    ratios.sort((a, b) => a - b);
+    const finiteOr1 = (value: number): number => (Number.isFinite(value) ? value : 1);
+    const mid = ratios.length > 0 ? (ratios[Math.floor((ratios.length - 1) / 2)] as number) : 1;
+    return {
+      sessionsTotal: this.sessions.size,
+      onlineCharacters,
+      worldTimeRatio: real > 0 ? finiteOr1(advanced / real) : 1,
+      worldTimeRatioMin: ratios.length > 0 ? finiteOr1(ratios[0] as number) : 1,
+      worldTimeRatioP50: finiteOr1(mid),
+      roundCharsProcessed: this.roundCharsProcessed,
+      roundCallbacksUsed: this.roundCallbacksUsed,
+      roundCpuMs: this.roundCpuMs,
+      roundsTotal: this.roundsTotal,
+      roundsCutOff: this.roundsCutOff,
+      truncatedMsTotal: this.truncatedMsTotal,
+      debtWarnTotal: this.debtWarnTotal,
+      callbackBudgetPerRound: WORLD_CONFIG.globalCallbackBudgetPerRound,
+      maxRoundCpuMs: WORLD_CONFIG.maxRoundCpuMs,
+    };
+  }
+
+  /**
    * 最近一次 `player.select` 的角色 key。
    *
    * 前端 transport 的 `world.snapshot` / `world.leave` / `battle.focus` / `idle.*`
@@ -363,6 +497,8 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       lastPersistAt: now,
       pendingLoot: [],
       combatDirty: false,
+      advancedMs: 0,
+      realMs: 0,
     };
 
     const built = buildBattleWorld({

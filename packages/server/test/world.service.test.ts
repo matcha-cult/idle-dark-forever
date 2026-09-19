@@ -20,6 +20,7 @@ import { InProcessEventBus } from '../src/modules/logic/shared/event-bus.js';
 import { StoryLogicService } from '../src/modules/logic/story/story.logic.service.js';
 import { RateLimiterService } from '../src/common/services/rate-limiter.service.js';
 import { WorldService } from '../src/modules/logic/world/world.service.js';
+import { WORLD_CONFIG } from '../src/modules/logic/world/world.config.js';
 import { FakeDatabase } from './helpers/fake-database.js';
 
 const tables: DataTables = createDefaultTables();
@@ -220,6 +221,50 @@ describe('WorldService', () => {
     expect(result.data.gainedExp).toBe(0);
     expect(result.data.kills).toBe(0);
     expect(service.pendingOfflineMs(1, 'c1')).toBe(0);
+  });
+
+  it('world_time_ratio：在线稳定推进 20 轮后 ≈ 1（世界时间 = 真实时间），无截断', async () => {
+    await startInStreet();
+    for (let i = 0; i < 20; i += 1) {
+      now += 200;
+      service.tick();
+    }
+    const stats = service.stats;
+    expect(stats.worldTimeRatio).toBeGreaterThan(0.99);
+    expect(stats.worldTimeRatioMin).toBeGreaterThan(0.99);
+    expect(stats.truncatedMsTotal).toBe(0);
+    expect(stats.roundsTotal).toBe(20);
+    expect(stats.roundsCutOff).toBe(0);
+    expect(stats.callbackBudgetPerRound).toBe(WORLD_CONFIG.globalCallbackBudgetPerRound);
+  });
+
+  it('预算驱动：150 个在线会话**一轮全部** tick（已无 maxCharactersPerTick=100 的人数上限）', async () => {
+    const ids: string[] = [];
+    for (let i = 0; i < 150; i += 1) {
+      const id = `bulk-${i}`;
+      db.seedCharacter({ id, user_id: 1, role: 'Eyer', career: 'warrior' });
+      ids.push(id);
+    }
+    for (const id of ids) {
+      await service.start(1, id);
+    }
+    frames.length = 0;
+    service.tick();
+    // 旧实现（每轮最多 100 个）这里只会推 100 帧。
+    expect(tickFrames().length).toBe(150);
+    expect(service.stats.sessionsTotal).toBe(150);
+    expect(service.stats.roundCharsProcessed).toBe(150);
+    expect(service.stats.roundsCutOff).toBe(0);
+  });
+
+  it('stats 边界：无会话时 ratio 定义为 1、各计数为 0（不产生 NaN）', () => {
+    const stats = service.stats;
+    expect(stats.sessionsTotal).toBe(0);
+    expect(stats.onlineCharacters).toBe(0);
+    expect(stats.worldTimeRatio).toBe(1);
+    expect(stats.worldTimeRatioMin).toBe(1);
+    expect(stats.worldTimeRatioP50).toBe(1);
+    expect(Number.isNaN(stats.roundCpuMs)).toBe(false);
   });
 });
 

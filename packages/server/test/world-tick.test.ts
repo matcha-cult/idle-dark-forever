@@ -86,10 +86,19 @@ describe('WORLD_CONFIG 预算', () => {
     expect(WORLD_TICK_MS).toBeLessThanOrEqual(200);
   });
 
-  it('单帧预算为正有限值，且 catch-up 有上界', () => {
+  it('预算驱动调度：全局回调/单轮 CPU 预算为正，且硬债务上限有上界（无人头上限）', () => {
     expect(WORLD_CONFIG.callbackBudgetPerCharacterPerTick).toBeGreaterThan(0);
-    expect(WORLD_CONFIG.maxCharactersPerTick).toBeGreaterThan(0);
-    expect(WORLD_CONFIG.maxCatchUpMs).toBeLessThanOrEqual(WORLD_CONFIG.tickIntervalMs * 60);
+    expect(WORLD_CONFIG.globalCallbackBudgetPerRound).toBeGreaterThanOrEqual(
+      WORLD_CONFIG.callbackBudgetPerCharacterPerTick,
+    );
+    expect(WORLD_CONFIG.maxRoundCpuMs).toBeGreaterThan(0);
+    expect(WORLD_CONFIG.worldTimeDebtWarnMs).toBeGreaterThan(0);
+    expect(WORLD_CONFIG.worldTimeDebtShedMs).toBeGreaterThanOrEqual(WORLD_CONFIG.worldTimeDebtWarnMs);
+    expect(WORLD_CONFIG.worldTimeDebtShedMs).toBeLessThanOrEqual(WORLD_CONFIG.tickIntervalMs * 60);
+    // 旧名保留为同一硬上限（语义已从「静默丢弃」改为「显式截断」）
+    expect(WORLD_CONFIG.maxCatchUpMs).toBe(WORLD_CONFIG.worldTimeDebtShedMs);
+    // 人数语义的上限已被移除（07 T-A2）
+    expect('maxCharactersPerTick' in WORLD_CONFIG).toBe(false);
     expect(WORLD_CONFIG.persistIntervalMs).toBeGreaterThanOrEqual(10_000);
   });
 });

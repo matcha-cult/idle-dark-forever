@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { EnemyUnit } from './enemy-unit.js';
 import { PlayerUnit } from './player-unit.js';
 import { makePlayer, makeTestWorld } from './test-support.js';
+import { VirtualClock } from '../sim/clocks.js';
 
 describe('边界：资源与属性', () => {
   it('0 攻速：普攻永不就绪，且调度不会因 Infinity 延迟崩溃', () => {
@@ -241,6 +242,48 @@ describe('边界：召唤链与离线推进', () => {
     expect(rest).toBe(0);
     t.clock.resume();
     expect(() => t.clock.advanceBy(1000)).not.toThrow();
+  });
+
+  it('callbacksUsed：记录上一次推进实际执行的回调数（全局预算记账；budget=0 / 空到期边界）', () => {
+    const clock = new VirtualClock();
+    let fired = 0;
+    clock.setTimeout(() => {
+      fired += 1;
+    }, 100);
+    clock.setTimeout(() => {
+      fired += 1;
+    }, 200);
+    clock.setTimeout(() => {
+      fired += 1;
+    }, 900);
+
+    // 尚未推进 → 0
+    expect(clock.callbacksUsed()).toBe(0);
+
+    // 只到期 1 个
+    expect(clock.advanceBy(150, 10)).toBe(0);
+    expect(fired).toBe(1);
+    expect(clock.callbacksUsed()).toBe(1);
+
+    // budget = 0 → 一个都不执行，返回剩余毫秒
+    expect(clock.advanceBy(50, 0)).toBeGreaterThan(0);
+    expect(clock.callbacksUsed()).toBe(0);
+
+    // 无到期回调 → 0（不产生 NaN / 负数）
+    expect(clock.advanceBy(0, 10)).toBe(0);
+    expect(clock.callbacksUsed()).toBe(0);
+
+    // 推完剩余：本次执行 2 个
+    expect(clock.advanceBy(100_000, 10)).toBe(0);
+    expect(fired).toBe(3);
+    expect(clock.callbacksUsed()).toBe(2);
+
+    // 非法 budget（NaN / 负数）回落默认，不抛错
+    clock.setTimeout(() => {
+      fired += 1;
+    }, 1);
+    expect(() => clock.advanceBy(10, Number.NaN)).not.toThrow();
+    expect(fired).toBe(4);
   });
 
   it('dumpState → load 到新世界可继续推进（定时器按剩余时间重建）', () => {
