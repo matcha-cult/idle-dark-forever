@@ -219,6 +219,16 @@ s.listen(5273,'127.0.0.1',()=>{console.log('OK');s.close()})"
 > 另外 `curl` 得到 `000` 既可能是"没有监听"，也可能是"端口被占但无响应"，
 > 两者处置相反 —— 判断依据只能是 bind 探测。
 
+### 7.8.1 `/tmp` 是**每次调用一个新 tmpfs**，日志别写那儿
+
+沙箱用 `bwrap … --tmpfs /tmp` 起每次 `bash`，所以**上一条命令写进 `/tmp` 的文件，下一条就读不到了**
+（实测：`pnpm run verify >/tmp/v.log` 之后 grep 报 `No such file or directory`，
+白跑一次全量门禁）。落盘用工作区内的 `tmp/`（已 gitignore）：
+
+```bash
+mkdir -p tmp && pnpm run verify >tmp/verify.log 2>&1; echo "exit=$?"; grep -E "Tests  " tmp/verify.log
+```
+
 ### 7.9 本地调试默认值：`dev.config.json`（唯一真相）
 
 端口与代理地址只写一次：前端 `packages/web/vite.config.ts` **直接 import 它**，
