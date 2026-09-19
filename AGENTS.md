@@ -7,7 +7,9 @@
 
 设计与拆解见 [`ai-docs/00-重写总方案.md`](ai-docs/00-重写总方案.md)，
 结构与接续点见 [`ai-docs/01-架构与接续指南.md`](ai-docs/01-架构与接续指南.md)，
-后续任务书见 [`ai-docs/02-wave2-任务书.md`](ai-docs/02-wave2-任务书.md)。
+后续任务书见 [`ai-docs/02-wave2-任务书.md`](ai-docs/02-wave2-任务书.md)，
+交付状态见 [`ai-docs/04-交付状态与验收.md`](ai-docs/04-交付状态与验收.md)，
+**未竟事宜（接续前先读这个）见 [`ai-docs/05-交接-未竟事宜.md`](ai-docs/05-交接-未竟事宜.md)**。
 
 ---
 
