@@ -7,6 +7,8 @@
  * - 所有可选字段显式标 `?`，服务端可增量裁剪。
  */
 
+import type { EquipPosition } from './equip.js';
+
 // ────────────────────────────── 基础枚举 ──────────────────────────────
 
 /**
@@ -21,9 +23,6 @@ export const QUALITY_NAMES: readonly string[] = ['普通', '优秀', '传奇'];
 
 /** 物品大类。 */
 export type GoodType = 'equip' | 'material' | 'junk' | 'package';
-
-/** 装备部位。 */
-export type EquipPosition = 'weapon' | 'plastron' | 'gaiter' | 'ornament';
 
 /** 物品所在容器（对应原版 InventorySlot.position）。 */
 export type ItemPosition = 'equip' | 'inventory' | 'build' | 'award' | 'bank' | 'loot';
@@ -85,7 +84,7 @@ export interface InventorySlotDto {
   energy?: number;
 }
 
-/** 装备栏（4 个固定槽）。 */
+/** 装备栏（9 个固定槽，P2；槽位定义见 `equip.ts`）。 */
 export type EquipmentsDto = Partial<Record<EquipPosition, InventorySlotDto | null>>;
 
 // ────────────────────────────── 角色 ──────────────────────────────

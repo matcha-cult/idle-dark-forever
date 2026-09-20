@@ -6,13 +6,19 @@
  */
 
 import type { DataTables } from '../contracts/data.js';
+import { EQUIP_POSITIONS, type EquipPosition } from '@idle-dark/protocol';
 import { asNumber, asRecord, asStringArray, asTruthyNumber } from './player-meta.js';
 import { InventorySlot, type InventorySlotJson } from './inventory-slot.js';
 
-/** 四个装备位（原版 `equipments` 的固定键）。 */
-export type EquipSlot = 'weapon' | 'plastron' | 'gaiter' | 'ornament';
+/**
+ * 装备槽（**9 个**，P2）。
+ *
+ * 类型与顺序的唯一真相在 `@idle-dark/protocol` 的 `equip.ts`（前后端共用同一份）；
+ * 这里只做别名导出，避免第 4 份重复定义。
+ */
+export type EquipSlot = EquipPosition;
 
-export const EQUIP_SLOTS: readonly EquipSlot[] = ['weapon', 'plastron', 'gaiter', 'ornament'];
+export const EQUIP_SLOTS: readonly EquipSlot[] = EQUIP_POSITIONS;
 
 export interface CareerInfoJson {
   type: string;
@@ -43,12 +49,9 @@ export class CareerInfo {
   constructor(tables: DataTables, type = '') {
     this.tables = tables;
     this.type = type;
-    this.equipments = {
-      weapon: new InventorySlot(tables, 'equip'),
-      plastron: new InventorySlot(tables, 'equip'),
-      gaiter: new InventorySlot(tables, 'equip'),
-      ornament: new InventorySlot(tables, 'equip'),
-    };
+    this.equipments = Object.fromEntries(
+      EQUIP_SLOTS.map((slot) => [slot, new InventorySlot(tables, 'equip')]),
+    ) as Record<EquipSlot, InventorySlot>;
   }
 
   static fromJSON(tables: DataTables, type: string, value: unknown): CareerInfo {
@@ -114,12 +117,9 @@ export class CareerInfo {
       peakExp: this.peakExp,
       peakLevel: this.peakLevel,
       maxLevel: this.maxLevel,
-      equipments: {
-        weapon: this.equipments.weapon.toJSON(),
-        plastron: this.equipments.plastron.toJSON(),
-        gaiter: this.equipments.gaiter.toJSON(),
-        ornament: this.equipments.ornament.toJSON(),
-      },
+      equipments: Object.fromEntries(
+        EQUIP_SLOTS.map((slot) => [slot, this.equipments[slot].toJSON()]),
+      ) as Record<EquipSlot, InventorySlotJson>,
       selectedSkills: [...this.selectedSkills],
       selectedEnhances: [...this.selectedEnhances],
     };

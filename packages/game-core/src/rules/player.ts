@@ -24,7 +24,8 @@
  * 因此调用方（服务端 = 真实时钟；离线结算/测试 = 虚拟时钟）完全掌控。
  */
 
-import type { DataTables, MapData } from '../contracts/data.js';
+import type { DataTables, GoodData, MapData } from '../contracts/data.js';
+import { canEquipOffHand, isTwoHanded, type EquipCategory } from '@idle-dark/protocol';
 import { CareerInfo, type CareerInfoJson, type EquipSlot } from './career-info.js';
 import { getGoodOrder } from './goods.js';
 import { InventorySlot, type InventorySlotJson } from './inventory-slot.js';
@@ -713,17 +714,90 @@ export class Player extends PlayerMeta {
 
   // ───────────────────────── 装备 ─────────────────────────
 
-  /** 原版 `equip(slot)`。 */
-  equip(slot: InventorySlot): void {
-    const { goodData } = slot;
-    if (!goodData || goodData.type !== 'equip' || !goodData.position) {
-      return;
+  /** 主手武器的装备类别（空槽 / 非武器 → null）。 */
+  private mainHandCategory(): EquipCategory | null {
+    const main = this.equipments?.weapon;
+    if (!main || main.empty) {
+      return null;
     }
+    return main.goodData?.equipCategory ?? null;
+  }
+
+  /**
+   * 底材 → 实际落槽（P2 + §2.3 判定表的落地）。
+   *
+   * - 单手武器：主手空 → 主手；主手是单手武器且副手空 → 副手（**双持**）；否则换主手；
+   * - 双手近战 / 弓 → 主手；
+   * - 副手专属（盾 / 箭袋）→ 必须过 `canEquipOffHand`，否则拒绝；
+   * - 戒指：两个戒指槽里第一个空的；都满则换 ring1。
+   */
+  private resolveEquipTarget(goodData: GoodData): EquipSlot | null {
     const equipments = this.equipments;
-    if (!equipments) {
-      return;
+    const position = goodData.position;
+    if (!equipments || !position) {
+      return null;
     }
-    equipments[goodData.position].swap(slot);
+    const category = goodData.equipCategory ?? null;
+
+    if (position === 'weapon') {
+      if (
+        category === 'oneHand' &&
+        !equipments.weapon.empty &&
+        equipments.weapon.goodData?.equipCategory === 'oneHand' &&
+        equipments.offHand.empty
+      ) {
+        return 'offHand';
+      }
+      return 'weapon';
+    }
+
+    if (position === 'offHand') {
+      return canEquipOffHand(this.mainHandCategory(), category) ? 'offHand' : null;
+    }
+
+    if (position === 'ring1' || position === 'ring2') {
+      if (equipments[position].empty) {
+        return position;
+      }
+      const other: EquipSlot = position === 'ring1' ? 'ring2' : 'ring1';
+      return equipments[other].empty ? other : position;
+    }
+
+    return position;
+  }
+
+  private moveToInventory(item: InventorySlot): boolean {
+    const empty = this.emptySlot(this.inventory);
+    if (empty < 0) {
+      return false;
+    }
+    this.inventory[empty]!.swap(item);
+    return true;
+  }
+
+  /**
+   * 原版 `equip(slot)`；P2 起返回**是否装备成功**（判定表拒绝 / 无处安放副手时为 false）。
+   */
+  equip(slot: InventorySlot): boolean {
+    const { goodData } = slot;
+    if (!goodData || goodData.type !== 'equip') {
+      return false;
+    }
+    const target = this.resolveEquipTarget(goodData);
+    const equipments = this.equipments;
+    if (!target || !equipments) {
+      return false;
+    }
+
+    // 双手武器占据副手：先把副手物挪回背包，腾不出空位则拒绝。
+    if (target === 'weapon' && isTwoHanded(goodData.equipCategory) && !equipments.offHand.empty) {
+      if (!this.moveToInventory(equipments.offHand)) {
+        return false;
+      }
+    }
+
+    equipments[target].swap(slot);
+    return true;
   }
 
   /** 原版 `unequip(slot)`：换到第一个空格。 */

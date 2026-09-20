@@ -23,7 +23,7 @@ return  [
     affixType: 'prefix',
     tag: 'life',
     display: effect => `生命值 +${Math.round(effect)}`,
-    validPositions: ['plastron', 'gaiter'],
+    validPositions: ['plastron', 'boots', 'gloves', 'belt'],
     generate(level, rng) {
       // 1 + 每装备等级1-3点生命
       return (rng.next() * 2 + 1) * level + 1;
@@ -57,7 +57,7 @@ return  [
     affixType: 'prefix',
     tag: 'life',
     display: effect => `5秒回血${Math.round(effect*5)}点`,
-    validPositions: ['plastron', 'gaiter', 'ornament'],
+    validPositions: ['plastron', 'boots', 'gloves', 'belt', 'amulet', 'ring1', 'ring2'],
     generate(level, rng) {
       // (0.5+每装备等级0.125-0.375点生命回复)*(1+每装备等级*0.1)
       return ((rng.next() * 0.05 + 0.025) * level + 0.1) * (1+level*0.2);
@@ -197,7 +197,7 @@ return  [
     affixType: 'prefix',
     tag: 'defense',
     display: effect => `护甲 +${Math.round(effect)}`,
-    validPositions: ['plastron', 'gaiter'],
+    validPositions: ['plastron', 'boots', 'gloves', 'belt'],
     generate(level, rng) {
       // 3 + 每装备等级0.5-1.5属性
       return (rng.next() * 1 + 0.5) * level + 3;
@@ -283,7 +283,7 @@ return  [
     display: effect => `火焰抗性 +${Math.round(effect)}`,
     minLevel: 40,
     maxLevel: 180,
-    validPositions: ['plastron', 'gaiter'],
+    validPositions: ['plastron', 'boots', 'gloves', 'belt'],
     generate(level, rng) {
       // 1 + 每装备等级1-2点抗性
       return (rng.next() * 1 + 1) * level + 1;
@@ -302,7 +302,7 @@ return  [
     display: effect => `火焰吸收 +${Math.round(effect*100)}%`,
     minLevel: 40,
     weight: 0.2,
-    validPositions: ['plastron', 'gaiter', 'ornament'],
+    validPositions: ['plastron', 'boots', 'gloves', 'belt', 'amulet', 'ring1', 'ring2'],
     generate(level, rng) {
       // 0.5% + 每装备等级0.1-0.2% 吸收
       return (rng.next() * 0.001 + 0.001) * level + 0.005;
@@ -321,7 +321,7 @@ return  [
     display: effect => `暗影抗性 +${Math.round(effect)}`,
     minLevel: 40,
     maxLevel: 180,
-    validPositions: ['plastron', 'gaiter'],
+    validPositions: ['plastron', 'boots', 'gloves', 'belt'],
     generate(level, rng) {
       // 1 + 每装备等级1-2点抗性
       return (rng.next() * 1 + 1) * level + 1;
@@ -340,7 +340,7 @@ return  [
     display: effect => `暗影吸收 +${Math.round(effect*100)}%`,
     minLevel: 40,
     weight: 0.2,
-    validPositions: ['plastron', 'gaiter', 'ornament'],
+    validPositions: ['plastron', 'boots', 'gloves', 'belt', 'amulet', 'ring1', 'ring2'],
     generate(level, rng) {
       // 0.5% + 每装备等级0.1-0.2% 吸收
       return (rng.next() * 0.001 + 0.001) * level + 0.005;
@@ -359,7 +359,7 @@ return  [
     display: effect => `寒冷抗性 +${Math.round(effect)}`,
     minLevel: 40,
     maxLevel: 180,
-    validPositions: ['plastron', 'gaiter'],
+    validPositions: ['plastron', 'boots', 'gloves', 'belt'],
     generate(level, rng) {
       // 1 + 每装备等级1-2点抗性
       return (rng.next() * 1 + 1) * level + 1;
@@ -378,7 +378,7 @@ return  [
     display: effect => `寒冷吸收 +${Math.round(effect*100)}%`,
     minLevel: 40,
     weight: 0.2,
-    validPositions: ['plastron', 'gaiter', 'ornament'],
+    validPositions: ['plastron', 'boots', 'gloves', 'belt', 'amulet', 'ring1', 'ring2'],
     generate(level, rng) {
       // 0.5% + 每装备等级0.1-0.2% 吸收
       return (rng.next() * 0.001 + 0.001) * level + 0.005;
@@ -397,7 +397,7 @@ return  [
     display: effect => `闪电抗性 +${Math.round(effect)}`,
     minLevel: 40,
     maxLevel: 180,
-    validPositions: ['plastron', 'gaiter'],
+    validPositions: ['plastron', 'boots', 'gloves', 'belt'],
     generate(level, rng) {
       // 1 + 每装备等级1-2点抗性
       return (rng.next() * 1 + 1) * level + 1;
@@ -416,7 +416,7 @@ return  [
     display: effect => `闪电吸收 +${Math.round(effect*100)}%`,
     minLevel: 40,
     weight: 0.2,
-    validPositions: ['plastron', 'gaiter', 'ornament'],
+    validPositions: ['plastron', 'boots', 'gloves', 'belt', 'amulet', 'ring1', 'ring2'],
     generate(level, rng) {
       // 0.5% + 每装备等级0.1-0.2% 吸收
       return (rng.next() * 0.001 + 0.001) * level + 0.005;
@@ -435,7 +435,7 @@ return  [
     tag: 'resist',
     display: effect => `所有抗性 +${Math.round(effect)}`,
     minLevel: 40,
-    validPositions: ['plastron', 'gaiter'],
+    validPositions: ['plastron', 'boots', 'gloves', 'belt'],
     generate(level, rng) {
       // 1 + 每装备等级1-2点抗性
       return (rng.next() * 0.5 + 0.75) * level + 1;
@@ -488,7 +488,7 @@ return  [
     display: effect => `运气 +${effect | 0}`,
     minLevel: 60,
     weight: 0.1,
-    validPositions: ['plastron', 'gaiter', 'ornament'],
+    validPositions: ['plastron', 'boots', 'gloves', 'belt', 'amulet', 'ring1', 'ring2'],
     generate(level, rng) {
       return (rng.next() * 0.5 + 0.25) * level + 1;
     },

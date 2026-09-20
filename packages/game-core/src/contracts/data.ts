@@ -11,7 +11,7 @@
  * 3. hook 的 `this` 绑定不统一，见每个 Hook 类型的注释；移植时逐条对齐，禁止隐式 any。
  */
 
-import type { Quality } from '@idle-dark/protocol';
+import type { EquipCategory, EquipPosition, Quality } from '@idle-dark/protocol';
 import type { Rng } from './ports.js';
 
 // ────────────────────────────── 通用 ──────────────────────────────
@@ -39,7 +39,12 @@ export interface GoodData {
   description?: string;
   /** 装备大类（sword/dagger/cloth/armor/ornament/base…）。 */
   class?: string;
-  position?: 'weapon' | 'plastron' | 'gaiter' | 'ornament';
+  position?: EquipPosition;
+  /**
+   * 装备类别（P2 + §2.3）：主手武器 `oneHand | twoHandMelee | bow`，
+   * 副手专属 `shield | quiver`。判定表见 `@idle-dark/protocol` 的 `canEquipOffHand`。
+   */
+  equipCategory?: EquipCategory;
   quality?: Quality;
   /** 可堆叠上限；不可堆叠为 undefined。 */
   stack?: number;
@@ -318,7 +323,7 @@ export interface CareerData {
   name: string;
   description: string;
   requirement: Requirement;
-  equipments: Partial<Record<'weapon' | 'plastron' | 'gaiter' | 'ornament', string>>;
+  equipments: Partial<Record<EquipPosition, string>>;
   /** 等级 → 升级所需经验的系数多项式，`expFormula.map((v, i) => v * level ** i)`。 */
   expFormula: number[];
   /** 三维成长（P3：耐力 `sta` 已删除，不引入替代属性）。 */

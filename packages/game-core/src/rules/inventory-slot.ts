@@ -11,6 +11,7 @@
  */
 
 import type { AffixData, DataTables, GoodData, LegendData } from '../contracts/data.js';
+import { EQUIP_POSITION_NAMES, EQUIP_POSITION_ORDER } from '@idle-dark/protocol';
 import {
   asArray,
   asCountOrNull,
@@ -21,6 +22,9 @@ import {
   getEndlessKeyName,
   transformEquipLevel,
 } from './player-meta.js';
+
+// 槽位中文名 / 排序权重：唯一真相在 `@idle-dark/protocol` 的 `equip.ts`，这里只转发（原有消费方不变）。
+export { EQUIP_POSITION_NAMES, EQUIP_POSITION_ORDER };
 
 /** 格子所属容器（原版 `InventorySlot.position`）。 */
 export type SlotPosition = 'equip' | 'inventory' | 'build' | 'award' | 'bank' | 'loot';
@@ -78,26 +82,16 @@ export const DEF_CLASS_RATE: Readonly<Record<string, number>> = {
   armor: 2, // 重甲
 };
 
-/** 原版 `DEF_POSITION_RATE`（部位倍率；武器/饰品没有倍率 → 防御为 0）。 */
+/**
+ * 部位倍率（P2：9 槽；武器 / 副手 / 饰品没有倍率 → 防御为 0）。
+ *
+ * P2 之前只有 `plastron` / `gaiter` 两项，新手套 / 腰带 / 鞋子的 `def` 恒为 0（§3.5 第 15 条）。
+ */
 export const DEF_POSITION_RATE: Readonly<Record<string, number>> = {
   plastron: 1,
-  gaiter: 0.6,
-};
-
-/** 原版 `EQUIP_POSITION_NAMES`。 */
-export const EQUIP_POSITION_NAMES: Readonly<Record<string, string>> = {
-  plastron: '胸衣',
-  gaiter: '护腿',
-  ornament: '饰品',
-  weapon: '武器',
-};
-
-/** 原版 `EQUIP_POSITION_ORDER`（排序权重）。 */
-export const EQUIP_POSITION_ORDER: Readonly<Record<string, number>> = {
-  plastron: 1,
-  gaiter: 2,
-  ornament: 3,
-  weapon: 0,
+  boots: 0.6,
+  belt: 0.5,
+  gloves: 0.4,
 };
 
 // ────────────────────────────── AffixInfo ──────────────────────────────
@@ -320,11 +314,13 @@ export class InventorySlot {
   }
 
   get equipPositionName(): string | undefined {
-    return EQUIP_POSITION_NAMES[this.goodData?.position ?? ''];
+    const position = this.goodData?.position;
+    return position ? EQUIP_POSITION_NAMES[position] : undefined;
   }
 
   get equipPositionOrder(): number | undefined {
-    return EQUIP_POSITION_ORDER[this.goodData?.position ?? ''];
+    const position = this.goodData?.position;
+    return position ? EQUIP_POSITION_ORDER[position] : undefined;
   }
 
   get maxHp(): number {

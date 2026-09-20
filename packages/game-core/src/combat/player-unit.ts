@@ -24,13 +24,15 @@
 
 import type { TimerHandle } from '../contracts/ports.js';
 import type { AttrHooks } from '../contracts/data.js';
+import { EQUIP_POSITIONS, type EquipPosition } from '@idle-dark/protocol';
 import { Camps } from './camps.js';
 import type { BattleWorld } from './battle-world.js';
 import { SkillState } from './skill-state.js';
 import { Unit, type UnitSavedState } from './unit.js';
 import { transformEquipLevel } from './util.js';
 
-export type EquipPosition = 'weapon' | 'plastron' | 'gaiter' | 'ornament';
+// 装备槽（9 个）的唯一真相在 `@idle-dark/protocol`；这里转发以保持原有导入路径可用。
+export type { EquipPosition };
 
 export interface EquipmentSlotLike {
   empty: boolean;
@@ -228,7 +230,7 @@ export class PlayerUnit extends Unit {
     if (!player) {
       return;
     }
-    (['weapon', 'plastron', 'gaiter', 'ornament'] as EquipPosition[]).forEach((position) => {
+    EQUIP_POSITIONS.forEach((position) => {
       const slot = player.equipments[position];
       if (!slot || slot.empty) {
         return;
@@ -357,9 +359,12 @@ export class PlayerUnit extends Unit {
     // P3：基础生命 = `50 + 等级×10 + 装备加成`，随后走 hooks。
     // 原版 `*(1 + sta/100)` 的耐力乘子**直接删除**，不换成 str/int/dex 驱动。
     let ret = 50 + this.level * 10;
-    const ornament = this.player?.equipments.ornament;
-    if (ornament && !ornament.empty) {
-      ret += ornament.maxHp;
+    // 饰品类槽位（项链 + 两枚戒指，class === 'ornament'）的生命加成。
+    for (const position of ['amulet', 'ring1', 'ring2'] as EquipPosition[]) {
+      const slot = this.player?.equipments[position];
+      if (slot && !slot.empty) {
+        ret += slot.maxHp;
+      }
     }
     ret = this.runAttrHooks(ret, 'maxHp');
     ret = this.runAttrHooks(ret, 'maxHpMul');
@@ -527,14 +532,12 @@ export class PlayerUnit extends Unit {
 
   override get def(): number {
     let ret = 0;
-    const plastron = this.player?.equipments.plastron;
-    const gaiter = this.player?.equipments.gaiter;
-    // 来自装备的属性
-    if (plastron && !plastron.empty) {
-      ret += plastron.def;
-    }
-    if (gaiter && !gaiter.empty) {
-      ret += gaiter.def;
+    // 护甲类槽位（P2：胸甲 + 手套 + 腰带 + 鞋子）——不再只读 plastron/gaiter。
+    for (const position of ['plastron', 'gloves', 'belt', 'boots'] as EquipPosition[]) {
+      const slot = this.player?.equipments[position];
+      if (slot && !slot.empty) {
+        ret += slot.def;
+      }
     }
     // 来自力量的属性
     ret += this.str;

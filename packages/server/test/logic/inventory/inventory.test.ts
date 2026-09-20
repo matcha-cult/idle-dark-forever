@@ -54,8 +54,8 @@ describe('inventory 内部逻辑', () => {
     const fixture = makeFixture();
     const slots = listPanelSlots(fixture.tables, fixture.player);
     const equip = slots.filter((slot) => slot.position === 'equip');
-    expect(equip).toHaveLength(4);
-    expect(new Set(equip.map((slot) => slot.id)).size).toBe(4);
+    expect(equip).toHaveLength(9);
+    expect(new Set(equip.map((slot) => slot.id)).size).toBe(9);
     expect(equip.find((slot) => slot.equipPosition === 'weapon')?.key).toBe('stickSword');
     expect(slots.some((slot) => slot.position === 'inventory')).toBe(true);
   });

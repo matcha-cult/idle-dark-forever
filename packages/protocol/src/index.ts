@@ -4,6 +4,7 @@
  * 内容：
  * - `cmd.ts`          cmd 段规划与路由常量（服务端注册 Action 与前端调用共用）
  * - `dto.ts`          线协议载荷类型
+ * - `equip.ts`        装备槽 / 武器类别 / 副手判定（前后端共用的唯一真相）
  * - `result.ts`       Action 统一返回形状与两级错误判定
  * - `error-codes.ts`  业务错误码与中文文案
  *
@@ -12,6 +13,7 @@
 
 export * from './cmd.js';
 export * from './dto.js';
+export * from './equip.js';
 export * from './result.js';
 export * from './error-codes.js';
 

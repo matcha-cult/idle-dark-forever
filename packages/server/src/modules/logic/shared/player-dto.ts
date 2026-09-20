@@ -22,6 +22,7 @@ import type {
 import type { DataTables } from '@idle-dark/game-core';
 import {
   CareerInfo,
+  EQUIP_SLOTS,
   InventorySlot,
   Player,
   type AffixInfo,
@@ -200,10 +201,10 @@ export function slotListDtoOf(slots: readonly InventorySlot[]): InventorySlotDto
   return slots.map((slot, index) => slotDtoOf(slot, index));
 }
 
-/** 四个装备槽 → DTO（固定部位键；空槽为 `null`）。 */
+/** 九个装备槽 → DTO（固定部位键；空槽为 `null`）。 */
 export function equipmentsDtoOf(career: CareerInfo | undefined): EquipmentsDto {
   const out: EquipmentsDto = {};
-  const slots: readonly EquipSlot[] = ['weapon', 'plastron', 'gaiter', 'ornament'];
+  const slots: readonly EquipSlot[] = EQUIP_SLOTS;
   if (!career) {
     for (const key of slots) out[key as EquipPosition] = null;
     return out;

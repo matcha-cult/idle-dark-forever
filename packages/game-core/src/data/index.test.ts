@@ -158,8 +158,18 @@ describe('createDefaultTables', () => {
     }
   });
 
-  it('goods 里 type=equip 的 position / class 合法', () => {
-    const positions = new Set(['weapon', 'plastron', 'gaiter', 'ornament']);
+  it('goods 里 type=equip 的 position / class / equipCategory 合法（9 槽 + P2 类别）', () => {
+    const positions = new Set([
+      'weapon',
+      'offHand',
+      'plastron',
+      'gloves',
+      'belt',
+      'boots',
+      'amulet',
+      'ring1',
+      'ring2',
+    ]);
     const classes = new Set(['armor', 'cloth', 'dagger', 'ornament', 'sword', 'wand']);
     let equips = 0;
     for (const [key, good] of Object.entries(tables.goods)) {
@@ -170,6 +180,12 @@ describe('createDefaultTables', () => {
       expect(good.class, key).toBeDefined();
       expect(classes.has(good.class ?? ''), `${key} class=${good.class}`).toBe(true);
       expect(typeof good.minLevel, key).toBe('number');
+      if (good.position === 'weapon') {
+        expect(['oneHand', 'twoHandMelee', 'bow']).toContain(good.equipCategory);
+      }
+      if (good.position === 'offHand') {
+        expect(['shield', 'quiver']).toContain(good.equipCategory);
+      }
     }
     expect(equips).toBeGreaterThan(0);
   });

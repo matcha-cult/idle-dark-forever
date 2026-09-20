@@ -558,27 +558,92 @@ describe('Player 技能经验', () => {
   });
 });
 
-describe('Player 装备', () => {
-  it('equip 与已装备武器互换', () => {
+describe('Player 装备（P2：9 槽 + 副手判定表）', () => {
+  it('单手武器：主手空 → 主手；主手单手且副手空 → 副手（双持）', () => {
     const player = makePlayer();
     player.postCreate();
-    const newSword = new InventorySlot(tables, 'inventory').fromJSON({ key: 'stickSword', count: 1, level: 20, quality: 2 });
-    player.inventory[0]!.fromJSON(newSword.toJSON());
+    // postCreate 后主手是 stickSword（单手）。
+    expect(player.equipments!.weapon.key).toBe('stickSword');
 
-    player.equip(player.inventory[0]!);
-    expect(player.equipments!.weapon.level).toBe(20);
-    expect(player.equipments!.weapon.quality).toBe(2);
-    // 旧武器换到了背包原格
-    expect(player.inventory[0]!.key).toBe('stickSword');
-    expect(player.inventory[0]!.level).toBe(1);
+    const second = item('stickSword', 1, { level: 20, quality: 2 });
+    expect(player.equip(second)).toBe(true);
+    // 主手仍被第一把占据，第二把进副手（双持）。
+    expect(player.equipments!.weapon.level).toBe(1);
+    expect(player.equipments!.offHand.key).toBe('stickSword');
+    expect(player.equipments!.offHand.level).toBe(20);
+
+    // 副手也占满 → 换主手，旧主手回传入槽。
+    const third = item('stickSword', 1, { level: 30 });
+    expect(player.equip(third)).toBe(true);
+    expect(player.equipments!.weapon.level).toBe(30);
+    expect(player.equipments!.offHand.level).toBe(20);
+    expect(third.level).toBe(1);
   });
 
-  it('equip 忽略非装备与未知物品', () => {
+  it('主手空：只允许副手专属（盾 / 箭袋），单手武器仍进主手', () => {
+    const player = makePlayer();
+    player.postCreate();
+    player.unequip(player.equipments!.weapon);
+    expect(player.equipments!.weapon.empty).toBe(true);
+
+    expect(player.equip(item('woodenShield', 1))).toBe(true);
+    expect(player.equipments!.offHand.key).toBe('woodenShield');
+
+    player.unequip(player.equipments!.offHand);
+    expect(player.equip(item('arrowQuiver', 1))).toBe(true);
+    expect(player.equipments!.offHand.key).toBe('arrowQuiver');
+
+    // 单手武器不会进副手（主手空时进主手）。
+    player.unequip(player.equipments!.offHand);
+    expect(player.equip(item('stickSword', 1))).toBe(true);
+    expect(player.equipments!.weapon.key).toBe('stickSword');
+    expect(player.equipments!.offHand.empty).toBe(true);
+  });
+
+  it('单手主手：可盾、禁箭袋', () => {
+    const player = makePlayer();
+    player.postCreate();
+    expect(player.equip(item('arrowQuiver', 1))).toBe(false);
+    expect(player.equipments!.offHand.empty).toBe(true);
+    expect(player.equip(item('woodenShield', 1))).toBe(true);
+    expect(player.equipments!.offHand.key).toBe('woodenShield');
+  });
+
+  it('双手近战：装上后副手被锁定 / 清空；再装箭袋被拒', () => {
+    const player = makePlayer();
+    player.postCreate();
+    player.equip(item('woodenShield', 1));
+    expect(player.equipments!.offHand.key).toBe('woodenShield');
+
+    const twoHand = item('bigSword', 1);
+    expect(player.equip(twoHand)).toBe(true);
+    // 副手被清空并挪回背包；双手武器在主手。
+    expect(player.equipments!.weapon.key).toBe('bigSword');
+    expect(player.equipments!.offHand.empty).toBe(true);
+    expect(player.inventory.some((slot) => slot.key === 'woodenShield')).toBe(true);
+
+    expect(player.equip(item('arrowQuiver', 1))).toBe(false);
+    expect(player.equip(item('woodenShield', 1))).toBe(false);
+    expect(player.equipments!.offHand.empty).toBe(true);
+  });
+
+  it('弓：可装箭袋、禁盾', () => {
+    const player = makePlayer();
+    player.postCreate();
+    expect(player.equip(item('shortBow', 1))).toBe(true);
+    expect(player.equipments!.weapon.key).toBe('shortBow');
+
+    expect(player.equip(item('woodenShield', 1))).toBe(false);
+    expect(player.equip(item('arrowQuiver', 1))).toBe(true);
+    expect(player.equipments!.offHand.key).toBe('arrowQuiver');
+  });
+
+  it('equip 忽略非装备与未知物品（返回 false）', () => {
     const player = makePlayer();
     player.postCreate();
     const before = player.equipments!.weapon.toJSON();
-    player.equip(item('dust1', 1));
-    player.equip(item('no-such-good', 1));
+    expect(player.equip(item('dust1', 1))).toBe(false);
+    expect(player.equip(item('no-such-good', 1))).toBe(false);
     expect(player.equipments!.weapon.toJSON()).toEqual(before);
   });
 

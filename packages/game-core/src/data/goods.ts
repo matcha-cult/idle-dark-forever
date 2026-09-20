@@ -359,6 +359,7 @@ return  [
     type: 'equip',
     class: 'wand',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '法杖',
     description: '就是普通的法杖。',
 
@@ -373,6 +374,7 @@ return  [
     type: 'equip',
     class: 'sword',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '细木剑',
     description: '手工制的细木剑，比起玩具更像是工艺品。',
 
@@ -385,6 +387,7 @@ return  [
     type: 'equip',
     class: 'wand',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '细木法杖',
     description: '也就是削平了的树枝，想要凤凰羽毛什么的是没有的。',
 
@@ -397,6 +400,7 @@ return  [
     type: 'equip',
     class: 'dagger',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '细木匕首',
     description: '磨光的细木，戳在身上有点疼。',
 
@@ -411,6 +415,7 @@ return  [
     type: 'equip',
     class: 'sword',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '木剑',
     description: '手工制的木剑，比起武器更像是玩具。',
 
@@ -423,6 +428,7 @@ return  [
     type: 'equip',
     class: 'wand',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '木杖',
     description: '老爷爷们人手一个的东西，居然能用来施法？',
 
@@ -435,6 +441,7 @@ return  [
     type: 'equip',
     class: 'dagger',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '木匕首',
     description: '木头削成的匕首，表面很锋利。',
 
@@ -449,6 +456,7 @@ return  [
     type: 'equip',
     class: 'sword',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '骨剑',
     description: '骨头磨成的剑，看起来就很瘆人。',
 
@@ -461,6 +469,7 @@ return  [
     type: 'equip',
     class: 'wand',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '骨杖',
     description: '看起来很适合兽人酋长。',
 
@@ -473,6 +482,7 @@ return  [
     type: 'equip',
     class: 'dagger',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '骨刺',
     description: '骨头上尖利的部位，十分完整。',
 
@@ -487,6 +497,7 @@ return  [
     type: 'equip',
     class: 'sword',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '狼牙棒',
     description: '狼牙棒是狼牙造的？逗我呢？',
 
@@ -499,6 +510,7 @@ return  [
     type: 'equip',
     class: 'wand',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '狼牙巫杖',
     description: '塔子金够~',
 
@@ -511,6 +523,7 @@ return  [
     type: 'equip',
     class: 'dagger',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '狼牙匕',
     description: '完整的狼牙，加上了小块木柄。',
 
@@ -525,6 +538,7 @@ return  [
     type: 'equip',
     class: 'sword',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '铜剑',
     description: '红彤彤的金属剑，并不坚固。',
     minLevel: 32,
@@ -536,6 +550,7 @@ return  [
     type: 'equip',
     class: 'sword',
     position: 'weapon',
+    equipCategory: 'twoHandMelee',
     name: '铜巨剑',
     description: '巨大的铜剑。因为铜的韧性不够所以有些破损了。',
     minLevel: 32,
@@ -547,6 +562,7 @@ return  [
     type: 'equip',
     class: 'dagger',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '铜匕首',
     description: '通体由红铜打制，很是美观。',
 
@@ -560,6 +576,7 @@ return  [
     type: 'equip',
     class: 'wand',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '魔骨手杖',
     description: '这是一个手杖。"手"杖的意思是上面还粘着一只没有处理掉的僵尸手。',
 
@@ -572,6 +589,7 @@ return  [
     type: 'equip',
     class: 'wand',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '魔骨巨杖',
     description: '感受一下吧，手持僵尸火腿战斗的感觉。',
 
@@ -587,6 +605,7 @@ return  [
     type: 'equip',
     class: 'sword',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '青铜剑',
     description: '青铜制成的剑，相当坚固。',
 
@@ -599,6 +618,7 @@ return  [
     type: 'equip',
     class: 'sword',
     position: 'weapon',
+    equipCategory: 'twoHandMelee',
     name: '青铜巨剑',
     description: '巨大的青铜剑。看起来非常沉重。',
 
@@ -611,6 +631,7 @@ return  [
     type: 'equip',
     class: 'dagger',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '青铜匕首',
     description: '青铜造的匕首，像是从古墓中发掘出来的。',
 
@@ -623,6 +644,7 @@ return  [
     type: 'equip',
     class: 'wand',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '秘银短杖',
     description: '通体秘银打制的短杖，导魔性能非常好。',
 
@@ -635,6 +657,7 @@ return  [
     type: 'equip',
     class: 'wand',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '秘银巨杖',
     description: '不要被名字糊弄了。其实是木质杖体，镀了一层秘银。',
 
@@ -650,6 +673,7 @@ return  [
     type: 'equip',
     class: 'sword',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '魔骨短剑',
     description: '磨尖的骨头做成的短剑，非常吓人。',
 
@@ -662,6 +686,7 @@ return  [
     type: 'equip',
     class: 'sword',
     position: 'weapon',
+    equipCategory: 'twoHandMelee',
     name: '魔骨巨剑',
     description: '磨尖的大腿骨，还有幽魂缠绕，非常吓人。',
 
@@ -674,6 +699,7 @@ return  [
     type: 'equip',
     class: 'dagger',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '魔骨匕首',
     description: '带有魔力的尖利骨头。',
 
@@ -687,6 +713,7 @@ return  [
     type: 'equip',
     class: 'wand',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '幽魂魔杖',
     description: '你能听到魔杖发出阵阵呻吟。',
 
@@ -699,6 +726,7 @@ return  [
     type: 'equip',
     class: 'wand',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '幽魂长棍',
     description: '一大段连接而成的长骨，缠绕着很多幽魂。',
 
@@ -714,6 +742,7 @@ return  [
     type: 'equip',
     class: 'sword',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '秘银青铜剑',
     description: '掺了秘银的青铜剑，坚固且轻巧。',
 
@@ -725,6 +754,7 @@ return  [
     type: 'equip',
     class: 'sword',
     position: 'weapon',
+    equipCategory: 'twoHandMelee',
     name: '秘银青铜巨剑',
     description: '掺了秘银的巨大青铜剑，难得如此轻巧。',
 
@@ -736,6 +766,7 @@ return  [
     type: 'equip',
     class: 'dagger',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '秘银匕首',
     description: '华丽的匕首，极其轻便。',
 
@@ -747,6 +778,7 @@ return  [
     type: 'equip',
     class: 'wand',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '合金锡杖',
     description: '秘银和锡合金的短杖，导魔性能非常好。',
 
@@ -758,6 +790,7 @@ return  [
     type: 'equip',
     class: 'wand',
     position: 'weapon',
+    equipCategory: 'oneHand',
     name: '合金巨杖',
     description: '秘银和锡的合金组成的巨大长棍，表面非常光滑。',
 
@@ -792,7 +825,7 @@ return  [
   {
     key: 'skirt',
     type: 'equip',
-    position: 'gaiter',
+    position: 'boots',
     class: 'cloth',
     name: '布裙',
     description: '普通的村民装束，不太适合男性。',
@@ -816,7 +849,7 @@ return  [
   {
     key: 'rattanShinGuard',
     type: 'equip',
-    position: 'gaiter',
+    position: 'boots',
     class: 'armor',
     name: '藤护胫',
     description: '将木条绑在一起组成的护腿，稍微能起到一点防御作用。',
@@ -839,7 +872,7 @@ return  [
   {
     key: 'boot',
     type: 'equip',
-    position: 'gaiter',
+    position: 'boots',
     class: 'cloth',
     name: '长靴',
     description: '将木条绑在一起组成的长靴，居然还非常的好看。',
@@ -864,7 +897,7 @@ return  [
   {
     key: 'leatherTrousers',
     type: 'equip',
-    position: 'gaiter',
+    position: 'boots',
     class: 'armor',
     name: '皮裤',
     description: '不知道为什么穿它的时候，想着它曾经属于一只野兽，就感觉有点悲风。',
@@ -886,7 +919,7 @@ return  [
   {
     key: 'leatherSkirt',
     type: 'equip',
-    position: 'gaiter',
+    position: 'boots',
     class: 'cloth',
     name: '短皮裙',
     description: '穿起来非常凉爽，也很养眼。',
@@ -910,7 +943,7 @@ return  [
   {
     key: 'copperShinGuard',
     type: 'equip',
-    position: 'gaiter',
+    position: 'boots',
     class: 'armor',
     name: '锁链靴',
     description: '木质的鞋底，铜环串联而成鞋面，防御力很不错。',
@@ -932,7 +965,7 @@ return  [
   {
     key: 'silkSocks',
     type: 'equip',
-    position: 'gaiter',
+    position: 'boots',
     class: 'cloth',
     name: '丝袜',
     description: '性感的丝袜，特别显得腿细。',
@@ -955,7 +988,7 @@ return  [
   {
     key: 'boneShinGuard',
     type: 'equip',
-    position: 'gaiter',
+    position: 'boots',
     class: 'armor',
     name: '骨靴',
     description: '用骨片雕琢而成的靴子，已经看不出骨头来自哪个部位了。',
@@ -986,7 +1019,7 @@ return  [
   {
     key: 'mithrilSkirt',
     type: 'equip',
-    position: 'gaiter',
+    position: 'boots',
     class: 'cloth',
     name: '秘银短裙',
     description: '一层布料一层秘银叠加而成的褶裙，自带防走光被动。',
@@ -1009,7 +1042,7 @@ return  [
     key: 'ornament',
     type: 'equip',
     class: 'ornament',
-    position: 'ornament',
+    position: 'amulet',
     name: '饰品',
     description: '就是普通的饰品。',
 
@@ -1020,7 +1053,7 @@ return  [
     key: 'copperRing',
     type: 'equip',
     class: 'ornament',
-    position: 'ornament',
+    position: 'ring1',
     name: '铜拉环',
     description: '看起来就是罐头上取下来的一样。',
 
@@ -1032,7 +1065,7 @@ return  [
     key: 'zombieHeart',
     type: 'equip',
     class: 'ornament',
-    position: 'ornament',
+    position: 'amulet',
     name: '灌魔心脏',
     description: '还在微微的跳动。',
 
@@ -1044,7 +1077,7 @@ return  [
     key: 'ironRing',
     type: 'equip',
     class: 'ornament',
-    position: 'ornament',
+    position: 'ring1',
     name: '钢指环',
     description: '百炼钢化作绕指柔。',
 
@@ -1055,7 +1088,7 @@ return  [
     key: 'goldNecklace',
     type: 'equip',
     class: 'ornament',
-    position: 'ornament',
+    position: 'amulet',
     name: '金项链',
     description: '暴发户专属。',
 
@@ -1066,7 +1099,7 @@ return  [
     key: 'mithrilRing',
     type: 'equip',
     class: 'ornament',
-    position: 'ornament',
+    position: 'ring1',
     name: '秘银指环',
     description: '我就知道有钱人什么东西都能用上贵金属。',
 
@@ -1077,7 +1110,7 @@ return  [
     key: 'mithrilStannumRing',
     type: 'equip',
     class: 'ornament',
-    position: 'ornament',
+    position: 'amulet',
     name: '合金项链',
     description: '反光度非常好，可以卖个好价钱。',
 

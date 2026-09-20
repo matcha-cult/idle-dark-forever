@@ -243,6 +243,19 @@ describe('登录 → 选角 → 推送 → 面板更新', () => {
     expect(root.world.units).toHaveLength(1);
     expect(root.world.maps).toHaveLength(1);
     expect(root.inventory.inventory).toHaveLength(1);
+    // P2：装备栏固定 9 槽（前端按协议常量渲染，不硬编码）。
+    expect(root.inventory.equipments).toHaveLength(9);
+    expect(root.inventory.equipments.map((entry) => entry.position)).toEqual([
+      'weapon',
+      'offHand',
+      'plastron',
+      'gloves',
+      'belt',
+      'boots',
+      'amulet',
+      'ring1',
+      'ring2',
+    ]);
     expect(root.inventory.equipments.find((entry) => entry.position === 'weapon')?.slot).toBeNull();
     expect(root.idle.report?.kills).toBe(1);
     expect(root.idle.hasPending).toBe(true);

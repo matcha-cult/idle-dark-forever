@@ -62,7 +62,7 @@ describe('E0.5 装备词缀 hook 重绑：未知 / 缺失 key 不得让角色载
   it('affixData 存在但 hooks 缺失 → 不抛错且跳过', () => {
     const t = makeTestWorld({ seed: 9 });
     const player = makePlayer();
-    player.equipments.gaiter = equippedSlot([{ affixData: {}, value: 3 }]);
+    player.equipments.boots = equippedSlot([{ affixData: {}, value: 3 }]);
     expect(() => t.world.addPlayer(player)).not.toThrow();
   });
 
@@ -80,7 +80,7 @@ describe('E0.5 装备词缀 hook 重绑：未知 / 缺失 key 不得让角色载
       // 空槽也不该读词缀，但故意塞一条未知 key 证明短路发生在读取之前。
       affixes: [{ affixData: undefined, value: 1 }],
     };
-    player.equipments.gaiter = undefined as unknown as EquipmentSlotLike;
+    player.equipments.boots = undefined as unknown as EquipmentSlotLike;
     expect(() => t.world.addPlayer(player)).not.toThrow();
   });
 

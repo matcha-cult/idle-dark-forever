@@ -93,7 +93,7 @@ describe('InventorySlot 基础', () => {
     expect(sword.atkSpeed).toBe(1.5);
     expect(sword.atk).toBe(2); // (3/3 + 2) / 1.5
     expect(sword.displayQuality).toBe(2);
-    expect(sword.equipPositionName).toBe('武器');
+    expect(sword.equipPositionName).toBe('主手');
     expect(sword.equipPositionOrder).toBe(0);
   });
 
@@ -276,10 +276,10 @@ describe('InventorySlot.fromJSON 隐式兼容', () => {
   });
 
   it('常量表与契约字段一致', () => {
-    expect(EQUIP_POSITION_NAMES.gaiter).toBe('护腿');
+    expect(EQUIP_POSITION_NAMES.boots).toBe('鞋子');
     expect(EQUIP_POSITION_ORDER.weapon).toBe(0);
-    expect(EQUIP_POSITION_ORDER.ornament).toBe(3);
-    expect(DEF_POSITION_RATE.gaiter).toBe(0.6);
+    expect(EQUIP_POSITION_ORDER.amulet).toBe(6);
+    expect(DEF_POSITION_RATE.boots).toBe(0.6);
     expect(DEF_CLASS_RATE.armor).toBe(2);
   });
 });

@@ -7,20 +7,13 @@
  */
 import { makeAutoObservable, observable, runInAction } from 'mobx';
 import type { EquipPosition, InventorySlotDto, LootRuleStateDto } from '@idle-dark/protocol';
-import { INVENTORY_CMD } from '@idle-dark/protocol';
+import { EQUIP_POSITIONS, EQUIP_POSITION_NAMES, INVENTORY_CMD } from '@idle-dark/protocol';
 import { toastFailure } from '../services/game-client.js';
 import { LoadGuard } from './load-guard.js';
 import type { StoreContext } from './store-context.js';
 
-/** 装备栏固定 4 槽的展示顺序（顺序是表现，不是数值推导）。 */
-export const EQUIP_POSITIONS: readonly EquipPosition[] = ['weapon', 'plastron', 'gaiter', 'ornament'];
-
-export const EQUIP_POSITION_NAMES: Record<EquipPosition, string> = {
-  weapon: '武器',
-  plastron: '胸甲',
-  gaiter: '护腿',
-  ornament: '饰品',
-};
+// 装备槽（9 个）的顺序与中文名：唯一真相在 `@idle-dark/protocol` 的 `equip.ts`（前后端共用）。
+export { EQUIP_POSITIONS, EQUIP_POSITION_NAMES };
 
 export class InventoryStore {
   /** 服务端下发的全量格子。 */
@@ -58,7 +51,7 @@ export class InventoryStore {
     return this.slots.filter((slot) => slot.position === 'award');
   }
 
-  /** 装备栏 4 槽（`equipPosition` 定位；缺失即为空槽）。 */
+  /** 装备栏 9 槽（`equipPosition` 定位；缺失即为空槽）。 */
   get equipments(): Array<{ position: EquipPosition; slot: InventorySlotDto | null }> {
     const equipped = this.slots.filter((slot) => slot.position === 'equip');
     return EQUIP_POSITIONS.map((position) => ({

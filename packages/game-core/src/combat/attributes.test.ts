@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import type { EquipmentSlotLike, PlayerLike } from './player-unit.js';
 import { makePlayer, makeTestWorld } from './test-support.js';
 
-/** 带 `ornament.maxHp` 的饰品槽。 */
+/** 带 `maxHp` 的饰品（项链）槽。 */
 function ornamentSlot(maxHp: number): EquipmentSlotLike {
   return { empty: false, level: 1, atk: 0, atkSpeed: 0, def: 0, maxHp, affixes: [] };
 }
@@ -65,7 +65,7 @@ describe('E1 属性三化', () => {
   it('`maxHp` 叠加饰品加成，再走 maxHp / maxHpMul / maxHpAdd hooks', () => {
     const t = makeTestWorld({ seed: 5 });
     const player = makePlayer({ level: 5 });
-    player.equipments.ornament = ornamentSlot(40);
+    player.equipments.amulet = ornamentSlot(40);
     const unit = t.world.addPlayer(player);
     unit.addAttrHook('maxHp', ((v: number) => v + 100) as never);
     unit.addAttrHook('maxHpMul', ((v: number) => v * 2) as never);
@@ -77,14 +77,14 @@ describe('E1 属性三化', () => {
   it('边界：level 0 / 负数装备 maxHp / NaN 残留 sta 均不抛错', () => {
     const t = makeTestWorld({ seed: 6 });
     const player = makePlayer({ level: 0 });
-    player.equipments.ornament = ornamentSlot(-100);
+    player.equipments.amulet = ornamentSlot(-100);
     withExtraSta(player, Number.NaN);
     const unit = t.world.addPlayer(player);
     expect(unit.maxHp).toBe(50 - 100); // 装备加成原样参与（负数由数据保证，不在内核夹取）
 
     const t2 = makeTestWorld({ seed: 7 });
     const p2 = makePlayer({ level: 0 });
-    p2.equipments.ornament = undefined as unknown as EquipmentSlotLike;
+    p2.equipments.amulet = undefined as unknown as EquipmentSlotLike;
     expect(t2.world.addPlayer(p2).maxHp).toBe(50);
   });
 
@@ -98,5 +98,39 @@ describe('E1 属性三化', () => {
     expect(Number.isNaN(unit.str)).toBe(true); // NaN + 1
     expect(unit.dex).toBe(0); // -1 + 1
     expect(unit.int).toBe(1); // 0 + 1
+  });
+});
+
+describe('E4 护甲槽位泛化：def 不再只读胸甲/护腿', () => {
+  const armor = (def: number): EquipmentSlotLike => ({
+    empty: false,
+    level: 1,
+    atk: 0,
+    atkSpeed: 0,
+    def,
+    maxHp: 0,
+    affixes: [],
+  });
+
+  it('胸甲 + 手套 + 腰带 + 鞋子的 def 全部计入（+ 力量）', () => {
+    const t = makeTestWorld({ seed: 12 });
+    const player = makePlayer();
+    player.equipments.plastron = armor(10);
+    player.equipments.gloves = armor(4);
+    player.equipments.belt = armor(3);
+    player.equipments.boots = armor(2);
+    const unit = t.world.addPlayer(player);
+    // makePlayer: str = 5 + 1×(level 1) = 6；def = 装备和 + str。
+    expect(unit.def).toBe(10 + 4 + 3 + 2 + 6);
+  });
+
+  it('饰品的 maxHp 计入（项链 + 两枚戒指）', () => {
+    const t = makeTestWorld({ seed: 13 });
+    const player = makePlayer();
+    player.equipments.amulet = { ...armor(0), maxHp: 30 };
+    player.equipments.ring1 = { ...armor(0), maxHp: 20 };
+    player.equipments.ring2 = { ...armor(0), maxHp: 10 };
+    const unit = t.world.addPlayer(player);
+    expect(unit.maxHp).toBe(50 + 10 + 30 + 20 + 10);
   });
 });

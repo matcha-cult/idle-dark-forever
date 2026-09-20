@@ -16,7 +16,17 @@ describe('CareerInfo', () => {
     expect(info.maxLevel).toBe(60);
     expect(info.selectedSkills).toEqual([]);
     expect(info.selectedEnhances).toEqual([]);
-    expect(Object.keys(info.equipments)).toEqual(['weapon', 'plastron', 'gaiter', 'ornament']);
+    expect(Object.keys(info.equipments)).toEqual([
+      'weapon',
+      'offHand',
+      'plastron',
+      'gloves',
+      'belt',
+      'boots',
+      'amulet',
+      'ring1',
+      'ring2',
+    ]);
     expect(info.equipments.weapon.empty).toBe(true);
     expect(info.equipments.weapon.position).toBe('equip');
   });
@@ -66,8 +76,9 @@ describe('CareerInfo', () => {
     expect(info.equipments.weapon.key).toBe('stickSword');
     expect(info.equipments.weapon.level).toBe(10);
     expect(info.equipments.plastron.empty).toBe(true);
-    expect(info.equipments.gaiter.empty).toBe(true);
-    expect(info.equipments.ornament.empty).toBe(true);
+    expect(info.equipments.boots.empty).toBe(true);
+    expect(info.equipments.amulet.empty).toBe(true);
+    expect(info.equipments.ring1.empty).toBe(true);
   });
 
   it('fromJSON：selectedSkills/selectedEnhances 按职业表过滤', () => {

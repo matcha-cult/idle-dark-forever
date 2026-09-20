@@ -5,10 +5,10 @@
  * 合成（`${position}:${index}`）。本文件把它扩展成一个**面板域自洽**的 id 方案：
  *
  * - 背包 / 建造 / 奖励：`inventory:0` / `build:0` / `award:0`（与 shared 一致）；
- * - 装备栏：`equip:weapon` / `equip:plastron` / `equip:gaiter` / `equip:ornament`。
+ * - 装备栏：`equip:<槽名>`（P2 的 9 个槽，见 `@idle-dark/protocol` 的 `EQUIP_POSITIONS`）。
  *
- * ⚠️ 为什么装备栏不用 `equip:0`：`shared/player-dto.ts` 的 `equipmentsDtoOf` 对四个装备槽
- * 都调用 `slotDtoOf(slot, 0)`，会产出**四个相同 id** `equip:0`，单件操作无法区分。
+ * ⚠️ 为什么装备栏不用 `equip:0`：`shared/player-dto.ts` 的 `equipmentsDtoOf` 对每个装备槽
+ * 都调用 `slotDtoOf(slot, 0)`，会产出**多个相同 id** `equip:0`，单件操作无法区分。
  * 本域一律使用 `${position}:${equipSlot}`，`inventory.list` / 写操作返回的 DTO 都用它。
  */
 import type { InventorySlotDto, ItemPosition } from '@idle-dark/protocol';

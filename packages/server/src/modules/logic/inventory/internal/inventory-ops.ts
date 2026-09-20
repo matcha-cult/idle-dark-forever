@@ -34,7 +34,10 @@ export function opEquip(player: Player, position: string, slot: InventorySlot): 
   if (slot.empty) throw new OpError(BusinessErrorCode.ITEM_NOT_FOUND);
   const reason = equipBlockReason(player, slot);
   if (reason !== null) throw new OpError(reason);
-  player.equip(slot);
+  // `Player.equip` 会过副手判定表（P2）：主手不兼容时返回 false。
+  if (!player.equip(slot)) {
+    throw new OpError(BusinessErrorCode.INVALID_PARAM, '副手无法装备该物品');
+  }
 }
 
 /** 卸下装备到第一个背包空位（无空位 → INVENTORY_FULL）。 */
