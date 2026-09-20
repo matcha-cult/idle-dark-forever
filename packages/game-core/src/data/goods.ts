@@ -1120,34 +1120,69 @@ return  [
 
 })();
 
-// ── 占位物品：12 通货 + 12 精华（P10/P8；真实名称与能力下期开工） ──
-// 只登记 `{ key, type: 'material', name, price, stack }`，不写任何能力函数（§3.4）。
-// 复用既有 `type: 'material'`（不动冻结契约 GoodType，前端零改动）。
-const __goods_placeholder = ((): GoodEntry[] => {
-  const out: GoodEntry[] = [];
-  for (let i = 1; i <= 12; i += 1) {
-    const n = String(i).padStart(2, '0');
-    out.push({
-      key: `currency.${n}`,
+// ── 工艺通货 12 种 + 精华 6 种（实装；效果文案取自修仙设计稿，炼器效果下期接） ──
+//
+// 约定：`currency.<code>` = 可堆叠工艺通货；`essence.<code>` = 定向精华（同为 `material` + `stack`）。
+// ⚠️ 本期只实装**物品与掉落**；`description` 是下期炼器系统的接线说明，尚未有消费方。
+// 修仙原表 13 种通货中的 `vaal`（瓦尔宝珠）**不实装**（用户指定）。
+// 精华槽共 12 个：本期实装 6 个，其余 6 个是 `essence.07..12` 空位（不参与掉落）。
+const __goods_craft = ((): GoodEntry[] => {
+  const currency = (key: string, name: string, price: number, description: string): GoodEntry => ({
+    key: `currency.${key}`,
+    type: 'material',
+    name,
+    description,
+    price,
+    stack: 9999,
+  });
+  const essence = (key: string, name: string, description: string): GoodEntry => ({
+    key: `essence.${key}`,
+    type: 'material',
+    name,
+    description,
+    price: 150,
+    stack: 9999,
+  });
+  const reserved = (n: number): GoodEntry => {
+    const nn = String(n).padStart(2, '0');
+    return {
+      key: `essence.${nn}`,
       type: 'material',
-      name: `通货·占位 ${n}`,
-      description: `占位通货 ${n}（能力与正式名称下期开工）。`,
-      price: 10,
+      name: `精华·空位 ${nn}`,
+      description: '精华槽位预留（下期实装，暂不参与掉落）。',
+      price: 0,
       stack: 9999,
-    });
-  }
-  for (let i = 1; i <= 12; i += 1) {
-    const n = String(i).padStart(2, '0');
-    out.push({
-      key: `essence.${n}`,
-      type: 'material',
-      name: `精华·占位 ${n}`,
-      description: `占位精华 ${n}（能力与正式名称下期开工）。`,
-      price: 20,
-      stack: 9999,
-    });
-  }
-  return out;
+    };
+  };
+  return [
+    // 工艺通货（price = 面额阶梯；掉落稀有度见 data/index.ts 的 CRAFT_DROP_RATES）
+    currency('transmute', '蜕变石', 10, '凡品 → 灵品（roll 1~2 条词缀）。'),
+    currency('alchemy', '点金石', 25, '凡品 → 宝品（roll 3~6 条词缀）。'),
+    currency('chaos', '混沌石', 50, '重 roll 当前品阶的词条数与词缀。'),
+    currency('scour', '重铸石', 80, '清除全部词缀，还原凡品（唯一降阶途径）。'),
+    currency('annul', '剥离石', 120, '随机移除 1 条词缀，品阶不变。'),
+    currency('blessed', '祝福石', 200, '重 roll 基础属性数值。'),
+    currency('exalt', '崇高石', 350, '新增 1 条词缀；灵品满 2 条再使用即升宝品。'),
+    currency('ember', '古灵余烬', 500, '新增/替换基底词缀。'),
+    currency('wisp', '古灵溶液', 500, '新增/替换基底词缀。'),
+    currency('divine', '神圣石', 1000, '重 roll 词缀数值（不改词条数与种类）。大额交易通货。'),
+    currency('fracture', '破溃宝珠', 1500, '锁定 1 条词缀为天定铭文。大额交易通货。'),
+    currency('mirror', '映道镜', 10000, '复制一件物品，镜像不可再复制。极稀有。'),
+    // 精华 6 种（实装；按前后缀 + 词缀族定向）
+    essence('atk', '锋锐精华', '定向：前缀必出锋锐（攻击）族。'),
+    essence('spirit', '蕴灵精华', '定向：前缀必出蕴灵（灵性）族。'),
+    essence('def', '御土精华', '定向：前缀必出御土（防御）族。'),
+    essence('hp', '太一精华', '定向：前缀必出太一（生命）族。'),
+    essence('regen', '回春精华', '定向：后缀必出回春（回复）族。'),
+    essence('insight', '悟性精华', '定向：后缀必出悟性族。'),
+    // 精华空位 6 个（下期实装，不参与掉落）
+    reserved(7),
+    reserved(8),
+    reserved(9),
+    reserved(10),
+    reserved(11),
+    reserved(12),
+  ];
 })();
 
 export const goods: Record<string, GoodEntry> = arrayToMap([
@@ -1156,5 +1191,5 @@ export const goods: Record<string, GoodEntry> = arrayToMap([
   ...__goods_2,
   ...__goods_3,
   ...__goods_4,
-  ...__goods_placeholder,
+  ...__goods_craft,
 ]);

@@ -75,27 +75,66 @@ export function createDefaultTables(): DataTables {
   const tables: MutableDataTables = cloneTables(baseTables);
   registerNightmare(tables);
   registerYear2018(tables);
-  registerPlaceholders(tables);
+  registerCraftDrops(tables);
   return tables;
 }
 
 /**
- * E6/P8：把 **12 通货 + 12 精华**占位物品接入掉落池（`{ key, count:[n,n], rate }` 形态）。
+ * 工艺通货掉落速率（**敌人每击杀**；地图通关 = ×{@link MAP_DROP_MULTIPLIER}）。
+ *
+ * 顺序 = 稀有度**递增**（越靠后越稀有）。用户口径：
+ * - `mirror`（映道镜）**极稀有**：用极低概率控制持有量；
+ * - `divine`（神圣石）/ `fracture`（破溃宝珠）掉落高于映道镜，是**大额交易通货**（类比百元钞）；
+ * - 其余按稀有度顺序排列。数值可随时调整（纯数据）。
+ *
+ * ⚠️ 修仙原表 13 种里 **不含 `vaal`**（瓦尔宝珠，用户指定不实装）。
+ */
+export const CRAFT_DROP_RATES: Readonly<Record<string, number>> = {
+  'currency.transmute': 0.12,
+  'currency.alchemy': 0.08,
+  'currency.chaos': 0.05,
+  'currency.scour': 0.03,
+  'currency.annul': 0.02,
+  'currency.blessed': 0.012,
+  'currency.exalt': 0.008,
+  'currency.ember': 0.005,
+  'currency.wisp': 0.005,
+  'currency.divine': 0.0025,
+  'currency.fracture': 0.0018,
+  'currency.mirror': 0.0001,
+};
+
+/** 精华掉落速率（本期实装 6 种，统一 2%；具体分布下期）。 */
+export const ESSENCE_DROP_RATES: Readonly<Record<string, number>> = {
+  'essence.atk': 0.02,
+  'essence.spirit': 0.02,
+  'essence.def': 0.02,
+  'essence.hp': 0.02,
+  'essence.regen': 0.02,
+  'essence.insight': 0.02,
+};
+
+/** 地图通关掉落相对敌人的倍率。 */
+export const MAP_DROP_MULTIPLIER = 5;
+
+/**
+ * P8/P10：把**实装的工艺通货 + 精华**接入掉落池（`{ key, count:[n,n], rate }` 形态）。
  *
  * ⚠️ `battle-world.loots` 对 `count` **只认数组**：写标量会算出 0（§3.2 陷阱），故一律 `[n,n]`。
- * 本期只保证「可掉落 + 可堆叠」，具体分布下期（P5/P8）。
+ * `essence.07..12`（空位）**不在**速率表里 → 不参与掉落。
  */
-export function registerPlaceholders(tables: MutableDataTables): void {
-  const currencies = Object.keys(tables.goods).filter((key) => key.startsWith('currency.'));
-  const essences = Object.keys(tables.goods).filter((key) => key.startsWith('essence.'));
+export function registerCraftDrops(tables: MutableDataTables): void {
+  const drops = { ...CRAFT_DROP_RATES, ...ESSENCE_DROP_RATES };
   for (const enemy of Object.values(tables.enemies)) {
     if (!enemy.loots) continue;
-    for (const key of currencies) enemy.loots.push({ key, count: [1, 1], rate: 0.05 });
-    for (const key of essences) enemy.loots.push({ key, count: [1, 1], rate: 0.01 });
+    for (const [key, rate] of Object.entries(drops)) {
+      enemy.loots.push({ key, count: [1, 1], rate });
+    }
   }
   for (const map of Object.values(tables.maps)) {
     if (!map.loots) continue;
-    for (const key of currencies) map.loots.push({ key, count: [1, 2], rate: 0.2 });
-    for (const key of essences) map.loots.push({ key, count: [1, 1], rate: 0.05 });
+    for (const [key, rate] of Object.entries(drops)) {
+      map.loots.push({ key, count: [1, 1], rate: rate * MAP_DROP_MULTIPLIER });
+    }
   }
 }

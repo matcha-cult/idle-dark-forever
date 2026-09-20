@@ -675,9 +675,15 @@ __IDLE_DARK__                   // 根 store（临时排查）
 ### 18.6 掉落与商店（P8/P10/P11）
 
 - 怪物与副本**都不再产装备**（184 条 equip 掉落条目已物理删除）；数据门禁断言「无 equip 掉落」。
-- 12 通货 + 12 精华是 `type:'material'` + `stack` 的**占位物品**（无能力函数）；
-  `registerPlaceholders(tables)` 把它们接入掉落池，**`count` 一律用 `[n,n]` 数组**
-  （`battle-world.loots` 对 `count` 只认数组，标量会算出 0）。
+- **工艺通货 12 种 + 精华 6 种**（实装，全部 `type:'material'` + `stack`）：
+  - 通货 key `currency.<code>` = `transmute/alchemy/chaos/scour/annul/blessed/exalt/ember/wisp/divine/fracture/mirror`
+    （取自修仙设计稿，**不含 `vaal` 瓦尔宝珠**）；`description` 写有效果说明，但**炼器效果尚未接线**（下期 P9）。
+  - 精华 key `essence.<code>` = `atk/spirit/def/hp/regen/insight`（按前后缀 + 词缀族定向）。
+  - 精华槽共 12 个：`essence.07..12` 是**空位**（下期实装，**不参与掉落**）。
+- 掉落速率表在 `data/index.ts` 的 `CRAFT_DROP_RATES` / `ESSENCE_DROP_RATES`，`registerCraftDrops(tables)`
+  接线（地图通关 = ×`MAP_DROP_MULTIPLIER`）。稀有度口径：**`mirror` 最低（控制持有量）**，
+  `divine` / `fracture` 高于它且是**大额交易通货**，其余按序递减；**`count` 一律 `[n,n]` 数组**
+  （`battle-world.loots` 对 `count` 只认数组，标量会算出 0）。改数值只动这张表。
 - 0 级地图 `town` 与 `baseCatalogOf(tables)`（数据驱动底材目录）是商店入口骨架；
   底材目录与购买 Action 下期（P8）。`lootRule` 域因装备不再掉落而**休眠**（未删除）。
 

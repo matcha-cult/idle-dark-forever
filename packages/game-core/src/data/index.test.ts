@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { DataTables } from '../contracts/data.js';
 import type { Rng } from '../contracts/ports.js';
-import { createDefaultTables } from './index.js';
+import { CRAFT_DROP_RATES, ESSENCE_DROP_RATES, createDefaultTables } from './index.js';
 
 const tables: DataTables = createDefaultTables();
 const tables2: DataTables = createDefaultTables();
@@ -427,7 +427,12 @@ describe('边界与异常输入', () => {
   });
 });
 
-describe('E6/P11：掉落门禁与占位物品', () => {
+describe('E6/P11 + 工艺通货：掉落门禁与实装清单', () => {
+  const allLootEntries = (): Array<Record<string, unknown>> => [
+    ...Object.values(tables.enemies).flatMap((enemy) => enemy.loots ?? []),
+    ...Object.values(tables.maps).flatMap((map) => map.loots ?? []),
+  ] as Array<Record<string, unknown>>;
+
   it('任何掉落表都不再产装备（无 `type:equip` 条目）', () => {
     const offenders: string[] = [];
     const check = (owner: string, loots: unknown): void => {
@@ -444,29 +449,84 @@ describe('E6/P11：掉落门禁与占位物品', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('12 通货 + 12 精华占位物品已登记，且为可堆叠 material', () => {
-    for (let i = 1; i <= 12; i += 1) {
-      const n = String(i).padStart(2, '0');
-      for (const key of [`currency.${n}`, `essence.${n}`]) {
-        const good = tables.goods[key];
-        expect(good, key).toBeDefined();
-        expect(good?.type, key).toBe('material');
-        expect(good?.stack, key).toBeGreaterThan(0);
-      }
+  it('12 工艺通货已实装，且不含 vaal（瓦尔宝珠）', () => {
+    const expected = [
+      'transmute',
+      'alchemy',
+      'chaos',
+      'scour',
+      'annul',
+      'blessed',
+      'exalt',
+      'ember',
+      'wisp',
+      'divine',
+      'fracture',
+      'mirror',
+    ];
+    for (const code of expected) {
+      const good = tables.goods[`currency.${code}`];
+      expect(good, code).toBeDefined();
+      expect(good?.type, code).toBe('material');
+      expect(good?.stack, code).toBeGreaterThan(0);
+      expect((good?.name ?? '').length, code).toBeGreaterThan(0);
+    }
+    expect(Object.keys(tables.goods).filter((k) => k.startsWith('currency.'))).toHaveLength(12);
+    expect(tables.goods['currency.vaal']).toBeUndefined();
+  });
+
+  it('6 种精华已实装 + 6 个空位（essence.07..12），全部为可堆叠 material', () => {
+    for (const code of ['atk', 'spirit', 'def', 'hp', 'regen', 'insight']) {
+      const good = tables.goods[`essence.${code}`];
+      expect(good, code).toBeDefined();
+      expect(good?.type, code).toBe('material');
+      expect(good?.stack, code).toBeGreaterThan(0);
+    }
+    for (let i = 7; i <= 12; i += 1) {
+      const key = `essence.${String(i).padStart(2, '0')}`;
+      expect(tables.goods[key], key).toBeDefined();
+      expect(tables.goods[key]?.type, key).toBe('material');
+    }
+    expect(Object.keys(tables.goods).filter((k) => k.startsWith('essence.'))).toHaveLength(12);
+  });
+
+  it('实装物品已接入掉落池，count 是数组（标量会算出 0）', () => {
+    const allLoots = allLootEntries();
+    for (const key of ['currency.chaos', 'currency.mirror', 'essence.atk']) {
+      const entry = allLoots.find((item) => item['key'] === key);
+      expect(entry, key).toBeDefined();
+      expect(Array.isArray(entry?.['count']), key).toBe(true);
     }
   });
 
-  it('占位物品已接入掉落池，且 count 是数组（标量会算出 0）', () => {
-    const allLoots = [
-      ...Object.values(tables.enemies).flatMap((enemy) => enemy.loots ?? []),
-      ...Object.values(tables.maps).flatMap((map) => map.loots ?? []),
-    ];
-    const currencyEntry = allLoots.find(
-      (entry) => typeof (entry as { key?: string }).key === 'string' &&
-        (entry as { key: string }).key.startsWith('currency.'),
-    );
-    expect(currencyEntry).toBeDefined();
-    expect(Array.isArray((currencyEntry as { count?: unknown }).count)).toBe(true);
+  it('稀有度阶梯：映道镜最低；神圣石/破溃宝珠高于映道镜；其余按序非递增', () => {
+    const mirror = CRAFT_DROP_RATES['currency.mirror'];
+    expect(mirror).toBeGreaterThan(0);
+    for (const [key, rate] of Object.entries(CRAFT_DROP_RATES)) {
+      if (key === 'currency.mirror') continue;
+      expect(rate, key).toBeGreaterThan(mirror!);
+    }
+    expect(CRAFT_DROP_RATES['currency.divine']!).toBeGreaterThan(mirror!);
+    expect(CRAFT_DROP_RATES['currency.fracture']!).toBeGreaterThan(mirror!);
+
+    // 声明的顺序 = 稀有度递增（非严格，ember/wisp 同档）
+    const ordered = Object.keys(CRAFT_DROP_RATES);
+    for (let i = 1; i < ordered.length; i += 1) {
+      const prev = CRAFT_DROP_RATES[ordered[i - 1]!]!;
+      const cur = CRAFT_DROP_RATES[ordered[i]!]!;
+      expect(cur, `${ordered[i - 1]} >= ${ordered[i]}`).toBeLessThanOrEqual(prev);
+    }
+    for (const [key, rate] of Object.entries(ESSENCE_DROP_RATES)) {
+      expect(rate, key).toBeGreaterThan(mirror!);
+    }
+  });
+
+  it('空位精华（essence.07..12）不参与掉落', () => {
+    const allLoots = allLootEntries();
+    for (let i = 7; i <= 12; i += 1) {
+      const key = `essence.${String(i).padStart(2, '0')}`;
+      expect(allLoots.some((item) => item['key'] === key), key).toBe(false);
+    }
   });
 
   it('0 级城镇地图存在（P8 底材商店入口骨架）', () => {
