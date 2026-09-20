@@ -1,16 +1,16 @@
 /**
  * battle（战斗逻辑服）**对外命令契约**（09 §4.2；C3「跨服只走通信契约」）
  *
- * 为什么要有这个端口：拓扑 B 里 map / dungeon / character 都需要命令 battle
+ * 为什么要有这个端口：拓扑 B 里 map / character 都需要命令 battle
  * "开/切/关会话、要快照、解析当前角色"，但**不允许 import 另一个服的 service/internal**。
  * 因此把跨服命令面收敛成本文件的接口 + 注入令牌：
  *
- * - 消费方（map/dungeon/character）只依赖 `shared`（允许）；
+ * - 消费方（map/character）只依赖 `shared`（允许）；
  * - battle 在自己的模块里用 `useExisting: WorldService` 绑定令牌（R4 过渡实现；
  *   框架逻辑服运行时（ionet-ts RS5 的 `FlowContext.call`）就绪后换成真正跨进程调用，
  *   **消费方代码不变**）。
  *
- * 只放**跨服真需要**的方法；battle 内部方法（focus/enterPendingMap/…）不出现在这里。
+ * 只放**跨服真需要**的方法；battle 内部方法（focus/…）不出现在这里。
  */
 import type { ActionResult, WorldSnapshotDto } from '@idle-dark/protocol';
 import type { WorldPosition } from './map-dto.js';
@@ -24,9 +24,7 @@ export interface BattleCommandPort {
   /** 当前世界快照。 */
   snapshot(userId: number, characterId: string): Promise<ActionResult<WorldSnapshotDto>>;
   /**
-   * 切换到某张图：**会做解锁判定与（秘境的）扣票**；`opId` 幂等。
-   *
-   * 唯一扣费点：票在这里扣一次；调用方不要再扣（RC2）。
+   * 切换到某张图：**会做解锁判定**；`opId` 幂等。
    */
   enterMap(
     userId: number,

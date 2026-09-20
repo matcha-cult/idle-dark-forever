@@ -5,7 +5,7 @@
  *  1. 表非空、关键 key 存在（防止「移植成空壳」）；
  *  2. `goods` 中装备的 `position` / `class` 落在合法枚举内；
  *  3. `careers.expFormula` 是纯数字数组；
- *  4. `data/packages/*` 的显式注册（nightmare / year2018）真的生效；
+ *  4. `data/packages/*` 的显式注册（year2018）真的生效；
  *  5. `createDefaultTables()` 可重入——`year2018/redbag.js` 的「全表追加红包」不会累加；
  *  6. 函数型规则被保留，且随机**全部**走注入的 `Rng` 端口：
  *     `generate` 用形参 `rng`，技能 / buff / 强化 / 传奇 hook 用 `world.rng.skill`
@@ -191,33 +191,12 @@ describe('createDefaultTables', () => {
 });
 
 describe('data/packages 显式注册', () => {
-  it('nightmare 追加了表项', () => {
-    expect(tables.maps['nightmare.slime']).toBeDefined();
-    expect(tables.enemies['nightmare.wolf.king']).toBeDefined();
-    expect(tables.skills['nightmare.fire.kakarif.1']).toBeDefined();
-    expect(tables.buffs['bossState']).toBeDefined();
-  });
-
-  it('nightmare 的 extend 保留了「基于原技能做 BOSS 阶段包装」的函数式改写', () => {
-    const base = tables.skills['wolf.call'];
-    const extended = tables.skills['nightmare.wolf.1'];
-    expect(base).toBeDefined();
-    expect(extended).toBeDefined();
-    expect(extended).not.toBe(base);
-    expect(extended.coolDown).toBe(30000);
-    expect(extended.notBreakable).toBe(true);
-    // canUse / effect 是从 origin 组合出来的新函数，不是原函数
-    expect(typeof extended.canUse).toBe('function');
-    expect(extended.canUse).not.toBe(base.canUse);
-  });
-
-  it('year2018 注册了红包 / 传奇 / 活动副本', () => {
+  it('year2018 注册了红包 / 传奇', () => {
     expect(tables.goods['year2018.redbag']).toBeDefined();
     expect(tables.legends['year2018.yearBeastWeapon-1']).toBeDefined();
-    expect(tables.maps['year2018.dungeon']).toBeDefined();
   });
 
-  it('红包掉落被追加到注册时已存在的所有 enemies / maps（活动副本除外）', () => {
+  it('红包掉落被追加到注册时已存在的所有 enemies / maps', () => {
     const hasRedbag = (loots: unknown): boolean =>
       Array.isArray(loots) && loots.some((l) => (l as { key?: string }).key === 'year2018.redbag');
 
@@ -227,12 +206,8 @@ describe('data/packages 显式注册', () => {
     }
     for (const [key, map] of Object.entries(tables.maps)) {
       if (!map.loots) continue;
-      // `year2018.dungeon` 在 redbag 之后才注册（原版注释：活动副本不掉落红包）。
-      if (key === 'year2018.dungeon') continue;
       expect(hasRedbag(map.loots), `maps.${key}`).toBe(true);
     }
-    // 活动副本自己不掉红包（原版注释：活动副本不掉落红包）
-    expect(hasRedbag(tables.maps['year2018.dungeon']?.loots)).toBe(false);
   });
 
   it('createDefaultTables() 可重入：红包不会在多次调用间累加', () => {

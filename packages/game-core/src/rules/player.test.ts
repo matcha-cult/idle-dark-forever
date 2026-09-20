@@ -4,7 +4,6 @@ import { InventorySlot } from './inventory-slot.js';
 import {
   DEFAULT_INVENTORY_SIZE,
   MAX_SKILL_LEVEL,
-  MAX_TICKET_STACK,
   Player,
   createPlayerAccountState,
   type PlayerAccountState,
@@ -41,7 +40,6 @@ describe('Player 构造与访问器', () => {
     expect(player.inventoryDiamondLevel).toBe(0);
     expect(player.skillExp.size).toBe(0);
     expect(player.careers.size).toBe(0);
-    expect(player.dungeonTickets.size).toBe(0);
     expect(player.minLootLevel).toBe(0);
     expect(player.banned).toBe(false);
     expect(player.isBanned).toBe(false);
@@ -176,54 +174,6 @@ describe('Player.fromJSON 隐式兼容', () => {
     expect(player.skillExp.get('slash')).toEqual({ level: 3, exp: 1 });
   });
 
-  it('dungeonTickets 缺失时按地图配置补齐，跳过无尽地图', () => {
-    const player = Player.fromJSON(tables, 'p1', now, {});
-    expect(player.dungeonTickets.get('dungeon1')).toBe(2);
-    expect(player.dungeonTickets.has('endlessDungeon')).toBe(false);
-    expect(player.dungeonTickets.has('nightmare.3')).toBe(false);
-    expect(player.dungeonTickets.has('home')).toBe(false);
-  });
-
-  it('dungeonTickets 已有值时保留（含 0）', () => {
-    const player = Player.fromJSON(tables, 'p1', now, { dungeonTickets: { dungeon1: 0 } });
-    expect(player.dungeonTickets.get('dungeon1')).toBe(0);
-  });
-
-  it('dungeonTickets 使用 group 作为键', () => {
-    const custom = createTestTables();
-    custom.maps.grouped = {
-      key: 'grouped',
-      name: '分组地城',
-      isDungeon: true,
-      group: 'sharedGroup',
-      defaultTicketCount: 7,
-    };
-    const player = Player.fromJSON(custom, 'p1', now, {});
-    expect(player.dungeonTickets.get('sharedGroup')).toBe(7);
-    expect(player.dungeonTickets.has('grouped')).toBe(false);
-    expect(player.dungeonTickets.size).toBe(2); // dungeon1 + sharedGroup
-  });
-
-  it('背包里的无尽钥石会抬高 highestEndlessLevel', () => {
-    const account = createPlayerAccountState();
-    Player.fromJSON(tables, 'p1', now, {
-      inventory: [
-        { key: 'ticket', count: 2, dungeonKey: 'nightmare.3' },
-        { key: 'ticket', count: 1, dungeonKey: 'dungeon1' },
-      ],
-    }, account);
-    expect(account.highestEndlessLevel).toBe(3);
-  });
-
-  it('dungeonKey 非无尽时不影响 highestEndlessLevel', () => {
-    const account = createPlayerAccountState();
-    account.highestEndlessLevel = 9;
-    Player.fromJSON(tables, 'p1', now, {
-      inventory: [{ key: 'ticket', count: 1, dungeonKey: 'dungeon1' }],
-    }, account);
-    expect(account.highestEndlessLevel).toBe(9);
-  });
-
   it('buildInventory / awardInventory 只保留非空格子', () => {
     const player = Player.fromJSON(tables, 'p1', now, {
       buildInventory: [{ key: 'dust1', count: 2 }, {}, null],
@@ -299,7 +249,6 @@ describe('Player.fromJSON 隐式兼容', () => {
       skillExp: { slash: { level: 3, exp: 4 } },
       migrateMap: { m1: 1 },
       lootRule: { 'equip:1': 2 },
-      dungeonTickets: { dungeon1: 4 },
       inventory: [{ key: 'dust1', count: 2 }, { key: 'stickSword', count: 1, level: 7 }],
       buildInventory: [{ key: 'dust1', count: 1 }],
       awardInventory: [{ key: 'potion', count: 2 }],
@@ -375,23 +324,6 @@ describe('Player.loot', () => {
     expect(good.count).toBe(10);
   });
 
-  it('钥石使用专属堆叠上限（50）并按 dungeonKey 区分格子', () => {
-    const player = withBag(makePlayer(), 3);
-    expect(MAX_TICKET_STACK).toBe(50);
-    player.loot(item('ticket', 60, { dungeonKey: 'dungeon1' }));
-    expect(player.inventory[0]!.count).toBe(50);
-    expect(player.inventory[1]!.count).toBe(10);
-    player.loot(item('ticket', 1, { dungeonKey: 'nightmare.3' }));
-    expect(player.inventory[2]!.dungeonKey).toBe('nightmare.3');
-  });
-
-  it('拾取无尽钥石会抬高 highestEndlessLevel', () => {
-    const account = createPlayerAccountState();
-    const player = withBag(makePlayer(account), 2);
-    player.loot(item('ticket', 1, { dungeonKey: 'nightmare.5' }));
-    expect(account.highestEndlessLevel).toBe(5);
-  });
-
   it('空掉落物被忽略', () => {
     const player = withBag(makePlayer(), 1);
     player.loot(new InventorySlot(tables, 'loot'));
@@ -447,44 +379,7 @@ describe('Player.sellItem', () => {
   });
 });
 
-describe('Player 票券与材料', () => {
-  it('countTicket 汇总地图票 + 背包 + 银行', () => {
-    const account = createPlayerAccountState();
-    const player = withBag(Player.fromJSON(tables, 'p1', now, { dungeonTickets: { dungeon1: 2 } }, account), 2);
-    player.inventory[0]!.fromJSON({ key: 'ticket', count: 3, dungeonKey: 'dungeon1' });
-    account.bank.push(new InventorySlot(tables, 'bank').fromJSON({ key: 'ticket', count: 4, dungeonKey: 'dungeon1' }));
-    account.bank.push(new InventorySlot(tables, 'bank').fromJSON({ key: 'ticket', count: 9, dungeonKey: 'other' }));
-
-    expect(player.countTicket('dungeon1')).toBe(9);
-    expect(player.countTicket('other')).toBe(9);
-    expect(player.countTicket('none')).toBe(0);
-  });
-
-  it('costTicket 优先扣地图票，其次背包，最后银行', () => {
-    const account = createPlayerAccountState();
-    const player = withBag(Player.fromJSON(tables, 'p1', now, { dungeonTickets: { dungeon1: 2 } }, account), 1);
-    player.costTicket('dungeon1');
-    expect(player.dungeonTickets.get('dungeon1')).toBe(1);
-    expect(player.countTicket('dungeon1')).toBe(1);
-
-    player.costTicket('dungeon1');
-    expect(player.dungeonTickets.get('dungeon1')).toBe(0);
-
-    player.inventory[0]!.fromJSON({ key: 'ticket', count: 2, dungeonKey: 'dungeon1' });
-    player.costTicket('dungeon1');
-    expect(player.inventory[0]!.count).toBe(1);
-
-    player.inventory[0]!.clear();
-    account.bank.push(new InventorySlot(tables, 'bank').fromJSON({ key: 'ticket', count: 1, dungeonKey: 'dungeon1' }));
-    player.costTicket('dungeon1');
-    expect(account.bank[0]!.key).toBeNull();
-  });
-
-  it('costTicket 无票时不抛错', () => {
-    const player = makePlayer();
-    expect(() => player.costTicket('dungeon1')).not.toThrow();
-  });
-
+describe('Player 材料与消耗', () => {
   it('countGood / costGood：只统计背包，且从尾部扣', () => {
     const player = makePlayer();
     player.inventory.push(new InventorySlot(tables, 'inventory').fromJSON({ key: 'dust1', count: 3 }));
@@ -724,13 +619,12 @@ describe('Player.sortInventory', () => {
     player.inventory[1]!.fromJSON({ key: 'dust1', count: 5 });
     player.inventory[2]!.fromJSON({ key: 'trash', count: 1 });
     player.inventory[3]!.fromJSON({ key: 'box', count: 1 });
-    player.inventory[4]!.fromJSON({ key: 'ticket', count: 1, dungeonKey: 'dungeon1' });
 
     player.sortInventory();
 
     const order = player.inventory.map((slot) => (slot.goodData ? slot.goodData.type : slot.key));
-    expect(order.slice(0, 5)).toEqual(['junk', 'package', 'material', 'ticket', 'equip']);
-    expect(player.inventory[5]!.empty).toBe(true);
+    expect(order.slice(0, 4)).toEqual(['junk', 'package', 'material', 'equip']);
+    expect(player.inventory[4]!.empty).toBe(true);
   });
 
   it('装备按部位顺序与等级排序', () => {
@@ -754,15 +648,6 @@ describe('Player.sortInventory', () => {
     expect(bank[1]!.key).toBe('dust1');
     expect(bank[0]!.position).toBe('bank');
     expect(() => player.sortInventory([])).not.toThrow();
-  });
-
-  it('钥石按地图等级排序', () => {
-    const player = withBag(makePlayer(), 3);
-    player.inventory[0]!.fromJSON({ key: 'ticket', count: 1, dungeonKey: 'nightmare.3' }); // 320
-    player.inventory[1]!.fromJSON({ key: 'ticket', count: 1, dungeonKey: 'dungeon1' }); // 10
-    player.sortInventory();
-    expect(player.inventory[0]!.dungeonKey).toBe('dungeon1');
-    expect(player.inventory[1]!.dungeonKey).toBe('nightmare.3');
   });
 });
 

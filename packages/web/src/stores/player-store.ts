@@ -59,10 +59,6 @@ export class PlayerStore {
     return this.state?.map ?? '';
   }
 
-  get endlessLevel(): number {
-    return this.state?.endlessLevel ?? 0;
-  }
-
   /** 离线待结算时长（>0 表示需要弹结算报告）。 */
   get pendingOfflineMs(): number {
     return this.state?.pendingOfflineMs ?? 0;

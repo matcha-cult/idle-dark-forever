@@ -7,7 +7,7 @@
  * `WorldService` 在 `onModuleInit` 注册 tick 推送合并器并启动受管心跳。
  *
  * **对外命令端口**：`BATTLE_COMMAND` 令牌以 `useExisting: WorldService` 绑定，
- * 供 map / dungeon / character 注入 —— 它们只依赖 `shared/battle-command.ts` 的契约，
+ * 供 map / character 注入 —— 它们只依赖 `shared/battle-command.ts` 的契约，
  * 不再 import 本服的 `world.service.js`（C3）。
  */
 import { Global, Module } from '@nestjs/common';

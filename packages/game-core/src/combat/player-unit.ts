@@ -101,8 +101,6 @@ export interface PlayerLike {
    *          决定上报 `handled` 还是 `'lost'`。旧实现返回 `void`，导致「提示已发但没入包」。
    */
   loot?(slot: unknown): number | void;
-  countTicket?(type: string): number;
-  costTicket?(type: string): void;
   /**
    * 野外 BOSS 的一次性击杀记录（W4）。
    *

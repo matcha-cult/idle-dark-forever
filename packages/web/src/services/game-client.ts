@@ -84,7 +84,7 @@ export class RestClient {
     return this.send<LoginResultDto>('POST', '/auth/register', input, false);
   }
 
-  me(): Promise<ActionResult<{ userId: string; displayName: string; diamonds: number; playerSlotCount: number; highestEndlessLevel: number }>> {
+  me(): Promise<ActionResult<{ userId: string; displayName: string; diamonds: number; playerSlotCount: number }>> {
     return this.send('GET', '/auth/me', undefined, true);
   }
 

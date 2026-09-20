@@ -76,8 +76,6 @@ export interface InventorySlotDto {
   /** 附魔次数（影响费用）。 */
   enchantTimes: number;
   affixes: AffixDto[];
-  /** 副本钥匙所属 group（如 'nightmare.3'）。 */
-  dungeonKey?: string;
   /**
    * 是否为钱包物品（R1）：通货 / 精华 / 一般等价物**不占背包格**。
    *
@@ -197,15 +195,12 @@ export interface PlayerStateDto {
   selectedEnhances: string[];
   /** 技能等级：expGroup|skillKey → { level, exp }。 */
   skillExp: Record<string, { level: number; exp: number }>;
-  /** 副本钥匙计数：group|key → count。 */
-  dungeonTickets: Record<string, number>;
   /** 药剂等级。 */
   medicineLevel: Record<string, number>;
   medicineExp: number;
   maxMedicineExp: number;
-  /** 当前地图与无尽层。 */
+  /** 当前地图。 */
   map: string;
-  endlessLevel: number;
   /** 离线结算待领取（>0 表示需要弹结算报告）。 */
   pendingOfflineMs: number;
 }
@@ -251,7 +246,6 @@ export interface MapDto {
   key: string;
   name: string;
   hint?: string;
-  isDungeon: boolean;
   level: number;
   /** 未解锁原因（null = 已解锁）。 */
   lockedReason: string | null;
@@ -262,52 +256,14 @@ export interface MapDto {
    * 数据表里有 47 张图，其中绝大多数在前期是锁定的，服务端会把可进入的排在前面。
    */
   unlocked?: boolean;
-  /** 进入需要的钥匙 group。 */
-  ticketGroup?: string;
-  ticketCount: number;
-}
-
-/** 挑战队列条目（结构同 `WorldSnapshotDto.pendingMaps`）。 */
-export interface ChallengeEntryDto {
-  key: string;
-  endlessLevel: number;
-}
-
-/** 单个票键的冷却 / 可挑战状态（09 §5.4）。 */
-export interface DungeonTicketStateDto {
-  /** `group ?? mapKey`（无尽为 `nightmare.<level>`）。 */
-  ticketKey: string;
-  /** 当前可挑战层数。 */
-  stacks: number;
-  available: boolean;
-  /** 下一次回满的周期边界时刻（ms 时间戳）。 */
-  nextResetAt: number;
-}
-
-/** 挑战队列 + 本角色各票键状态（`dungeon.queueGet`）。 */
-export interface ChallengeQueueDto {
-  entries: ChallengeEntryDto[];
-  tickets: DungeonTicketStateDto[];
-}
-
-/** 神力重置结果（`dungeon.reset`）。 */
-export interface DungeonResetResultDto {
-  ticketKey: string;
-  /** 实际消耗的神力。 */
-  cost: number;
-  stacks: number;
-  nextResetAt: number;
 }
 
 /** 世界快照。 */
 export interface WorldSnapshotDto {
   map: string;
-  endlessLevel: number;
   units: UnitStateDto[];
   /** 当前地图可进入的列表。 */
   maps: MapDto[];
-  /** 挑战队列（原版 pendingMaps）。 */
-  pendingMaps: Array<{ key: string; endlessLevel: number }>;
   /** 累计模拟速率（原版 updateRate），用于 UI 展示加速倍率。 */
   updateRate: number;
   paused: boolean;
@@ -430,7 +386,6 @@ export interface MeDto {
   displayName: string;
   diamonds: number;
   playerSlotCount: number;
-  highestEndlessLevel: number;
 }
 
 // ────────────────────────────── 系统 ──────────────────────────────

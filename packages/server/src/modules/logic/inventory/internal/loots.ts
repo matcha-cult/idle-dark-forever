@@ -8,7 +8,6 @@
  * 与 `world.loots()` 的差异：
  * - 不乘 `account.updateRate`（开包固定 `updateRate = 1`，与原版 `usePackage` 调
  *   `loots(..., noUpdateRate=true)` 一致）；
- * - 不处理 `world._endlessLevel` 的等级加成（开包不在无尽副本里结算）；
  * - 不弹提示（服务端只改状态，前端从 `inventory.list` 拿结果）。
  *
  * ⚠️ 拾取规则的**编码与判定**（`c:class:quality` / `+10 = 停用` / `minLootLevel` 兜底）
@@ -56,9 +55,7 @@ export function rollLoots(
     const rate = finiteNumber(raw['rate'], 0);
     const rolls = type === 'maxLevel' ? 1 : Math.ceil(rate - rng.next());
     for (let i = 0; i < rolls; i++) {
-      if (type === 'ticket') {
-        rollTicket(player, tables, raw, rng);
-      } else if (type === 'equip' || type === 'specialEquip') {
+      if (type === 'equip' || type === 'specialEquip') {
         rollEquip(player, tables, raw, type, lootLevel, rng);
       } else if (type === 'maxLevel') {
         const value = intOr(raw['value'], 0);
@@ -69,38 +66,6 @@ export function rollLoots(
       }
     }
   }
-}
-
-function rollTicket(
-  player: Player,
-  tables: DataTables,
-  raw: Record<string, unknown>,
-  rng: Rng,
-): void {
-  const dungeons = raw['dungeons'];
-  if (dungeons === null || typeof dungeons !== 'object' || Array.isArray(dungeons)) return;
-  const table = dungeons as Record<string, unknown>;
-  const keys = Object.keys(table);
-  const totalWeight = keys.reduce((sum, key) => sum + Math.max(0, finiteNumber(table[key], 0)), 0);
-  if (totalWeight <= 0) return;
-  let dice = rng.next() * totalWeight;
-  let picked: string | undefined;
-  for (const key of keys) {
-    const weight = Math.max(0, finiteNumber(table[key], 0));
-    if (dice < weight) {
-      picked = key;
-      break;
-    }
-    dice -= weight;
-  }
-  if (picked === undefined) return;
-  player.loot(
-    new InventorySlot(tables, 'loot').fromJSON({
-      key: 'ticket',
-      dungeonKey: picked,
-      count: 1,
-    }),
-  );
 }
 
 function rollEquip(

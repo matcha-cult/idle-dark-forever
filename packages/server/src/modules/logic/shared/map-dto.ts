@@ -31,18 +31,13 @@ export function mapListDtoOf(
     const map = tables.maps[key];
     if (!map) continue;
     const unlocked = checkRequirement(map.requirement, context);
-    const isDungeon = !!map.isDungeon;
-    const ticketGroup = map.group;
     const dto: MapDto = {
       key,
       name: map.name,
-      isDungeon,
       level: typeof map.level === 'number' && Number.isFinite(map.level) ? map.level : 0,
       lockedReason: unlocked ? null : '尚未满足进入条件',
-      ticketCount: isDungeon && ticketGroup ? safeTicketCount(player, ticketGroup) : 0,
     };
     if (map.hint) dto.hint = map.hint;
-    if (ticketGroup) dto.ticketGroup = ticketGroup;
     dto.unlocked = unlocked;
     out.push(dto);
   }
@@ -56,19 +51,9 @@ export function mapListDtoOf(
   });
 }
 
-function safeTicketCount(player: Player, group: string): number {
-  try {
-    const count = player.countTicket(group);
-    return Number.isFinite(count) ? count : 0;
-  } catch {
-    return 0;
-  }
-}
-
-/** `PlayerStateDto` 里 `map` / `endlessLevel` 由 world 运行时提供。 */
+/** `PlayerStateDto` 里 `map` 由 world 运行时提供。 */
 export interface WorldPosition {
   map: string;
-  endlessLevel: number;
 }
 
 export function pendingOfflineMsOf(player: Player, now: number, capMs: number): number {
@@ -83,21 +68,16 @@ export type PlayerStateRef = PlayerStateDto;
 /**
  * 把持久化位置解析成可用位置（09 §2.2 map 控制器 / battle 会话宿主共用）。
  *
- * - `stored` 缺失 → `home` / 0；
- * - 未知 mapKey → `home`（存档漂移时不让玩家卡死在不存在的地图）；
- * - `endlessLevel` 非有限值 → 0（RC1：无尽暂缓，但字段必须不产生 NaN）。
+ * - `stored` 缺失 → `home`；
+ * - 未知 mapKey → `home`（存档漂移时不让玩家卡死在不存在的地图）。
  */
 export function resolveWorldPosition(
   tables: DataTables,
-  stored: { map: string; endlessLevel: number } | undefined,
+  stored: { map: string } | undefined,
 ): WorldPosition {
-  if (!stored) return { map: 'home', endlessLevel: 0 };
+  if (!stored) return { map: 'home' };
   const map = tables.maps[stored.map] ? stored.map : 'home';
-  const endlessLevel =
-    typeof stored.endlessLevel === 'number' && Number.isFinite(stored.endlessLevel)
-      ? Math.trunc(stored.endlessLevel)
-      : 0;
-  return { map, endlessLevel };
+  return { map };
 }
 
 /**
@@ -116,24 +96,4 @@ export function evaluateMapUnlock(
   } catch {
     return false;
   }
-}
-
-/**
- * 挑战队列耗尽后的「非秘境战斗图」选择（RD4，09 §10.2）。
- *
- * 优先级：`candidate`（= `run.outside`）→ 角色持久化开放世界位置 → `home`。
- * **只接受非秘境图**；候选非法 / 是秘境 / 不存在 → 落到下一档，最终兜底 `home`。
- */
-export function pickOpenWorldMap(
-  tables: DataTables,
-  candidate: string | null | undefined,
-  persisted: string | null | undefined,
-): string {
-  const usable = (key: string | null | undefined): string | null => {
-    if (typeof key !== 'string' || key === '') return null;
-    const map = tables.maps[key];
-    if (!map || map.isDungeon === true) return null;
-    return key;
-  };
-  return usable(candidate) ?? usable(persisted) ?? 'home';
 }

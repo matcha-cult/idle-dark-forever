@@ -45,7 +45,6 @@ export class WorldStore {
   snapshot: WorldSnapshotDto | null = null;
   units: WorldSnapshotDto['units'] = [];
   maps: WorldSnapshotDto['maps'] = [];
-  pendingMaps: WorldSnapshotDto['pendingMaps'] = [];
   updateRate = 0;
   paused = false;
   /** 战斗日志（服务端事件流，最新在前）。 */
@@ -65,7 +64,6 @@ export class WorldStore {
         logSeq: false,
         units: observable.shallow,
         maps: observable.shallow,
-        pendingMaps: observable.shallow,
         log: observable.shallow,
       },
       { autoBind: true },
@@ -136,13 +134,10 @@ export class WorldStore {
     }
   }
 
-  /** 进入地图（含挑战队列项）。成功后以服务端返回的快照为准并再刷新一次。 */
-  async enterMap(map: string, endlessLevel?: number): Promise<boolean> {
+  /** 进入地图。成功后以服务端返回的快照为准并再刷新一次。 */
+  async enterMap(map: string): Promise<boolean> {
     try {
-      const result = await this.ctx.api.world.enterMap({
-        map,
-        ...(endlessLevel === undefined ? {} : { endlessLevel }),
-      });
+      const result = await this.ctx.api.world.enterMap({ map });
       if (result.success === false) {
         toastFailure(this.ctx.toast, result, '进入地图失败');
         return false;
@@ -258,7 +253,6 @@ export class WorldStore {
     this.snapshot = snapshot;
     this.units = snapshot.units;
     this.maps = snapshot.maps;
-    this.pendingMaps = snapshot.pendingMaps;
     this.updateRate = snapshot.updateRate;
     this.paused = snapshot.paused;
   }

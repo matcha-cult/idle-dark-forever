@@ -10,11 +10,6 @@ describe('isCombatArea', () => {
     expect(isCombatArea(null)).toBe(false);
   });
 
-  it('isDungeon === true → true（即使没有 monsters）', () => {
-    expect(isCombatArea({ isDungeon: true })).toBe(true);
-    expect(isCombatArea({ isDungeon: true, monsters: [] })).toBe(true);
-  });
-
   it('有 monsters（非空数组）→ true', () => {
     expect(isCombatArea({ monsters: [{ key: 'dummy' } as never] })).toBe(true);
   });
@@ -27,10 +22,9 @@ describe('isCombatArea', () => {
     expect(isCombatArea({ monsters: {} as never })).toBe(false);
   });
 
-  it('isDungeon 非布尔真值 / 假值 → 回落到 monsters 判定', () => {
-    expect(isCombatArea({ isDungeon: 1 as never })).toBe(false);
-    expect(isCombatArea({ isDungeon: 'true' as never })).toBe(false);
-    expect(isCombatArea({ isDungeon: false, monsters: [{ key: 'x' } as never] })).toBe(true);
-    expect(isCombatArea({ isDungeon: false })).toBe(false);
+  it('monsters 非数组真值 → false（不回落到其它字段）', () => {
+    expect(isCombatArea({ monsters: 1 as never })).toBe(false);
+    expect(isCombatArea({ monsters: 'true' as never })).toBe(false);
+    expect(isCombatArea({ monsters: false as never })).toBe(false);
   });
 });

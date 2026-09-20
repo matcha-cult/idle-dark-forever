@@ -4,7 +4,6 @@
  * 与原版的对应关系：
  * - `enemies[this.type]` → `world.tables.enemies[this.type]`；
  * - 词缀抽取的 `Math.random()` → `world.rng.affix`（原版第 1876 行）；
- * - `world._endlessLevel` → `world.endlessLevel`；
  * - `willClean` / `loots` / `gotExp` / `removeUnit` 全部走注入的 `BattleWorld`。
  *
  * ⚠️ 契约 `EnemyData` 只声明了 `maxHp/atk/atkSpeed/exp/level/hpRecovery/...`，
@@ -36,7 +35,6 @@ interface EnemySavedState extends UnitSavedState {
   affixes?: string[];
   cleanTimer?: number;
   borner?: number;
-  phaseBorn?: number;
   summoner?: number;
   summonSkill?: number;
   /** 野外守关 BOSS 标记（W4）：恢复后仍需可辨识（用于一次性击杀登记）。 */
@@ -139,8 +137,6 @@ export class EnemyUnit extends Unit {
       }
       if (typeof savedState.borner === 'number') {
         this.borner = this.world.enemyBorn?.borns?.[savedState.borner] ?? null;
-      } else if (typeof savedState.phaseBorn === 'number') {
-        this.borner = this.world.enemyBorn?.phaseBorn?.[savedState.phaseBorn] ?? null;
       }
 
       if (this.borner) {
@@ -260,9 +256,6 @@ export class EnemyUnit extends Unit {
     // 品质提升 100% 生命值
     ret *= 2 ** this.quality;
     ret = this.runAttrHooks(ret, 'maxHpMul');
-    if (this.world.endlessLevel && this.camp === Camps.enemy) {
-      ret *= Math.pow(1.5, this.world.endlessLevel - 1);
-    }
     return ret;
   }
 
@@ -308,9 +301,6 @@ export class EnemyUnit extends Unit {
   override get hpRecovery(): number {
     let ret = this.enemyData.hpRecovery || 0;
     ret = this.runAttrHooks(ret, 'hpRecovery');
-    if (this.world.endlessLevel && this.camp === Camps.enemy) {
-      ret *= Math.pow(1.5, this.world.endlessLevel - 1);
-    }
     return ret;
   }
 
@@ -320,9 +310,6 @@ export class EnemyUnit extends Unit {
     ret *= this.runAttrHooks(1, 'atkAdd');
     ret *= this.runAttrHooks(1, 'atkMulAttr');
     ret = this.runAttrHooks(ret, 'atkMul');
-    if (this.world.endlessLevel && this.camp === Camps.enemy) {
-      ret *= Math.pow(1.2, this.world.endlessLevel - 1);
-    }
     return ret;
   }
 
@@ -522,11 +509,9 @@ export class EnemyUnit extends Unit {
       ret.cleanTimer = this.cleanTimerStart !== null ? this.cleanTimerStart - this.logicClock.getTime() : undefined;
     }
     if (this.borner) {
-      const { borns, phaseBorn } = this.world.enemyBorn ?? { borns: null, phaseBorn: null };
+      const borns = this.world.enemyBorn?.borns ?? null;
       if (borns && borns.indexOf(this.borner) >= 0) {
         ret.borner = borns.indexOf(this.borner);
-      } else if (phaseBorn && phaseBorn.indexOf(this.borner) >= 0) {
-        ret.phaseBorn = phaseBorn.indexOf(this.borner);
       }
     }
     if (this.summoner) {

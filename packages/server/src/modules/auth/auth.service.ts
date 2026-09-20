@@ -9,7 +9,7 @@
  * 表（见 scripts/init-db.mjs）：
  *   users(id bigserial, username text unique, password_hash text, display_name text, created_at)
  *   account_state(user_id bigint pk, diamonds int, player_slot_count int,
- *                 highest_endless_level int, data jsonb, updated_at)
+ *                 player_slot_count int, data jsonb, updated_at)
  */
 import { Injectable } from '@nestjs/common';
 import bcrypt from 'bcryptjs';
@@ -35,12 +35,6 @@ interface UserRow {
   username: string;
   password_hash: string;
   display_name: string;
-}
-
-interface AccountStateRow {
-  diamonds: number;
-  player_slot_count: number;
-  highest_endless_level: number;
 }
 
 @Injectable()
@@ -121,10 +115,9 @@ export class AuthService {
       display_name: string;
       diamonds: number | null;
       player_slot_count: number | null;
-      highest_endless_level: number | null;
     }>(
       `SELECT u.id, u.display_name,
-              s.diamonds, s.player_slot_count, s.highest_endless_level
+              s.diamonds, s.player_slot_count
          FROM users u
          LEFT JOIN account_state s ON s.user_id = u.id
         WHERE u.id = $1`,
@@ -139,7 +132,6 @@ export class AuthService {
       displayName: row.display_name,
       diamonds: row.diamonds ?? 0,
       playerSlotCount: row.player_slot_count ?? 1,
-      highestEndlessLevel: row.highest_endless_level ?? 0,
     });
   }
 

@@ -69,7 +69,7 @@ describe('WorldService', () => {
 
   async function startInStreet(): Promise<void> {
     const extras = await context.extrasOf(1);
-    extras.worldMaps['c1'] = { map: 'world.1', endlessLevel: 0 };
+    extras.worldMaps['c1'] = { map: 'world.1' };
     context.markAccountDirty(1);
     await context.flushAccount(1);
     const session = await service.start(1, 'c1');
@@ -84,7 +84,7 @@ describe('WorldService', () => {
 
   it('start 后 positionOf / activeCharacterOf 正确', async () => {
     await startInStreet();
-    expect(service.positionOf(1, 'c1')).toEqual({ map: 'world.1', endlessLevel: 0 });
+    expect(service.positionOf(1, 'c1')).toEqual({ map: 'world.1' });
     expect(service.activeCharacterOf(1)).toBe('c1');
     expect(service.isInBattle(1, 'c1')).toBe(true);
   });

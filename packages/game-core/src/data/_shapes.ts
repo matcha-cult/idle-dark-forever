@@ -399,23 +399,8 @@ export type HookAbilityEntry = Loose<Omit<HookAbilityData, 'hooks'>> & {
   hooks?: UnitWorldHooks;
 };
 
-/** 地图阶段里的怪物项：原版既支持 `type` 也支持 `types` 权重表。 */
-export interface PhaseMonster extends Omit<SpawnConfig, 'delay' | 'max'> {
-  type?: string;
-  types?: Record<string, number>;
-  /** 契约把 `delay` / `max` 标成必填，但原版 BOSS 阶段只写 `{ type, total }`。 */
-  delay?: number;
-  max?: number;
-}
-
-export interface MapPhase {
-  description: string;
-  monsters: PhaseMonster[];
-}
-
-export type MapEntry = Loose<Omit<MapData, 'monsters' | 'phases' | 'loots'>> & {
+export type MapEntry = Loose<Omit<MapData, 'monsters' | 'loots'>> & {
   monsters?: SpawnConfig[];
-  phases?: MapPhase[];
   loots?: Loot[];
 };
 

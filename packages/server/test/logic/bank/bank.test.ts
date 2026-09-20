@@ -43,10 +43,10 @@ describe('bank 纯逻辑', () => {
   it('容量判定：不可堆叠需要空格；可堆叠按剩余容量累加', () => {
     const fixture = makeFixture();
     const bank: InventorySlot[] = [];
-    expect(canAccept(bank, fixture.tables, 'dust1', null, 1)).toBe(false);
+    expect(canAccept(bank, fixture.tables, 'dust1', 1)).toBe(false);
     bank.push(new InventorySlot(fixture.tables, 'bank').fromJSON({ key: 'dust1', count: 9999 }));
-    expect(canAccept(bank, fixture.tables, 'dust1', null, 1)).toBe(false);
-    expect(canAccept(bank, fixture.tables, 'gold', null, 10 ** 9)).toBe(true);
+    expect(canAccept(bank, fixture.tables, 'dust1', 1)).toBe(false);
+    expect(canAccept(bank, fixture.tables, 'gold', 10 ** 9)).toBe(true);
   });
 
   it('扩容：神力不足 → NOT_ENOUGH_DIAMONDS', () => {

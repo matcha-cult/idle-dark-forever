@@ -155,64 +155,6 @@ export function untransformEquipLevel(level: number): number {
   }
 }
 
-/** 无尽副本罗马数字（原版 `romes`）。 */
-export const romes: readonly string[] = [
-  '',
-  'I',
-  'II',
-  'III',
-  'IV',
-  'V',
-  'VI',
-  'VII',
-  'VIII',
-  'IX',
-  'X',
-  'XI',
-  'XII',
-  'XIII',
-  'XIV',
-  'XV',
-  'XVI',
-  'XVII',
-  'XVIII',
-  'XIX',
-  'XX',
-];
-
-/**
- * 原版 `player.js:129-133`：从地图 key 解析无尽层数。
- *
- * 加固：原版对 `null` 会直接 `TypeError`（`name.startsWith`）；
- * 这里改为返回 `undefined`，让导入损坏存档时走「跳过」而不是崩服务。
- */
-export function getEndlessLevel(name: unknown): number | undefined {
-  if (typeof name !== 'string' || !name.startsWith('nightmare.')) {
-    return undefined;
-  }
-  return Number(name.substring(10)) | 0;
-}
-
-/** 原版 `player.js:159-164`：无尽副本展示名（`无尽噩梦I`…）。 */
-export function getEndlessKeyName(name: unknown): string | undefined {
-  const level = getEndlessLevel(name);
-  if (level) {
-    return `无尽噩梦` + (romes[level] || level);
-  }
-  return undefined;
-}
-
-/**
- * 原版 `player.js:166-169`：无尽副本的地图等级。
- *
- * ⚠️ 非无尽地图会得到 `NaN`（`undefined - 1`），这正是原版行为；
- * 调用方（`sortInventory`）用 `|| fallback` 兜底，因此**必须保留** NaN。
- */
-export function getEndlessMapLevel(name: unknown): number {
-  const level = getEndlessLevel(name);
-  return 250 + 35 * ((level ?? Number.NaN) - 1);
-}
-
 // ────────────────────────────── PlayerMeta ──────────────────────────────
 
 export interface PlayerMetaJson {

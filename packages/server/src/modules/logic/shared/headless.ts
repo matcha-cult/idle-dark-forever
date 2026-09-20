@@ -22,7 +22,6 @@ export interface BuildWorldOptions {
   player: Player;
   /** 当前地图 key。 */
   map: string;
-  endlessLevel?: number;
   /** 持久化随机种子（复算用）。 */
   seed: number;
   sink: BattleSink;
@@ -39,12 +38,7 @@ export interface BuildWorldOptions {
   lootRecorder?: LootRecorder;
   /** 掉落词缀随机流的派生标签（默认 `equipLoot`）。 */
   lootStreamLabel?: string;
-  /**
-   * 恢复刷怪器状态（秘境 run 相位；M7）。
-   *
-   * 由 `DungeonState.dumpState()` 产出、服务端从 `account_state.data.dungeonRuns` 取回；
-   * 传入后 `onMapChanged` 会据此恢复 `currentPhase` / `phaseBorn`（含"已付费"标记）。
-   */
+  /** 恢复刷怪器状态（open-world 波次；读档时从世界快照取回）。 */
   enemyBornState?: unknown;
 }
 
@@ -69,7 +63,6 @@ export function buildBattleWorld(options: BuildWorldOptions): BuiltWorld {
     sink: options.sink,
     player: like,
     map: options.map,
-    endlessLevel: normalizeEndless(options.endlessLevel),
     updateRate: normalizeRate(options.updateRate),
     ...(options.expRate === undefined ? {} : { expRate: options.expRate }),
     lootService,
@@ -91,11 +84,6 @@ export function nextWorldSeed(): number {
 
 function normalizeSeed(seed: unknown): number {
   return typeof seed === 'number' && Number.isFinite(seed) ? Math.trunc(seed) >>> 0 : 1;
-}
-
-function normalizeEndless(value: unknown): number {
-  const n = typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : 0;
-  return n > 0 ? n : 0;
 }
 
 function normalizeRate(value: unknown): number {

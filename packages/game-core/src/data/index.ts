@@ -2,11 +2,12 @@
  * 数据表组装入口。
  *
  * ⚠️ 与原版的唯一结构性差异：**没有模块级副作用**。
- * 原版 `data/index.js` 靠 `require('./packages/nightmare')` / `require('./packages/year2018')`
- * 在 import 期原地改写全局注册表（注册顺序即行为）；这里改成显式的
- * `registerNightmare(tables)` → `registerYear2018(tables)` 调用，顺序与原版 require 顺序一致：
+ * 原版 `data/index.js` 靠 `require('./packages/year2018')` 在 import 期原地改写全局注册表；
+ * 这里改成显式的 `registerYear2018(tables)` 调用：
  *
- *   基础表（data/base.js 的各表） → nightmare → year2018
+ *   基础表（data/base.js 的各表） → year2018
+ *
+ * 旧 `data/packages/nightmare`（氪金秘境）已在 W6 物理删除。
  *
  * `year2018/redbag.js` 会给「当时已存在的」所有 `enemies` / `maps` 追加红包掉落，
  * 因此这个顺序是**语义的一部分**（原版注释也强调「活动副本不掉落红包，所以这个顺序很重要」）。
@@ -31,10 +32,9 @@ import { roles } from './roles.js';
 import { skills } from './skills.js';
 import { upgrades } from './upgrades.js';
 
-import { registerNightmare } from './packages/nightmare.js';
 import { registerYear2018 } from './packages/year2018.js';
 
-export { registerNightmare, registerYear2018 };
+export { registerYear2018 };
 /**
  * 基础表（未叠加 `data/packages/*`）。
  *
@@ -71,7 +71,6 @@ export { baseTables };
  */
 export function createDefaultTables(): DataTables {
   const tables: MutableDataTables = cloneTables(baseTables);
-  registerNightmare(tables);
   registerYear2018(tables);
   registerCraftDrops(tables);
   return tables;

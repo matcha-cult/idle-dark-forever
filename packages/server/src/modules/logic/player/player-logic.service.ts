@@ -112,12 +112,11 @@ export class PlayerLogicService {
     // 不同步的话多角色账号会一直操作「最近创建」的那个角色（两个注册表必须一起写）。
     this.panelCharacters.setActive(userId, characterId);
     const extras = await this.playerContext.extrasOf(userId);
-    const position = this.battle.positionOf(userId, characterId) ?? { map: 'home', endlessLevel: 0 };
+    const position = this.battle.positionOf(userId, characterId) ?? { map: 'home' };
     return ok(
       playerStateDtoOf(this.tables, player, {
         extras,
         map: position.map,
-        endlessLevel: position.endlessLevel,
         pendingOfflineMs: this.battle.pendingOfflineMs(userId, characterId),
         usableByKey: this.battle.usableByKey(),
       }),

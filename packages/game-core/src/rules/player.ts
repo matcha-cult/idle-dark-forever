@@ -3,7 +3,7 @@
  *
  * ## 去单例：`PlayerAccountState`
  *
- * 原版 `Player` 直接读写三个全局单例（`game.diamonds` / `game.highestEndlessLevel` /
+ * 原版 `Player` 直接读写三个全局单例（`game.diamonds` /
  * `game.bank` / `game.banned` / `world.updateRate`）。移植后这些账号级状态收敛成
  * {@link PlayerAccountState}，**由调用方注入并共享同一个对象引用**——服务端把
  * account 级别的单例挂在 `PlayerAccountState` 上，行为与原版一致（改动会互相可见）。
@@ -24,7 +24,7 @@
  * 因此调用方（服务端 = 真实时钟；离线结算/测试 = 虚拟时钟）完全掌控。
  */
 
-import type { DataTables, GoodData, MapData } from '../contracts/data.js';
+import type { DataTables, GoodData } from '../contracts/data.js';
 import { canEquipOffHand, isTwoHanded, type EquipCategory } from '@idle-dark/protocol';
 import { CareerInfo, type CareerInfoJson, type EquipSlot } from './career-info.js';
 import { getGoodOrder } from './goods.js';
@@ -37,14 +37,9 @@ import {
   asStringOrNull,
   asTruthyNumber,
   entriesOf,
-  getEndlessLevel,
-  getEndlessMapLevel,
   PlayerMeta,
   type PlayerMetaJson,
 } from './player-meta.js';
-
-/** 原版 `MAX_TICKET_STACK`：钥石堆叠上限。 */
-export const MAX_TICKET_STACK = 50;
 
 /** 技能等级上限（原版 `fromJS` 里的 `Math.min(tmp.level, 70)`）。 */
 export const MAX_SKILL_LEVEL = 70;
@@ -62,26 +57,16 @@ export const DEFAULT_INVENTORY_SIZE = 50;
 export interface PlayerAccountState {
   /** 原版 `game.diamonds`（神力）。 */
   diamonds: number;
-  /** 原版 `game.highestEndlessLevel`。 */
-  highestEndlessLevel: number;
   /** 原版 `game.banned`。 */
   banned: boolean;
-  /** 原版 `game.bank`（储藏箱；`countTicket` / `costTicket` 会读）。 */
+  /** 原版 `game.bank`（储藏箱）。 */
   bank: InventorySlot[];
   /** 原版 `world.updateRate`（离线快进倍率；`addSkillExp` 会乘）。 */
   updateRate: number;
 }
 
 export function createPlayerAccountState(): PlayerAccountState {
-  return { diamonds: 0, highestEndlessLevel: 0, banned: false, bank: [], updateRate: 1 };
-}
-
-/** 合同的 `MapData` 里没有 `isEndless`（原版数据表有）；这里按可选字段读取。 */
-type MapDataCompat = MapData & { isEndless?: boolean };
-
-/** TODO(port-uncertain): 冻结的 MapData 缺 `isEndless` 字段，暂按可选字段读取，等数据表补齐后收敛。 */
-function isEndlessMap(map: MapData | undefined): boolean {
-  return !!(map as MapDataCompat | undefined)?.isEndless;
+  return { diamonds: 0, banned: false, bank: [], updateRate: 1 };
 }
 
 export interface PlayerJson extends PlayerMetaJson {
@@ -98,7 +83,6 @@ export interface PlayerJson extends PlayerMetaJson {
   migrateMap: Record<string, number>;
   lootRule: Record<string, number>;
   minLootLevel: number;
-  dungeonTickets: Record<string, number>;
   /** 钱包（R1）：通货 / 精华 / 一般等价物，key → 数量；**不占背包格**。 */
   wallet: Record<string, number>;
   /** 已击杀野外 BOSS 的地图 key（W4 一次性 BOSS；用于解锁下一段）。 */
@@ -130,7 +114,6 @@ export class Player extends PlayerMeta {
   migrateMap = new Map<string, number>();
   lootRule = new Map<string, number>();
   minLootLevel = 0;
-  dungeonTickets = new Map<string, number>();
   /**
    * 钱包（R1）：通货 / 精华 / 一般等价物，key → 数量，**无容量上限、不占背包格**。
    *
@@ -309,12 +292,6 @@ export class Player extends PlayerMeta {
     for (const item of asArray(raw.inventory)) {
       const slot = new InventorySlot(this.tables, 'inventory').fromJSON(item ?? {});
       this.inventory.push(slot);
-      if (slot.key === 'ticket') {
-        const endlessLevel = getEndlessLevel(slot.dungeonKey);
-        if (endlessLevel && endlessLevel > this.account.highestEndlessLevel) {
-          this.account.highestEndlessLevel = endlessLevel;
-        }
-      }
     }
 
     this.buildInventory = [];
@@ -365,19 +342,6 @@ export class Player extends PlayerMeta {
       }
     }
 
-    // dungeonTickets：缺失时按地图配置补齐（原版语义）
-    this.dungeonTickets = new Map();
-    for (const key of Object.keys(this.tables.maps)) {
-      const map = this.tables.maps[key];
-      if (!map || !map.isDungeon || isEndlessMap(map)) {
-        continue;
-      }
-      const defaultTickets = typeof map.defaultTicketCount === 'number' ? map.defaultTicketCount : 1;
-      const ticketKey = map.group || key;
-      const saved = lookupDungeonTicket(raw.dungeonTickets, ticketKey);
-      this.dungeonTickets.set(ticketKey, saved !== undefined ? saved : defaultTickets);
-    }
-
     return this;
   }
 
@@ -397,10 +361,6 @@ export class Player extends PlayerMeta {
     const lootRule: Record<string, number> = {};
     for (const [key, item] of this.lootRule) {
       lootRule[key] = item;
-    }
-    const dungeonTickets: Record<string, number> = {};
-    for (const [key, item] of this.dungeonTickets) {
-      dungeonTickets[key] = item;
     }
     const wallet: Record<string, number> = {};
     for (const [key, item] of this.wallet) {
@@ -422,7 +382,6 @@ export class Player extends PlayerMeta {
       migrateMap,
       lootRule,
       minLootLevel: this.minLootLevel,
-      dungeonTickets,
       wallet,
       worldBossKilled: Array.from(this.worldBossKilled),
     };
@@ -521,32 +480,19 @@ export class Player extends PlayerMeta {
   }
 
   /**
-   * 原版 `notFullSlot(target, key, stack, dungeonKey)`：找可继续堆叠的格子；
+   * 原版 `notFullSlot(target, key, stack)`：找可继续堆叠的格子；
    * 找不到则占用一个空格并写入 key（**副作用**，与原版一致）。
    */
-  notFullSlot(
-    target: InventorySlot[],
-    key: string,
-    stack: number,
-    dungeonKey: string | null = null,
-  ): number {
+  notFullSlot(target: InventorySlot[], key: string, stack: number): number {
     for (let i = 0; i < target.length; i++) {
       const slot = target[i]!;
-      if (
-        slot &&
-        slot.key === key &&
-        (key !== 'ticket' || dungeonKey === slot.dungeonKey) &&
-        (slot.count ?? 0) < stack
-      ) {
+      if (slot && slot.key === key && (slot.count ?? 0) < stack) {
         return i;
       }
     }
     const ret = this.emptySlot(target);
     if (ret >= 0) {
       target[ret]!.key = key;
-      if (key === 'ticket') {
-        target[ret]!.dungeonKey = dungeonKey;
-      }
     }
     return ret;
   }
@@ -588,7 +534,7 @@ export class Player extends PlayerMeta {
       return amount;
     }
     // 原版 `goods[key].stack`（未知 key 会 TypeError）；这里未知 key 视为不可堆叠
-    const limit = key === 'ticket' ? MAX_TICKET_STACK : this.tables.goods[key]?.stack;
+    const limit = this.tables.goods[key]?.stack;
     if (!limit) {
       // 不可堆叠物品
       const index = this.emptySlot(bag);
@@ -602,7 +548,7 @@ export class Player extends PlayerMeta {
 
     // 可以堆叠物品
     while ((good.count ?? 0) > 0) {
-      const index = this.notFullSlot(bag, key, limit, good.dungeonKey);
+      const index = this.notFullSlot(bag, key, limit);
       if (index < 0) {
         // 没有获取完毕：剩余部分被丢弃。
         break;
@@ -613,12 +559,6 @@ export class Player extends PlayerMeta {
     }
 
     const remaining = good.count ?? 0;
-    if (key === 'ticket' && remaining === 0) {
-      const endlessLevel = getEndlessLevel(good.dungeonKey);
-      if (endlessLevel && endlessLevel > this.account.highestEndlessLevel) {
-        this.account.highestEndlessLevel = endlessLevel;
-      }
-    }
     if (remaining === 0) {
       good.clear();
     }
@@ -640,40 +580,6 @@ export class Player extends PlayerMeta {
       slot.count = (slot.count ?? 0) - count;
       if (slot.count === 0) {
         slot.clear();
-      }
-    }
-  }
-
-  /** 原版 `countTicket(dungeonKey)`：地城钥匙 = 地图票 + 背包钥石 + 银行钥石。 */
-  countTicket(dungeonKey: string): number {
-    let count = this.dungeonTickets.get(dungeonKey) ?? 0;
-    count += this.inventory.reduce(
-      (sum, slot) =>
-        slot.key === 'ticket' && slot.dungeonKey === dungeonKey ? sum + (slot.count ?? 0) : sum,
-      0,
-    );
-    count += this.account.bank.reduce(
-      (sum, slot) =>
-        slot.key === 'ticket' && slot.dungeonKey === dungeonKey ? sum + (slot.count ?? 0) : sum,
-      0,
-    );
-    return count;
-  }
-
-  /** 原版 `costTicket(key)`。 */
-  costTicket(key: string): void {
-    const mapCount = this.dungeonTickets.get(key);
-    if (mapCount !== undefined && mapCount > 0) {
-      this.dungeonTickets.set(key, mapCount - 1);
-      return;
-    }
-    const finalSlot =
-      this.inventory.find((slot) => slot.key === 'ticket' && slot.dungeonKey === key) ??
-      this.account.bank.find((slot) => slot.key === 'ticket' && slot.dungeonKey === key);
-    if (finalSlot) {
-      finalSlot.count = (finalSlot.count ?? 0) - 1;
-      if (finalSlot.count === 0) {
-        finalSlot.clear();
       }
     }
   }
@@ -898,11 +804,7 @@ export class Player extends PlayerMeta {
   }
 
   /**
-   * 原版 `sortInventory(target)`：整理背包（类型 → 钥石地图等级 → 品质 → 部位/等级 → goodOrder）。
-   *
-   * ⚠️ 原版比较两张钥石地图等级时写作 `(mapData1 && mapData2.level)`：
-   * 守卫用 `a` 的地图、取值用 `b` 的地图。取值逻辑是正确的，只有守卫写错了
-   * （a 的地图不存在时 `level2` 会退化为 0），此处逐行保留。
+   * 原版 `sortInventory(target)`：整理背包（类型 → 品质 → 部位/等级 → goodOrder）。
    *
    * 注：临时格子统一用 `position='inventory'` 构造，但最终是写回 `target` 的**原有格子**
    * （`loot` 只覆盖内容，不覆盖 `position`），因此目标容器的格子归属不会改变。
@@ -924,22 +826,8 @@ export class Player extends PlayerMeta {
           junk: 0,
           package: 1,
           material: 2,
-          ticket: 3,
-          equip: 4,
+          equip: 3,
         });
-      }
-      if (atype === 'ticket' && a.dungeonKey !== b.dungeonKey) {
-        // 地图的话，比较地图等级和key
-        const mapData1 = a.dungeonKey === null ? undefined : this.tables.maps[a.dungeonKey];
-        const mapData2 = b.dungeonKey === null ? undefined : this.tables.maps[b.dungeonKey];
-        const level1 = getEndlessMapLevel(a.dungeonKey) || mapData1?.level || 0;
-        // 原版写作 `(mapData1 && mapData2.level)`：**守卫**用 mapData1、**取值**用 mapData2。
-        // 取值是对的，只有守卫对象写错了（当 a 的地图缺失、b 的等级 >0 时会退化为 0），逐行保留。
-        const level2 = getEndlessMapLevel(b.dungeonKey) || (mapData1 ? mapData2?.level : undefined) || 0;
-        if (level1 !== level2) {
-          return level1 - level2;
-        }
-        return (a.dungeonKey ?? '') < (b.dungeonKey ?? '') ? -1 : 1;
       }
       const aq = a.displayQuality;
       const bq = b.displayQuality;
@@ -964,14 +852,4 @@ export class Player extends PlayerMeta {
       this.loot(slot, target);
     }
   }
-}
-
-/** 读取存档里的 `dungeonTickets`（同时支持 Map 与普通对象；原版还支持 ObservableMap）。 */
-function lookupDungeonTicket(source: unknown, key: string): number | undefined {
-  if (source instanceof Map) {
-    const value: unknown = source.get(key);
-    return typeof value === 'number' && !Number.isNaN(value) ? value : undefined;
-  }
-  const raw = asRecord(source)[key];
-  return typeof raw === 'number' && !Number.isNaN(raw) ? raw : undefined;
 }

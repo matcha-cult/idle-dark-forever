@@ -118,7 +118,7 @@ describe('InventorySlot 基础', () => {
     expect(slot().fromJSON({ key: 'dress', count: 1, level: 5 }).mpRecovery).toBe(0);
   });
 
-  it('材料 / 金币 / 神力 / 钥石的展示名与品质', () => {
+  it('材料 / 金币 / 神力的展示名与品质', () => {
     expect(slot().fromJSON({ key: 'gold', count: 5 }).name).toBe('金币');
     expect(slot().fromJSON({ key: 'diamonds', count: 5 }).name).toBe('神力');
     expect(slot().fromJSON({ key: 'dust1', count: 5 }).name).toBe('尘1');
@@ -126,11 +126,6 @@ describe('InventorySlot 基础', () => {
     expect(slot().fromJSON({ key: 'potion', count: 5 }).isEnergyMaterial).toBe(true);
     expect(slot().fromJSON({ key: 'dust1', count: 5 }).isEnergyMaterial).toBe(false);
     expect(slot().fromJSON({ key: 'box', count: 1 }).isEnergyMaterial).toBe(false);
-
-    const ticket = slot().fromJSON({ key: 'ticket', count: 3, dungeonKey: 'dungeon1' });
-    expect(ticket.name).toBe('钥石:试炼地城');
-    const endless = slot().fromJSON({ key: 'ticket', count: 3, dungeonKey: 'nightmare.3' });
-    expect(endless.name).toBe('钥石:无尽噩梦III');
   });
 
   it('传奇词缀改写展示名与描述，并保留基底名', () => {
@@ -182,11 +177,6 @@ describe('InventorySlot.fromJSON 隐式兼容', () => {
     expect(slot().fromJSON({ key: '', count: 3 }).key).toBeNull();
     expect(slot().fromJSON(null).key).toBeNull();
     expect(slot().fromJSON(7).key).toBeNull();
-  });
-
-  it('ticket 缺 dungeonKey → 清空', () => {
-    expect(slot().fromJSON({ key: 'ticket', count: 3 }).key).toBeNull();
-    expect(slot().fromJSON({ key: 'ticket', count: 3, dungeonKey: 'dungeon1' }).key).toBe('ticket');
   });
 
   it('locked 保持原版的 boolean | number 形状', () => {
@@ -242,7 +232,6 @@ describe('InventorySlot.fromJSON 隐式兼容', () => {
     expect(equipped.quality).toBe(0);
     expect(equipped.enchantTimes).toBe(0);
     expect(equipped.legendType).toBeNull();
-    expect(equipped.dungeonKey).toBeNull();
     expect(equipped.affixes).toEqual([]);
     expect(equipped.position).toBe('equip');
     expect(equipped.locked).toBe(true);

@@ -24,14 +24,7 @@ import {
 } from '@idle-dark/game-core';
 import { GameDatabaseService } from '../../game/game-database.service.js';
 import { DATA_TABLES, GAME_CLOCK, type NowSource } from './game-clock.js';
-import {
-  createAccountExtras,
-  type AccountExtras,
-  type ChallengeEntry,
-  type DungeonCooldownEntry,
-  type DungeonRunEntry,
-} from './player-dto.js';
-import { normalizeChallengeQueue } from './challenge-queue.js';
+import { createAccountExtras, type AccountExtras } from './player-dto.js';
 
 /** 默认落库节流间隔（供 world tick 定期 flush 参考；本服务不主动起定时器）。 */
 export const DEFAULT_PERSIST_INTERVAL_MS = 30_000;
@@ -46,7 +39,6 @@ interface CharacterStateRow {
 
 interface AccountStateRow {
   diamonds: number | null;
-  highest_endless_level: number | null;
   data: unknown;
 }
 
@@ -69,10 +61,7 @@ interface AccountDataJson {
   medicineLevel?: Record<string, number>;
   medicineExp?: number;
   worldSeeds?: Record<string, number>;
-  worldMaps?: Record<string, { map?: unknown; endlessLevel?: unknown }>;
-  challengeQueue?: Record<string, unknown>;
-  dungeonCooldowns?: Record<string, unknown>;
-  dungeonRuns?: Record<string, unknown>;
+  worldMaps?: Record<string, { map?: unknown }>;
 }
 
 @Injectable()
@@ -208,7 +197,7 @@ export class PlayerContextService {
     if (cached) return cached;
 
     const rows = await this.db.query<AccountStateRow>(
-      `SELECT diamonds, highest_endless_level, data FROM account_state WHERE user_id = $1`,
+      `SELECT diamonds, data FROM account_state WHERE user_id = $1`,
       [userId],
     );
     const row = rows.rows[0];
@@ -216,7 +205,6 @@ export class PlayerContextService {
     const extras = createAccountExtras();
     if (row) {
       account.diamonds = finiteOr(row.diamonds, 0);
-      account.highestEndlessLevel = finiteOr(row.highest_endless_level, 0);
       applyAccountData(row.data, this.tables, account, extras);
     }
     const entry: AccountEntry = { account, extras, dirty: false };
@@ -306,24 +294,15 @@ export class PlayerContextService {
       medicineExp: entry.extras.medicineExp,
       worldSeeds: { ...entry.extras.worldSeeds },
       worldMaps: cloneWorldMaps(entry.extras.worldMaps),
-      challengeQueue: cloneChallengeQueue(entry.extras.challengeQueue),
-      dungeonCooldowns: cloneDungeonCooldowns(entry.extras.dungeonCooldowns),
-      dungeonRuns: cloneDungeonRuns(entry.extras.dungeonRuns),
     };
     await this.db.query(
-      `INSERT INTO account_state (user_id, diamonds, highest_endless_level, data, updated_at)
-       VALUES ($1, $2, $3, $4::jsonb, CURRENT_TIMESTAMP)
+      `INSERT INTO account_state (user_id, diamonds, data, updated_at)
+       VALUES ($1, $2, $3::jsonb, CURRENT_TIMESTAMP)
        ON CONFLICT (user_id) DO UPDATE
           SET diamonds = EXCLUDED.diamonds,
-              highest_endless_level = EXCLUDED.highest_endless_level,
               data = EXCLUDED.data,
               updated_at = CURRENT_TIMESTAMP`,
-      [
-        userId,
-        finiteInt(entry.account.diamonds, 0),
-        finiteInt(entry.account.highestEndlessLevel, 0),
-        JSON.stringify(data),
-      ],
+      [userId, finiteInt(entry.account.diamonds, 0), JSON.stringify(data)],
     );
     entry.dirty = false;
     return true;
@@ -436,127 +415,16 @@ function applyAccountData(
       const entry = data.worldMaps[key];
       if (!entry || typeof entry !== 'object') continue;
       const map = typeof entry.map === 'string' && entry.map !== '' ? entry.map : 'home';
-      const endlessLevel =
-        typeof entry.endlessLevel === 'number' && Number.isFinite(entry.endlessLevel)
-          ? Math.trunc(entry.endlessLevel)
-          : 0;
-      extras.worldMaps[key] = { map, endlessLevel };
-    }
-  }
-  if (data.challengeQueue && typeof data.challengeQueue === 'object') {
-    const queueByCharacter = data.challengeQueue as Record<string, unknown>;
-    for (const characterId of Object.keys(queueByCharacter)) {
-      extras.challengeQueue[characterId] = normalizeChallengeQueue(queueByCharacter[characterId], tables);
-    }
-  }
-  if (data.dungeonCooldowns && typeof data.dungeonCooldowns === 'object') {
-    const cooldownByCharacter = data.dungeonCooldowns as Record<string, unknown>;
-    for (const characterId of Object.keys(cooldownByCharacter)) {
-      const perChar = cooldownByCharacter[characterId];
-      if (!perChar || typeof perChar !== 'object' || Array.isArray(perChar)) continue;
-      const perCharMap = perChar as Record<string, unknown>;
-      const out: Record<string, DungeonCooldownEntry> = {};
-      for (const ticketKey of Object.keys(perCharMap)) {
-        const cdRaw: unknown = perCharMap[ticketKey];
-        if (!cdRaw || typeof cdRaw !== 'object') continue;
-        out[ticketKey] = {
-          stacks: finiteInt((cdRaw as { stacks?: unknown }).stacks, 0),
-          lastResetAt: finiteOr((cdRaw as { lastResetAt?: unknown }).lastResetAt, 0),
-          lastUsedAt: finiteOr((cdRaw as { lastUsedAt?: unknown }).lastUsedAt, 0),
-        };
-      }
-      if (Object.keys(out).length > 0) extras.dungeonCooldowns[characterId] = out;
-    }
-  }
-  if (data.dungeonRuns && typeof data.dungeonRuns === 'object') {
-    const runByCharacter = data.dungeonRuns as Record<string, unknown>;
-    for (const characterId of Object.keys(runByCharacter)) {
-      const runRaw: unknown = runByCharacter[characterId];
-      if (!runRaw || typeof runRaw !== 'object' || Array.isArray(runRaw)) continue;
-      const run = runRaw as {
-        runId?: unknown;
-        mapKey?: unknown;
-        endlessLevel?: unknown;
-        enemyBorn?: unknown;
-      };
-      const mapKey = run.mapKey;
-      // run 只对其所在秘境有意义；非秘境 / 未知图 → 丢弃（存档漂移）
-      if (typeof mapKey !== 'string' || mapKey === '' || tables.maps[mapKey]?.isDungeon !== true) {
-        continue;
-      }
-      if (typeof run.runId !== 'string' || run.runId === '') continue;
-      const endlessLevel =
-        typeof run.endlessLevel === 'number' && Number.isFinite(run.endlessLevel)
-          ? Math.max(0, Math.trunc(run.endlessLevel))
-          : 0;
-      const enemyBorn =
-        run.enemyBorn && typeof run.enemyBorn === 'object' ? run.enemyBorn : undefined;
-      extras.dungeonRuns[characterId] = {
-        runId: run.runId,
-        mapKey,
-        endlessLevel,
-        ...(enemyBorn === undefined ? {} : { enemyBorn }),
-      };
+      extras.worldMaps[key] = { map };
     }
   }
 }
 
-function cloneWorldMaps(
-  source: Record<string, { map: string; endlessLevel: number }>,
-): Record<string, { map: string; endlessLevel: number }> {
-  const out: Record<string, { map: string; endlessLevel: number }> = {};
+function cloneWorldMaps(source: Record<string, { map: string }>): Record<string, { map: string }> {
+  const out: Record<string, { map: string }> = {};
   for (const key of Object.keys(source)) {
     const entry = source[key];
-    if (entry) out[key] = { map: entry.map, endlessLevel: entry.endlessLevel };
-  }
-  return out;
-}
-
-function cloneDungeonRuns(source: Record<string, DungeonRunEntry>): Record<string, DungeonRunEntry> {
-  const out: Record<string, DungeonRunEntry> = {};
-  for (const characterId of Object.keys(source)) {
-    const run = source[characterId];
-    if (!run) continue;
-    out[characterId] = {
-      runId: run.runId,
-      mapKey: run.mapKey,
-      endlessLevel: run.endlessLevel,
-      ...(run.enemyBorn === undefined ? {} : { enemyBorn: run.enemyBorn }),
-    };
-  }
-  return out;
-}
-
-function cloneChallengeQueue(
-  source: Record<string, ChallengeEntry[]>,
-): Record<string, ChallengeEntry[]> {
-  const out: Record<string, ChallengeEntry[]> = {};
-  for (const key of Object.keys(source)) {
-    const entries = source[key];
-    if (entries) out[key] = entries.map((e) => ({ key: e.key, endlessLevel: e.endlessLevel }));
-  }
-  return out;
-}
-
-function cloneDungeonCooldowns(
-  source: Record<string, Record<string, DungeonCooldownEntry>>,
-): Record<string, Record<string, DungeonCooldownEntry>> {
-  const out: Record<string, Record<string, DungeonCooldownEntry>> = {};
-  for (const characterId of Object.keys(source)) {
-    const perChar = source[characterId];
-    if (!perChar) continue;
-    const inner: Record<string, DungeonCooldownEntry> = {};
-    for (const ticketKey of Object.keys(perChar)) {
-      const entry = perChar[ticketKey];
-      if (entry) {
-        inner[ticketKey] = {
-          stacks: entry.stacks,
-          lastResetAt: entry.lastResetAt,
-          lastUsedAt: entry.lastUsedAt,
-        };
-      }
-    }
-    out[characterId] = inner;
+    if (entry) out[key] = { map: entry.map };
   }
   return out;
 }

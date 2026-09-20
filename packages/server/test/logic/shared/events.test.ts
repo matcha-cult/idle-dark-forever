@@ -24,30 +24,14 @@ describe('InProcessEventBus', () => {
   it('订阅后按名收到事件，取消后不再收到；重复取消是 no-op', () => {
     const bus = new InProcessEventBus();
     const seen: DomainEvent[] = [];
-    const off = bus.on('RunEnded', (event) => seen.push(event));
-    bus.emit({
-      type: 'RunEnded',
-      userId: 1,
-      characterId: 'c1',
-      runId: 'r1',
-      mapKey: 'nightmare.slime',
-      endlessLevel: 1,
-      reason: 'clear',
-    });
+    const off = bus.on('CombatHooksDirty', (event) => seen.push(event));
+    bus.emit({ type: 'CombatHooksDirty', userId: 1, characterId: 'c1' });
     expect(seen).toHaveLength(1);
     off();
     off();
-    bus.emit({
-      type: 'RunEnded',
-      userId: 1,
-      characterId: 'c1',
-      runId: 'r1',
-      mapKey: 'nightmare.slime',
-      endlessLevel: 1,
-      reason: 'clear',
-    });
+    bus.emit({ type: 'CombatHooksDirty', userId: 1, characterId: 'c1' });
     expect(seen).toHaveLength(1);
-    expect(bus.handlerCountOf('RunEnded')).toBe(0);
+    expect(bus.handlerCountOf('CombatHooksDirty')).toBe(0);
   });
 
   it('单订阅者抛错不影响其它订阅者与发布方（显式记录而非静默）', () => {

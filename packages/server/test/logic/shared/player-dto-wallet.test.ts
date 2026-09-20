@@ -14,7 +14,6 @@ function stateOf(fixture: ReturnType<typeof makeFixture>) {
   return playerStateDtoOf(fixture.tables, fixture.player, {
     extras: fixture.extras,
     map: 'home',
-    endlessLevel: 0,
     pendingOfflineMs: 0,
   });
 }

@@ -160,7 +160,6 @@ export class SessionStore {
           displayName: data.displayName,
           diamonds: 0,
           playerSlotCount: 0,
-          highestEndlessLevel: 0,
         };
         this.status = 'authenticated';
         this.errorMessage = null;

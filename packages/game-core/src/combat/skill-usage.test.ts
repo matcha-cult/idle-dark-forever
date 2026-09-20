@@ -1,7 +1,7 @@
 /**
  * `BattleWorld.sendSkillUsage` 回归单测
  *
- * 背景：数据表技能（`data/skills.ts` / `data/nightmare.ts`）的 `effect` 会调用
+ * 背景：数据表技能（`data/skills.ts`）的 `effect` 会调用
  * `world.sendSkillUsage(...)`，但 `BattleWorld` 此前**没有该方法** —— 触发这些技能的战斗会抛
  * `world.sendSkillUsage is not a function`，异常被上层 catch 吞掉（离线秘境整段无收益）。
  *

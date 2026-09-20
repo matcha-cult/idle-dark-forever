@@ -2,7 +2,7 @@
  * BattlePanel —— 战斗（原版 Tab「战斗」）。
  *
  * 玩家在这里回答三个问题：
- *   1. 我在哪、还能去哪？→ 地图列表（服务端 `MapDto`）+ 挑战队列（`pendingMaps`）
+ *   1. 我在哪、还能去哪？→ 地图列表（服务端 `MapDto`）
  *   2. 现在打成什么样？→ 单位卡列表（`UnitStateDto`，服务端权威快照）+ 战斗日志（事件流）
  *   3. 打不动怎么办？→ 目标切换 / 离开地图 / 放弃离线收益
  *
@@ -57,7 +57,6 @@ export function formatBattleEvent(
 
 function mapLockedReason(map: MapDto): string | null {
   if (map.lockedReason !== null && map.lockedReason.length > 0) return map.lockedReason;
-  if (map.ticketGroup !== undefined && map.ticketCount <= 0) return '缺少副本钥匙';
   return null;
 }
 
@@ -102,7 +101,7 @@ export const BattlePanel = observer(function BattlePanel() {
   const leave = (): void => {
     modal.confirm({
       title: '离开当前地图？',
-      content: '离开后当前地图的挑战队列会被清空（服务端判定）。',
+      content: '离开后当前地图的战斗会话会关闭。',
       okText: '离开',
       cancelText: '取消',
       onOk: () => world.leave(),
@@ -123,7 +122,7 @@ export const BattlePanel = observer(function BattlePanel() {
   return (
     <Flex vertical gap={token.paddingSM} data-testid="battle-panel">
       <SectionCard
-        title="地图与挑战队列"
+        title="地图"
         extra={
           <Space>
             <Typography.Text type="secondary">
@@ -182,10 +181,10 @@ export const BattlePanel = observer(function BattlePanel() {
                   >
                     <Flex justify="space-between" align="center" gap={token.marginXXS}>
                       <Typography.Text strong>{map.name}</Typography.Text>
-                      {map.isDungeon ? <Tag color="purple">副本</Tag> : <Tag>野外</Tag>}
+                      <Tag>野外</Tag>
                     </Flex>
                     <Typography.Text style={{ fontSize: token.fontSizeSM, color: token.colorTextTertiary }}>
-                      {`Lv.${map.level}${map.ticketGroup === undefined ? '' : ` · 钥匙 ${map.ticketCount}`}`}
+                      {`Lv.${map.level}`}
                     </Typography.Text>
                     {map.hint === undefined ? null : (
                       <Typography.Text style={{ fontSize: token.fontSizeSM, color: token.colorTextSecondary }}>
@@ -206,19 +205,6 @@ export const BattlePanel = observer(function BattlePanel() {
               })}
               </Flex>
             </>
-          )}
-
-          {world.pendingMaps.length === 0 ? null : (
-            <Flex vertical gap={2} data-testid="battle-queue">
-              <Typography.Text strong>挑战队列</Typography.Text>
-              <Space wrap>
-                {world.pendingMaps.map((pending) => (
-                  <Tag key={`${pending.key}:${pending.endlessLevel}`} color="geekblue">
-                    {`${pending.key}${pending.endlessLevel > 0 ? ` · 无尽 ${pending.endlessLevel}` : ''}`}
-                  </Tag>
-                ))}
-              </Space>
-            </Flex>
           )}
         </Flex>
       </SectionCard>

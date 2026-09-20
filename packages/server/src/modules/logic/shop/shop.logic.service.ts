@@ -2,7 +2,7 @@
  * 神力商店域门面（Action → 本服务 → internal 纯逻辑）。
  *
  * ⚠️ `player_slot_count` 是 `account_state` 表的**独立列**，`PlayerContextService`
- * 只读写 `diamonds / highest_endless_level / data`，因此本服务是唯一直接访问该列的地方
+ * 只读写 `diamonds / player_slot_count / data`，因此本服务是唯一直接访问该列的地方
  * （任务书要求「不要绕过 PlayerContextService 直接写 SQL」，此处为确有必要并已在报告中说明）。
  */
 import { Inject, Injectable } from '@nestjs/common';

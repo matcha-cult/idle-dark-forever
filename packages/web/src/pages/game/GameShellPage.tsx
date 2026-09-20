@@ -80,7 +80,7 @@ export const GameShellPage = observer(function GameShellPage() {
             </Typography.Text>
             <Tag>{player.roleName === '—' ? (activePlayer?.roleName ?? '—') : player.roleName}</Tag>
             <Tag color="blue" data-testid="shell-level">{`Lv.${player.level}`}</Tag>
-            {player.map === '' ? null : <Tag color="geekblue">{`${player.map}${player.endlessLevel > 0 ? ` · 无尽 ${player.endlessLevel}` : ''}`}</Tag>}
+            {player.map === '' ? null : <Tag color="geekblue">{player.map}</Tag>}
           </Space>
         }
         headerExtra={

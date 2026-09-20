@@ -97,30 +97,24 @@ describe('页面渲染冒烟（有数据，防空分支假绿）', () => {
   const HOME = {
     key: 'home',
     name: '自宅',
-    isDungeon: false,
     level: 0,
     lockedReason: null,
     unlocked: true,
-    ticketCount: 0,
     hint: '安全的避难所',
   } as const;
   const STREET = {
     key: 'town.street',
     name: '村间小路',
-    isDungeon: false,
     level: 1,
     lockedReason: null,
     unlocked: true,
-    ticketCount: 0,
   } as const;
   const CAVE = {
     key: 'town.cave',
     name: '洞穴',
-    isDungeon: false,
     level: 3,
     lockedReason: '尚未满足进入条件',
     unlocked: false,
-    ticketCount: 0,
   } as const;
 
   function seed(maps: unknown[], map = 'home'): RootStore {
@@ -131,10 +125,8 @@ describe('页面渲染冒烟（有数据，防空分支假绿）', () => {
       root.world.maps = maps as never;
       root.world.snapshot = {
         map,
-        endlessLevel: 0,
         units: [],
         maps: maps as never,
-        pendingMaps: [],
         updateRate: 1,
         paused: false,
       };

@@ -52,7 +52,6 @@ export function toPlayerLike(
           key: (input as { key?: unknown })?.key ?? null,
           count: (input as { count?: unknown })?.count ?? 0,
           quality: (input as { quality?: unknown })?.quality ?? 0,
-          dungeonKey: (input as { dungeonKey?: unknown })?.dungeonKey ?? null,
         });
     const handled = (input as { handled?: unknown })?.handled;
     // ⚠️ `player.loot()` 会 `clear()` / 递减传入的 slot（放不下的部分保留）。

@@ -74,90 +74,26 @@ describe('PlayerContextService', () => {
   it('账号级神力落库后重载可见', async () => {
     const a = await ctx.create(1, 'c1', 'Eyer', 'warrior');
     a.account.diamonds = 999;
-    a.account.highestEndlessLevel = 5;
     ctx.markAccountDirty(1);
     await ctx.flushAccount(1);
 
     ctx.reset();
     const reloaded = await ctx.load(1, 'c1');
     expect(reloaded?.account.diamonds).toBe(999);
-    expect(reloaded?.account.highestEndlessLevel).toBe(5);
   });
 
   it('账号侧车（世界种子 / 地图）落库后重载一致', async () => {
     await ctx.create(1, 'c1', 'Eyer', 'warrior');
     const extras = await ctx.extrasOf(1);
     extras.worldSeeds['c1'] = 424242;
-    extras.worldMaps['c1'] = { map: 'home', endlessLevel: 3 };
+    extras.worldMaps['c1'] = { map: 'home' };
     ctx.markAccountDirty(1);
     await ctx.flushAccount(1);
 
     ctx.reset();
     const reloaded = await ctx.extrasOf(1);
     expect(reloaded.worldSeeds['c1']).toBe(424242);
-    expect(reloaded.worldMaps['c1']).toEqual({ map: 'home', endlessLevel: 3 });
-  });
-
-  it('账号侧车（挑战队列 / 秘境冷却）落库后重载一致', async () => {
-    await ctx.create(1, 'c1', 'Eyer', 'warrior');
-    const extras = await ctx.extrasOf(1);
-    extras.challengeQueue['c1'] = [
-      { key: 'home', endlessLevel: 0 },
-      { key: 'world.1', endlessLevel: 2 },
-    ];
-    extras.dungeonCooldowns['c1'] = {
-      'nightmare.slime': { stacks: 1, lastResetAt: 1_700_000_000_000, lastUsedAt: 1_699_999_000_000 },
-    };
-    extras.dungeonRuns['c1'] = {
-      runId: 'run-1',
-      mapKey: 'nightmare.slime',
-      endlessLevel: 0,
-      enemyBorn: { currentPhase: 2, ticketPaid: true },
-    };
-    ctx.markAccountDirty(1);
-    await ctx.flushAccount(1);
-
-    ctx.reset();
-    const reloaded = await ctx.extrasOf(1);
-    expect(reloaded.challengeQueue['c1']).toEqual([
-      { key: 'home', endlessLevel: 0 },
-      { key: 'world.1', endlessLevel: 2 },
-    ]);
-    expect(reloaded.dungeonCooldowns['c1']?.['nightmare.slime']).toEqual({
-      stacks: 1,
-      lastResetAt: 1_700_000_000_000,
-      lastUsedAt: 1_699_999_000_000,
-    });
-    expect(reloaded.dungeonRuns['c1']).toEqual({
-      runId: 'run-1',
-      mapKey: 'nightmare.slime',
-      endlessLevel: 0,
-      enemyBorn: { currentPhase: 2, ticketPaid: true },
-    });
-  });
-
-  it('存档脏数据：未知地图条目被丢弃、超长截断、非法冷却值夹取（不清空整条队列）', async () => {
-    await ctx.create(1, 'c1', 'Eyer', 'warrior');
-    // 直接改内存库，模拟外部/旧版本写坏的数据
-    const row = db.accounts.get(1);
-    expect(row).toBeDefined();
-    if (row) {
-      row.data = {
-        challengeQueue: {
-          c1: [{ key: 'home' }, { key: 'no.such.map' }, { key: '' }, null, 'x'],
-        },
-        dungeonCooldowns: {
-          c1: { 'nightmare.slime': { stacks: Number.NaN, lastResetAt: 'bad', lastUsedAt: -1 } },
-        },
-      };
-    }
-    ctx.reset();
-    const extras = await ctx.extrasOf(1);
-    expect(extras.challengeQueue['c1']).toEqual([{ key: 'home', endlessLevel: 0 }]);
-    const cd = extras.dungeonCooldowns['c1']?.['nightmare.slime'];
-    expect(cd?.stacks).toBe(0);
-    expect(cd?.lastResetAt).toBe(0);
-    expect(Number.isFinite(cd?.lastUsedAt)).toBe(true);
+    expect(reloaded.worldMaps['c1']).toEqual({ map: 'home' });
   });
 
   it('旧占位行（state = {}）在 load 时按列 role/career 补齐并落库', async () => {

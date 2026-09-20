@@ -4,7 +4,7 @@
  * 关键点：
  * - 波次由注入的 `Clock`（虚拟时钟）推进，测试用 `advanceBy` / `completeWave()` 显式步进，
  *   **不 sleep 真实时间**；
- * - 等级覆写只作用于非秘境图；秘境沿用 `enemyData.level + quality*4`（W6 再改）；
+ * - 等级覆写按地图等级作用于野外图；
  * - BOSS 一次性：击杀登记在角色上，之后该图只刷普通怪。
  */
 import { describe, expect, it } from 'vitest';
@@ -16,7 +16,7 @@ import { EnemyBorn, WORLD_BOSS_WAVE_INTERVAL } from './spawner.js';
 const WORLD_MAP = 'world.5';
 const WORLD_MAP_LEVEL = 35;
 
-/** 一张野外图（每波 3 只 dummy，同时最多 3 只）+ 一张秘境图（等级 10，用敌人数据等级）。 */
+/** 一张野外图（每波 3 只 dummy，同时最多 3 只）。 */
 function makeW4Tables() {
   const tables = makeTables();
   tables.maps = {
@@ -29,14 +29,6 @@ function makeW4Tables() {
       monsters: [
         { type: 'dummy', delay: 100, max: 3, warmup: 0, total: 3, quality: [100] },
       ],
-    }),
-    'world.dungeon': mapData({
-      key: 'world.dungeon',
-      name: 'Dungeon',
-      isDungeon: true,
-      outside: 'home',
-      level: 10,
-      phases: [{ description: 'p1', monsters: [] }],
     }),
   };
   tables.enemies = {
@@ -117,19 +109,6 @@ describe('W4 野外波次计数', () => {
     expect(
       new EnemyBorn(t.world, t.clock, WORLD_MAP, { wave: Number.NaN as unknown as number }).wave,
     ).toBe(0);
-  });
-
-  it('秘境不参与波次（DungeonState 覆写为空实现）', () => {
-    const { t } = setup();
-    t.world.map = 'world.dungeon';
-    const dungeon = t.world.enemyBorn as EnemyBorn;
-    expect(dungeon.wave).toBe(0);
-    dungeon.onBornOver();
-    expect(dungeon.wave).toBe(0); // 覆写为空实现，不推进波次
-    dungeon.completeWave();
-    expect(dungeon.wave).toBe(1); // 基类方法本身仍可调用（不与阶段推进耦合）
-    // 阶段推进语义：phaseBorn 为空时 checkPhaseAdvance 直接走通关分支（不抛错即可）。
-    expect(() => (dungeon as unknown as { checkPhaseAdvance(): void }).checkPhaseAdvance()).not.toThrow();
   });
 });
 
@@ -262,15 +241,5 @@ describe('W4 怪物等级规则', () => {
     expect(unit.level).toBe(1 + 2 * 4); // dummy 数据等级 1 + quality 2 ×4
     unit.levelOverride = Number.POSITIVE_INFINITY;
     expect(unit.level).toBe(9);
-  });
-
-  it('秘境沿用旧公式（enemyData.level + quality*4），不受地图等级影响', () => {
-    const { t } = setup();
-    t.world.map = 'world.dungeon';
-    const normal = t.world.addEnemy('dummy', null, 0);
-    const rare = t.world.addEnemy('dummy', null, 2);
-    expect(normal.levelOverride).toBeUndefined();
-    expect(normal.level).toBe(1); // dummy 数据等级 1
-    expect(rare.level).toBe(9); // 1 + 2*4
   });
 });

@@ -238,21 +238,6 @@ export function makeTables(overrides?: Partial<DataTables>): DataTables {
       name: 'Field',
       monsters: [{ type: 'dummy', delay: 1000, max: 1 }],
     }),
-    dungeon: mapData({
-      key: 'dungeon',
-      name: 'Dungeon',
-      isDungeon: true,
-      outside: 'home',
-      group: 'dungeon',
-      level: 1,
-      exp: 100,
-      loots: [],
-      phases: [
-        // 契约把 phases[].monsters 标为 {type,total}，真实数据还有 max/delay（见交付报告 TODO）。
-        { description: 'p1', monsters: [{ type: 'dummy', total: 2, max: 1, delay: 1000 } as never] },
-        { description: 'p2', monsters: [{ type: 'tank', total: 1, max: 1, delay: 1000 } as never] },
-      ],
-    }),
   };
   tables.buffs = {
     regen: buffData({
@@ -360,8 +345,6 @@ export function makePlayer(overrides?: Partial<PlayerLike>): PlayerLike {
     lootRule: new Map(),
     minLootLevel: 0,
     loot: () => {},
-    countTicket: () => 1,
-    costTicket: () => {},
   };
   return Object.assign(player, overrides ?? {});
 }

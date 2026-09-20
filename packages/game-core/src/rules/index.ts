@@ -6,7 +6,7 @@
  * - 无裸 `Math.random()`：随机一律经 `Rng` 端口（`generateEquip` / `randomEquip` / `randomAffixes`…）；
  * - 无裸 `Date.now()`：时间由注入的 `now` 源提供（见 `Player` 构造参数）；
  * - 规则函数第一参数是 `DataTables`，**不** import `src/data/`；
- * - 保留原版 `fromJS` 的隐式兼容语义（缺失字段兜底 / `DEFAULT_LEVEL` / `dungeonTickets` 补齐 / `skillExp.level ≤ 70`）。
+ * - 保留原版 `fromJS` 的隐式兼容语义（缺失字段兜底 / `DEFAULT_LEVEL` / `skillExp.level ≤ 70`）。
  *
  * 导出面：
  * - `PlayerMeta` + 存档兜底 helper + 等级换算（`transformEquipLevel` 等）
@@ -28,6 +28,5 @@ export * from './loot-rule.js';
 export * from './damage.js';
 export * from './check.js';
 export * from './combat-area.js';
-export * from './dungeon.js';
 export * from './keystone.js';
 export * from './player.js';

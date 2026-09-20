@@ -11,7 +11,7 @@
  * ⚠️ 本文件是**纯数据模块，无模块级副作用**：只有对象字面量，不注册、不 mock、不读写全局。
  * ⚠️ `total` = 一波的刷怪总量（W4 消费，`spawner` 用它判定「刷满 + 全部清空 = 完成一波」）。
  * ⚠️ `requirement.bossKilled` = 解锁链（W4）：进入本图需先击杀上一段图的野外 BOSS。
- * ⚠️ 不写 `isDungeon` / `phases` / `group` / `isEndless`：旧秘境体系在 W6 删除。
+ * ⚠️ 不写旧秘境体系的副本 / 相位 / 分组 / 无尽字段：该体系在 W6 已删除。
  */
 
 import type { MapEntry } from './_shapes.js';

@@ -23,7 +23,6 @@ export interface CollectedLoot {
   quality: number;
   handled: 'pickup' | 'sell' | 'decompose';
   gold: number;
-  dungeonKey?: string;
   materials?: Array<{ key: string; count: number }>;
 }
 
@@ -121,7 +120,6 @@ export class BattleCollector implements BattleSink {
         handled: e.handled,
         gold,
       };
-      if (e.dungeonKey) entry.dungeonKey = e.dungeonKey;
       if (e.materials) entry.materials = e.materials.map((m) => ({ key: m.key, count: finite(m.count) }));
       this.loots.set(`${e.handled}:${e.key}:${e.quality}`, entry);
     }

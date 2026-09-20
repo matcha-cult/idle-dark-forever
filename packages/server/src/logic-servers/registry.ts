@@ -3,7 +3,7 @@
  *
  * 08 §2.2 的目标划分（A2 单进程阶段）：
  * ```
- * external ──► battle / item / character / dungeon / map
+ * external ──► battle / item / character / idle / map
  *                                   └────────► shared（协议/时钟/端口/事件总线，无业务）
  * ```
  *
@@ -81,11 +81,11 @@ export const SERVER_DEFINITIONS = {
     roots: ['modules/character', 'modules/logic/player', 'modules/logic/career'],
     cmdSegments: [CMD_SEGMENTS.player, CMD_SEGMENTS.career],
   },
-  dungeon: {
-    name: 'dungeon',
-    // 09 R3：秘境挑战 + 挑战队列控制器（cmd 140）+ 离线结算编排（idle，cmd 120）。
-    roots: ['modules/logic/idle', 'modules/logic/dungeon'],
-    cmdSegments: [CMD_SEGMENTS.idle, CMD_SEGMENTS.dungeon],
+  idle: {
+    name: 'idle',
+    // 09 §6.3：离线结算编排（cmd 120）。W6 起旧氪金秘境域（dungeon, cmd 140）已物理删除。
+    roots: ['modules/logic/idle'],
+    cmdSegments: [CMD_SEGMENTS.idle],
   },
   map: {
     name: 'map',
@@ -105,6 +105,4 @@ export const ALL_SERVER_DEFINITIONS: readonly LogicServerDefinition[] = Object.v
  * 由 R4（battle 命令/事件对接）改为正式契约后删除。门禁断言**实际边集恰好等于本表**，
  * 因此任何新增跨服深路径都会立刻失败。
  */
-export const TRANSITIONAL_DEEP_IMPORTS: readonly { readonly from: string; readonly to: string; readonly reason: string }[] = [
-  { from: 'dungeon', to: 'map', reason: 'RD3/RD4：队列耗尽 / 非秘境条目 → map.ContinueOpenWorld（09 §4.2 允许的方向）' },
-];
+export const TRANSITIONAL_DEEP_IMPORTS: readonly { readonly from: string; readonly to: string; readonly reason: string }[] = [];

@@ -8,12 +8,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { DataTables, MapData } from '../contracts/data.js';
+import type { DataTables } from '../contracts/data.js';
 import { Mulberry32Rng } from '../rng/index.js';
-
-/** 带 `isEndless` 的地图（冻结的 `MapData` 尚未声明该字段）。 */
-type MapWithEndless = MapData & { isEndless?: boolean };
-
 /** 固定种子的确定随机源（测试里禁止真随机）。 */
 export function makeRng(seed = 12345): Mulberry32Rng {
   return new Mulberry32Rng(seed);
@@ -64,30 +60,12 @@ export function createTestTables(): DataTables {
     },
     maps: {
       home: { key: 'home', name: '家' },
-      dungeon1: {
-        key: 'dungeon1',
-        name: '试炼地城',
-        isDungeon: true,
-        defaultTicketCount: 2,
+      field: {
+        key: 'field',
+        name: '野外',
         level: 10,
-        cooldown: 0,
-      } as MapData,
-      endlessDungeon: {
-        key: 'endlessDungeon',
-        name: '无限回廊',
-        isDungeon: true,
-        isEndless: true,
-        group: 'endlessGroup',
-        defaultTicketCount: 5,
-        level: 99,
-      } as MapWithEndless,
-      'nightmare.3': {
-        key: 'nightmare.3',
-        name: '噩梦3',
-        isDungeon: true,
-        isEndless: true,
-        level: 320,
-      } as MapWithEndless,
+        monsters: [{ type: 'dummy', delay: 1000, max: 1 }],
+      },
     },
     enemies: {},
     skills: {
@@ -383,7 +361,8 @@ describe('测试夹具自检', () => {
     expect(a).not.toBe(b);
     expect(Object.keys(a.careers)).toEqual(['warrior', 'mage']);
     expect(Object.keys(a.goods).length).toBeGreaterThan(5);
-    expect(a.maps.dungeon1?.isDungeon).toBe(true);
+    expect(a.maps.home?.name).toBe('家');
+    expect(a.maps.field?.monsters?.length).toBeGreaterThan(0);
   });
 
   it('makeRng 固定种子可重放', () => {

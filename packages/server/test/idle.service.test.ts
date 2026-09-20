@@ -34,7 +34,7 @@ describe('IdleService 离线结算', () => {
 
     const player = await context.create(1, 'c1', 'Eyer', 'warrior');
     const extras = await context.extrasOf(1);
-    extras.worldMaps['c1'] = { map: 'world.1', endlessLevel: 0 };
+    extras.worldMaps['c1'] = { map: 'world.1' };
     context.markAccountDirty(1);
     player.timestamp = now;
     context.markDirty(1, 'c1');
@@ -144,7 +144,7 @@ describe('IdleService · R5 离线结算编排（RD1/RD2/RD7 + 幂等）', () =>
 
   async function setPosition(map: string): Promise<void> {
     const extras = await context.extrasOf(1);
-    extras.worldMaps['c1'] = { map, endlessLevel: 0 };
+    extras.worldMaps['c1'] = { map };
     context.markAccountDirty(1);
     const player = await context.load(1, 'c1');
     if (player) player.timestamp = now;
@@ -166,15 +166,4 @@ describe('IdleService · R5 离线结算编排（RD1/RD2/RD7 + 幂等）', () =>
     expect(context.peek(1, 'c1')?.timestamp).toBe(now);
   });
 
-  it('RD7：秘境离线**不做速率外推**（cappedMs 仍按 72h 上限，extrapolatedMs=0）', async () => {
-    await setPosition('nightmare.slime');
-    now += 100 * HOUR;
-    const service = new IdleService(context, () => now, tables);
-    const result = await service.report(1, 'c1');
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    expect(result.data.cappedMs).toBe(MAX_OFFLINE_MS);
-    expect(result.data.extrapolatedMs).toBe(0);
-    expect(result.data.pausedByMaxOffline).toBe(true);
-  });
 });

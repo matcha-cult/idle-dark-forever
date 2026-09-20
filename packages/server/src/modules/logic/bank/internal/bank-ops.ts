@@ -3,12 +3,7 @@
  *
  * 银行是**账号级**共享容器（`PlayerAccountState.bank`），因此落库走 `flushAccount`。
  */
-import {
-  InventorySlot,
-  MAX_TICKET_STACK,
-  type DataTables,
-  type PlayerAccountState,
-} from '@idle-dark/game-core';
+import { InventorySlot, type DataTables, type PlayerAccountState } from '@idle-dark/game-core';
 import type { InventorySlotDto } from '@idle-dark/protocol';
 import { BusinessErrorCode } from '@idle-dark/protocol';
 import { slotDtoOf } from '../../shared/index.js';
@@ -39,11 +34,10 @@ export function canAccept(
   target: readonly InventorySlot[],
   tables: DataTables,
   key: string,
-  dungeonKey: string | null,
   take: number,
 ): boolean {
   if (key === 'gold' || key === 'diamonds') return true;
-  const limit = key === 'ticket' ? MAX_TICKET_STACK : tables.goods[key]?.stack;
+  const limit = tables.goods[key]?.stack;
   let capacity = 0;
   if (!limit || limit <= 0) {
     for (const slot of target) if (slot.empty) capacity += 1;
@@ -55,7 +49,6 @@ export function canAccept(
       continue;
     }
     if (slot.key !== key) continue;
-    if (key === 'ticket' && slot.dungeonKey !== dungeonKey) continue;
     capacity += Math.max(0, limit - (slot.count ?? 0));
   }
   return capacity >= take;
@@ -81,7 +74,7 @@ export function opDeposit(
   const take = normalizeTake(slot, count);
   const key = slot.key;
   if (key === null) throw new OpError(BusinessErrorCode.ITEM_NOT_FOUND);
-  if (!canAccept(account.bank, tables, key, slot.dungeonKey, take)) {
+  if (!canAccept(account.bank, tables, key, take)) {
     throw new OpError(BusinessErrorCode.INVENTORY_FULL, '储藏箱已满');
   }
   moveInto(player, account.bank, tables, slot, take);
@@ -98,7 +91,7 @@ export function opWithdraw(
   const take = normalizeTake(slot, count);
   const key = slot.key;
   if (key === null) throw new OpError(BusinessErrorCode.ITEM_NOT_FOUND);
-  if (!canAccept(player.inventory, tables, key, slot.dungeonKey, take)) {
+  if (!canAccept(player.inventory, tables, key, take)) {
     throw new OpError(BusinessErrorCode.INVENTORY_FULL, '包裹已满');
   }
   moveInto(player, player.inventory, tables, slot, take);

@@ -16,7 +16,6 @@ import {
   PlayerContextService,
   evaluateMapUnlock,
   mapListDtoOf,
-  pickOpenWorldMap,
   resolveWorldPosition,
 } from '../shared/index.js';
 import { BATTLE_COMMAND, type BattleCommandPort } from '../shared/index.js';
@@ -70,19 +69,4 @@ export class MapLogicService {
     return this.battle.leave(userId, characterId);
   }
 
-  /**
-   * 控制器间命令：**队列耗尽后转入非秘境战斗图**（RD3/RD4，供 dungeon 控制器调用）。
-   *
-   * 目标图优先级：`candidate`（= `run.outside`）→ 角色持久化位置 → `home`（`pickOpenWorldMap`）。
-   */
-  async continueOpenWorld(
-    userId: number,
-    characterId: string,
-    candidate?: string,
-  ): Promise<ActionResult<WorldSnapshotDto>> {
-    const extras = await this.contexts.extrasOf(userId);
-    const position = resolveWorldPosition(this.contexts.tables, extras.worldMaps[characterId]);
-    const target = pickOpenWorldMap(this.contexts.tables, candidate, position.map);
-    return this.enter(userId, characterId, target);
-  }
 }

@@ -30,35 +30,6 @@ import {
   type EquipSlot,
 } from '@idle-dark/game-core';
 
-/** 挑战队列条目（服务端唯一所有者，RC4；结构同 `pendingMaps` 的一格）。 */
-export interface ChallengeEntry {
-  key: string;
-  endlessLevel: number;
-}
-
-/** 挑战队列长度上限（防止客户端用超大数组把落库行撑爆）。 */
-export const MAX_CHALLENGE_QUEUE = 32;
-
-/** 单个票键的冷却/层数状态（结构同 game-core `DungeonCooldownState`；09 §5.4）。 */
-export interface DungeonCooldownEntry {
-  stacks: number;
-  lastResetAt: number;
-  lastUsedAt: number;
-}
-
-/**
- * 进行中的秘境 run（M7；09 §5.2）。
- *
- * `enemyBorn` 是 `DungeonState.dumpState()` 的产物（相位 / 相位刷怪器 / 已付费标记），
- * 只随 run 存在；run 结束（通关/死亡/离图）即删除。
- */
-export interface DungeonRunEntry {
-  runId: string;
-  mapKey: string;
-  endlessLevel: number;
-  enemyBorn?: unknown;
-}
-
 /** 账号级、`Player` 之外的附加状态（服务端侧车，落在 `account_state.data`）。 */
 export interface AccountExtras {
   /** 药剂等级：type → level。 */
@@ -73,32 +44,12 @@ export interface AccountExtras {
    */
   worldSeeds: Record<string, number>;
   /**
-   * 每角色当前所在地图（characterId → {map, endlessLevel}）。
+   * 每角色当前所在地图（characterId → {map}）。
    *
    * 原版 `worldState`（在飞的战斗快照）按方案 §9.2 **不迁**；但「玩家上次在哪张图」
    * 必须记住，否则每次重连都回到 `home`。
    */
-  worldMaps: Record<string, { map: string; endlessLevel: number }>;
-  /**
-   * 挑战队列（characterId → 有序条目）。
-   *
-   * 09 §5.3：**服务端唯一所有者**（RC4），随角色落库、客户端只能增删查询；
-   * 单一归属 = 本侧车（不得再在 `characters.state` 写一份）。
-   */
-  challengeQueue: Record<string, ChallengeEntry[]>;
-  /**
-   * 秘境冷却/层数状态（characterId → ticketKey → 状态）。
-   *
-   * 09 §5.4（RC3）：每日 4 点重置 + 神力重置的状态载体；票键见 `ticketKeyOf`。
-   * 与 `dungeonTickets`（在 `characters.state`）**不同层**：那里是「有多少张票」，
-   * 这里是「本周期还能挑战几次」。
-   */
-  dungeonCooldowns: Record<string, Record<string, DungeonCooldownEntry>>;
-  /**
-   * 进行中的秘境 run（characterId → run 档）—— M7：相位此前完全不落库，
-   * 导致重登后从 phase 0 重跑。**只在本 run 仍停留在其地图时存在**。
-   */
-  dungeonRuns: Record<string, DungeonRunEntry>;
+  worldMaps: Record<string, { map: string }>;
 }
 
 export function createAccountExtras(): AccountExtras {
@@ -107,9 +58,6 @@ export function createAccountExtras(): AccountExtras {
     medicineExp: 0,
     worldSeeds: {},
     worldMaps: {},
-    challengeQueue: {},
-    dungeonCooldowns: {},
-    dungeonRuns: {},
   };
 }
 
@@ -189,7 +137,6 @@ export function slotDtoOf(slot: InventorySlot, index: number): InventorySlotDto 
     const requireLevel = slot.requireLevel;
     if (Number.isFinite(requireLevel)) dto.requireLevel = requireLevel;
   }
-  if (slot.dungeonKey) dto.dungeonKey = slot.dungeonKey;
   return dto;
 }
 
@@ -379,7 +326,6 @@ export interface PlayerStateOptions {
   extras: AccountExtras;
   /** 当前地图（来自 world 运行时；不在存档里）。 */
   map: string;
-  endlessLevel: number;
   pendingOfflineMs: number;
   usableByKey?: Readonly<Record<string, boolean>>;
 }
@@ -413,12 +359,10 @@ export function playerStateDtoOf(
     selectedSkills: [...(career?.selectedSkills ?? [])],
     selectedEnhances: [...(career?.selectedEnhances ?? [])],
     skillExp: skillExpRecord(player.skillExp),
-    dungeonTickets: numberRecord(player.dungeonTickets),
     medicineLevel: { ...options.extras.medicineLevel },
     medicineExp: options.extras.medicineExp,
     maxMedicineExp: 0,
     map: options.map,
-    endlessLevel: options.endlessLevel,
     pendingOfflineMs: options.pendingOfflineMs,
   };
 }
@@ -428,11 +372,5 @@ function skillExpRecord(
 ): Record<string, { level: number; exp: number }> {
   const out: Record<string, { level: number; exp: number }> = {};
   for (const [key, value] of source) out[key] = { level: value.level, exp: value.exp };
-  return out;
-}
-
-function numberRecord(source: ReadonlyMap<string, number>): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const [key, value] of source) out[key] = value;
   return out;
 }

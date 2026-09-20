@@ -30,15 +30,11 @@ export type LootEntry =
       count: [number, number] | number;
       mfRate?: number;
       qualityRate?: number;
-      /**
-       * 掉落等级门槛。判定等级 = **min(怪物等级, 地图等级)**（用户口径）；
-       * 无尽层的地图等级取 `mapData.level`，怪物等级含 `35×(层-1)` 的加成。
-       */
+      /** 掉落等级门槛。判定等级 = **min(怪物等级, 地图等级)**（用户口径）。 */
       minLevel?: number;
       maxLevel?: number;
     }
   | { type: 'equip'; rate: number; mfRate?: number; qualityRate?: number; position?: string; minLevel?: number; maxLevel?: number }
-  | { type: 'ticket'; rate: number; dungeons?: Record<string, number> }
   | { type: 'specialEquip'; rate: number; items: string[]; mfRate?: number }
   | { type: 'maxLevel'; rate: number; count: [number, number] };
 
@@ -230,17 +226,6 @@ export interface MonsterSpawnConfig {
   randomPosition?: boolean;
 }
 
-/**
- * 地城阶段里的刷怪条目。
- *
- * ⚠️ 真实数据不止 `type` / `total`：`data/maps/silver/warrior.js` 还有 `max` / `delay`，
- * 因此这里扩为 `MonsterSpawnConfig` 的超集（`type` / `total` 收紧为必填）。
- */
-export interface PhaseMonsterConfig extends MonsterSpawnConfig {
-  type: string;
-  total: number;
-}
-
 export interface MapData {
   key: string;
   name: string;
@@ -248,14 +233,6 @@ export interface MapData {
   /** 进入条件。 */
   requirement?: Requirement;
   monsters?: MonsterSpawnConfig[];
-  /** 地城专属。 */
-  isDungeon?: boolean;
-  outside?: string;
-  phases?: Array<{ description: string; monsters: PhaseMonsterConfig[] }>;
-  coolDown?: number;
-  maxCoolDownStack?: number;
-  coolDownOffset?: number;
-  resetPrice?: number;
   level?: number;
   exp?: number;
   /**
@@ -266,17 +243,6 @@ export interface MapData {
    */
   boss?: string;
   loots?: LootEntry[];
-  /** 无尽副本分组，如 'nightmare.3'。 */
-  group?: string;
-  /**
-   * 是否为无尽副本。
-   *
-   * ⚠️ 原版数据里真实存在（`data/packages/nightmare/*.js` 的 `isEndless: true`），
-   * 且 `Player.fromJSON` 补齐 `dungeonTickets` 时会跳过无尽地图 —— 漏了它会导致
-   * 钥石键空间多出一批不该存在的条目。
-   */
-  isEndless?: boolean;
-  defaultTicketCount?: number;
 }
 
 // ────────────────────────────── 条件 ──────────────────────────────

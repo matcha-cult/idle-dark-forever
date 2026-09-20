@@ -6,7 +6,6 @@
  * - 缺失字段兜底（`v.level || 0`、`v.locked || 0`…）；
  * - `count` 是 `number | null`（原版 `v.count ? Math.ceil(v.count) : null`）；
  * - 旧装备缺等级时用 `DEFAULT_LEVEL` 兜底，再兜底为 1；
- * - `ticket` 缺 `dungeonKey` 直接清空格子；
  * - `key`/`count===0` 直接清空格子。
  */
 
@@ -19,7 +18,6 @@ import {
   asNumber,
   asRecord,
   asStringOrNull,
-  getEndlessKeyName,
   transformEquipLevel,
 } from './player-meta.js';
 
@@ -165,10 +163,9 @@ export interface InventorySlotJson {
   enchantTimes: number;
   locked: boolean | number;
   legendType: string | null;
-  dungeonKey: string | null;
 }
 
-/** 原版 `player.js:293-544`：统一物品模型（装备 / 材料 / 钥石 / 空槽）。 */
+/** 原版 `player.js:293-544`：统一物品模型（装备 / 材料 / 空槽）。 */
 export class InventorySlot {
   readonly tables: DataTables;
   position: SlotPosition;
@@ -181,7 +178,6 @@ export class InventorySlot {
   enchantTimes = 0;
   locked: boolean | number = false;
   legendType: string | null = null;
-  dungeonKey: string | null = null;
 
   constructor(tables: DataTables, position: SlotPosition) {
     this.tables = tables;
@@ -223,7 +219,7 @@ export class InventorySlot {
     return this.goodData?.description ?? '';
   }
 
-  /** 原版 `name`。`ticket` 的展示名依赖地图表。 */
+  /** 原版 `name`。 */
   get name(): string {
     if (!this.key) {
       return '';
@@ -233,11 +229,6 @@ export class InventorySlot {
     }
     if (this.key === 'diamonds') {
       return '神力';
-    }
-    if (this.key === 'ticket') {
-      const endless = getEndlessKeyName(this.dungeonKey);
-      const map = this.dungeonKey === null ? undefined : this.tables.maps[this.dungeonKey];
-      return `钥石:${endless ?? map?.name ?? ''}`;
     }
     if (this.legendData) {
       return this.legendData.itemName;
@@ -362,7 +353,6 @@ export class InventorySlot {
     this.level = 0;
     this.enchantTimes = 0;
     this.legendType = null;
-    this.dungeonKey = null;
     this.affixes = [];
   }
 
@@ -376,15 +366,11 @@ export class InventorySlot {
     this.level = asNumber(raw.level, 0);
     this.enchantTimes = asNumber(raw.enchantTimes, 0);
     this.legendType = asStringOrNull(raw.legendType);
-    this.dungeonKey = asStringOrNull(raw.dungeonKey);
     if (this.isEquip && !this.level) {
       this.level = DEFAULT_LEVEL[this.key ?? ''] ?? 1;
     }
     this.affixes = asArray(raw.affixes).map((item) => new AffixInfo(this.tables).fromJSON(item));
     if (!this.key || this.count === 0) {
-      this.clear();
-    }
-    if (this.key === 'ticket' && !this.dungeonKey) {
       this.clear();
     }
     return this;
@@ -401,7 +387,6 @@ export class InventorySlot {
       enchantTimes: this.enchantTimes,
       locked: this.locked,
       legendType: this.legendType,
-      dungeonKey: this.dungeonKey,
     };
   }
 }

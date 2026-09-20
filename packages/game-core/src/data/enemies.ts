@@ -105,14 +105,7 @@ return  [
       {
         key: 'gold',
         count: [1, 20],
-        rate: 0.1,
-      },      {
-        type: 'ticket',
-        rate: 0.005,
-        dungeons: {
-          'town.cave2': 1,
-        },
-      },
+        rate: 0.1,      },
     ],
   },
   {
@@ -216,15 +209,7 @@ return  [
       {
         key: 'gold',
         count: [1, 20],
-        rate: 0.1,
-      },      {
-        type: 'ticket',
-        rate: 0.005,
-        dungeons: {
-          'town.cave2': 2,
-          'town.woods': 1,
-        },
-      },
+        rate: 0.1,      },
     ],
   },
   {
@@ -329,16 +314,7 @@ return  [
       {
         key: 'gold',
         count: [5, 10],
-        rate: 0.2,
-      },      {
-        type: 'ticket',
-        rate: 0.005,
-        dungeons: {
-          'town.woods': 4,
-          'town.mine.2': 2,
-          'town.mine.3': 1,
-        },
-      },
+        rate: 0.2,      },
     ],
   },
   {
@@ -588,16 +564,7 @@ return  [
       {
         key: 'gold',
         count: [5, 10],
-        rate: 0.2,
-      },      {
-        type: 'ticket',
-        rate: 0.005,
-        dungeons: {
-          'town.woods': 4,
-          'town.neighbourTown.2': 3,
-          'town.neighbourTown.3': 1,
-        },
-      },
+        rate: 0.2,      },
     ],
   },
   {
@@ -826,18 +793,7 @@ return  [
       {
         key: 'gold',
         count: [5, 20],
-        rate: 1,
-      },      {
-        type: 'ticket',
-        rate: 0.00125,
-        dungeons: {
-          'town.mine.2': 2,
-          'town.mine.3': 1,
-          'town.neighbourTown.2': 2,
-          'town.neighbourTown.3': 1,
-          'chapter3.shelter773': 1,
-        },
-      },
+        rate: 1,      },
     ],
   },
   {
@@ -971,15 +927,7 @@ return  [
       {
         key: 'gold',
         count: [5, 35],
-        rate: 0.1,
-      },      {
-        type: 'ticket',
-        rate: 0.00125,
-        dungeons: {
-          'chapter3.shelter773': 2,
-          'chapter3.wood1': 1,
-        },
-      },
+        rate: 0.1,      },
     ],
   },
   {
@@ -1166,16 +1114,7 @@ return  [
       {
         key: 'gold',
         count: [20, 40],
-        rate: 0.1,
-      },      {
-        type: 'ticket',
-        rate: 0.00125,
-        dungeons: {
-          'chapter3.wood1': 4,
-          'chapter3.auran1': 2,
-          'chapter3.auran2': 1,
-        },
-      },
+        rate: 0.1,      },
     ],
   },
   {
@@ -1448,16 +1387,7 @@ return  [
       {
         key: 'gold',
         count: [20, 50],
-        rate: 0.1,
-      },      {
-        type: 'ticket',
-        rate: 0.0025,
-        dungeons: {
-          'chapter3.auran1': 4,
-          'chapter3.auran2': 2,
-          'chapter3.tower2': 1,
-        },
-      },
+        rate: 0.1,      },
     ],
   },
   {
@@ -1716,15 +1646,7 @@ return  [
       {
         key: 'gold',
         count: [20, 50],
-        rate: 0.1,
-      },      {
-        type: 'ticket',
-        rate: 0.005,
-        dungeons: {
-          'chapter3.tower2': 2,
-          'chapter3.auran4': 1,
-        },
-      },
+        rate: 0.1,      },
     ],
   },
   {
@@ -1856,16 +1778,7 @@ return  [
       {
         key: 'gold',
         count: [30, 80],
-        rate: 1,
-      },      {
-        type: 'ticket',
-        rate: 0.002,
-        dungeons: {
-          'chapter3.auran4': 4,
-          'chapter4.westRolan1': 2,
-          'chapter4.westRolan2': 1,
-        },
-      },
+        rate: 1,      },
     ],
   },
   {
@@ -2293,17 +2206,7 @@ return  [
       {
         key: 'gold',
         count: [50, 100],
-        rate: 1,
-      },      {
-        type: 'ticket',
-        rate: 0.005,
-        dungeons: {
-          'chapter4.westRolan1': 4,
-          'chapter4.westRolan2': 2,
-          'chapter4.sanAnthony1': 2,
-          'chapter4.sanAnthony2': 1,
-        },
-      },
+        rate: 1,      },
     ],
   },
   {
@@ -4243,16 +4146,7 @@ return  [
       {
         key: 'gold',
         count: [5, 20],
-        rate: 1,
-      },      {
-        type: 'ticket',
-        rate: 0.0025,
-        dungeons: {
-          'chapter4.westRolan1': 4,
-          'chapter4.westRolan2': 2,
-          'chapter5.byer2': 1,
-        },
-      },
+        rate: 1,      },
     ],
   },
 
@@ -4378,16 +4272,7 @@ return  [
       {
         key: 'gold',
         count: [150, 300],
-        rate: 1,
-      },      {
-        type: 'ticket',
-        rate: 0.005,
-        dungeons: {
-          'chapter4.westRolan2': 2,
-          'chapter5.byer2': 2,
-          'chapter5.byer4': 1,
-        },
-      },
+        rate: 1,      },
     ],
   },
 
@@ -4532,15 +4417,7 @@ return  [
       {
         key: 'gold',
         count: [180, 250],
-        rate: 0.5,
-      },      {
-        type: 'ticket',
-        rate: 0.005,
-        dungeons: {
-          'chapter5.byer4': 1,
-          'chapter5.byer6': 1,
-        },
-      },
+        rate: 0.5,      },
     ],
   },
   {

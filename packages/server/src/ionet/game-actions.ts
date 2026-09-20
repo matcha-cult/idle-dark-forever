@@ -26,7 +26,6 @@ import { WorldAction } from '../modules/logic/world/world.action.js';
 import { BattleAction } from '../modules/logic/battle/battle.action.js';
 import { IdleAction } from '../modules/logic/idle/idle.action.js';
 import { MapAction } from '../modules/logic/map/map.action.js';
-import { DungeonAction } from '../modules/logic/dungeon/dungeon.action.js';
 import { HealthModule } from '../modules/health/health.module.js';
 import { AuthModule } from '../modules/auth/auth.module.js';
 import { MetricsModule } from '../modules/metrics/metrics.module.js';
@@ -36,7 +35,6 @@ import { WorldLogicModule } from '../modules/logic/world/world-logic.module.js';
 import { BattleLogicModule } from '../modules/logic/battle/battle-logic.module.js';
 import { IdleLogicModule } from '../modules/logic/idle/idle-logic.module.js';
 import { MapLogicModule } from '../modules/logic/map/map-logic.module.js';
-import { DungeonLogicModule } from '../modules/logic/dungeon/dungeon-logic.module.js';
 // 面板域（inventory/bank/lootrule/career/produce/shop）的登记片段由面板域维护，
 // 集成方只做组合 —— 避免两处各写一份清单而漂移。
 import { PANEL_ACTION_CLASSES, PANEL_LOGIC_MODULES } from '../modules/logic/panel-actions.js';
@@ -50,7 +48,6 @@ export const GAME_ACTION_CLASSES = [
   BattleAction,
   IdleAction,
   MapAction,
-  DungeonAction,
   ...PANEL_ACTION_CLASSES,
 ] as const;
 
@@ -73,7 +70,6 @@ export const GAME_ACTION_MODULES = [
   BattleLogicModule,
   IdleLogicModule,
   MapLogicModule,
-  DungeonLogicModule,
   ...PANEL_LOGIC_MODULES,
 ] as const;
 

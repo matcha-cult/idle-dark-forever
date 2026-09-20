@@ -1,21 +1,11 @@
 /**
- * 刷怪与副本阶段（原版 `src/logics/EnemyBorn.js`，303 行）。
+ * 刷怪与波次（原版 `src/logics/EnemyBorn.js`）。
  *
  * ## 去 MobX
  *
- * 原版 `DungeonState` 用一个 `autorun` 监听「`phaseBorn` 是否全部结束（`over`）」以推进阶段：
- *
- * ```js
- * this.autoDispose = autorun(() => {
- *   const { phaseBorn, disposed } = this;
- *   if (!disposed && phaseBorn && phaseBorn.every(v => !v || !v.config.total || v.over)) {
- *     this.switchToPhase(this.currentPhase + 1);
- *   }
- * });
- * ```
- *
- * 移植后改为显式：每个 `Born` 在 `over` 置位时回调 `onOver()`，`DungeonState` 用它触发
- * `checkPhaseAdvance()`。触发点只有一个（`Born.onEnemyKilled`），不会漏。
+ * 原版秘境阶段机用一个 `autorun` 监听「`phaseBorn` 是否全部结束」以推进副本阶段；
+ * 该氪金秘境阶段机在 W6 已随旧体系物理删除。现在只保留 open-world 刷怪：
+ * 每个 `Born` 在 `over` 置位时回调 `onOver()`，`EnemyBorn` 用它判定整波是否完成。
  *
  * 随机：`randomType` 的加权抽取、`setTimer` 的随机延迟、quality 抽取全部经
  * `world.rng.spawn`；时间全部来自注入的 `Clock`。
@@ -25,7 +15,6 @@ import type { Clock, Rng, TimerHandle } from '../contracts/ports.js';
 import type { MapData, MonsterSpawnConfig } from '../contracts/data.js';
 import type { BattleWorld } from './battle-world.js';
 import { EnemyUnit } from './enemy-unit.js';
-import { transformEquipLevel } from './util.js';
 
 /**
  * 野外守关 BOSS 的刷新间隔：每完成这么多波出一次（W4）。
@@ -69,7 +58,7 @@ export class Born {
   timer: TimerHandle | null = null;
   disposed = false;
 
-  /** 显式替代 `DungeonState` 的 autorun：`over` 置位时通知阶段控制器。 */
+  /** `over` 置位时通知刷怪控制器（用于波次推进）。 */
   onOver: (() => void) | null = null;
 
   constructor(
@@ -226,14 +215,11 @@ export class EnemyBorn {
   readonly map: string;
 
   borns: Array<Born | null> | null = null;
-  /** 地城阶段的刷怪器（`EnemyUnit.dumpState` 需要按它反查索引）。 */
-  phaseBorn: Array<Born | null> | null = null;
 
   /**
    * 已完成的波数（open-world，W4）。
    *
    * 一波 = 该图 `monsters` 的全部条目都刷满 `config.total` 且已刷出的敌人全部清空。
-   * 地城（`DungeonState`）不用它，沿用 `over` / `phases` 语义。
    */
   wave = 0;
 
@@ -257,7 +243,7 @@ export class EnemyBorn {
       : null;
     const savedWave = savedState?.wave;
     this.wave = typeof savedWave === 'number' && Number.isFinite(savedWave) && savedWave > 0 ? Math.trunc(savedWave) : 0;
-    // 显式接线：任一 Born 刷满清空 → 检查整波是否完成（open-world；地城覆写为空实现）。
+    // 显式接线：任一 Born 刷满清空 → 检查整波是否完成（open-world）。
     this.borns?.forEach((born) => {
       if (born) {
         born.onOver = () => this.onBornOver();
@@ -286,8 +272,7 @@ export class EnemyBorn {
   /**
    * 单个 `Born` 刷满并清空后的回调（由 `Born.onOver` 触发）。
    *
-   * open-world：所有 `borns` 都刷满且清空 → 完成一波。
-   * `DungeonState` **覆写为空实现**，保留它自己的 `over` / 阶段推进语义。
+   * 所有 `borns` 都刷满且清空 → 完成一波。
    */
   onBornOver(): void {
     if (this.isWaveComplete()) {
@@ -349,148 +334,5 @@ export class EnemyBorn {
 
   onPlayerDeath(): void {
     // 原版基类为空实现。
-  }
-}
-
-export interface DungeonSavedState {
-  borns?: BornSavedState[];
-  phaseBorn?: BornSavedState[];
-  currentPhase?: number | null;
-  /** 本 run 已付费（RC2/M5）；恢复时由服务端置位。 */
-  ticketPaid?: boolean;
-}
-
-export class DungeonState extends EnemyBorn {
-  currentPhase: number | null = 0;
-  disposed = false;
-  /**
-   * 本 run 是否**已在进图时付费**（RC2 / 修 M5 双扣票）。
-   *
-   * 由服务端在扣票成功后置位（`WorldService.enterMap`）；通关只**结算**、不再扣票。
-   * 未付费的 run（重登后从持久化位置重建、重复进同图重置、离线重建）不发放通关奖励，
-   * 避免「免费刷秘境」。
-   */
-  ticketPaid = false;
-
-  constructor(world: BattleWorld, clock: Clock, map: string, savedState?: DungeonSavedState | null) {
-    super(world, clock, map, savedState);
-    // 付费标记必须在 switchToPhase 之前恢复：恢复点若已在"通关"位置，
-    // switchToPhase 会当场走结算分支，晚设会导致已付费的 run 被判成未付费。
-    this.ticketPaid = savedState?.ticketPaid === true;
-    this.switchToPhase(
-      savedState ? (savedState.currentPhase ?? 0) : 0,
-      savedState && savedState.phaseBorn,
-    );
-  }
-
-  get phaseData(): NonNullable<MapData['phases']>[number] | undefined {
-    return this.mapData?.phases?.[this.currentPhase ?? 0];
-  }
-
-  /**
-   * 地城**不参与 open-world 波次**（W4）：覆写为 no-op。
-   *
-   * `Born` 的 `over` 语义与 `checkPhaseAdvance` 的接线不变 —— 阶段推进仍由 `phaseBorn`
-   * 的 `onOver` 触发（见 `switchToPhase`），因此秘境行为与改造前完全一致。
-   */
-  override onBornOver(): void {
-    // open-world 波次不适用于秘境阶段。
-  }
-
-  /** 替代原版 `autorun`：阶段内全部刷怪器结束（或无 total）时推进到下一阶段。 */
-  checkPhaseAdvance(): void {
-    if (this.disposed) {
-      return;
-    }
-    const { phaseBorn } = this;
-    if (phaseBorn && phaseBorn.every((v) => !v || !v.config.total || v.over)) {
-      this.switchToPhase((this.currentPhase ?? 0) + 1);
-    }
-  }
-
-  switchToPhase(phase: number, phaseBorn?: Array<BornSavedState | null> | null): void {
-    this.currentPhase = phase;
-    if (this.phaseBorn) {
-      this.phaseBorn.forEach((v) => v?.dispose());
-      this.phaseBorn = null;
-    }
-
-    const phaseData = this.phaseData;
-    if (!phaseData) {
-      // I'm over!
-      // RC2 / M5：票在**进图**时已扣（服务端唯一扣费点），通关**不再二次扣票**，
-      // 也不再按"当前票数"放行 —— 否则进图扣光最后一张票后，通关反而拿不到奖励。
-      if (this.ticketPaid) {
-        this.world.sink.general({
-          text: `dungeon.clear:${this.mapData?.name ?? this.map}`,
-        });
-        const { exp = 0, level = 0, loots } = this.mapData ?? {};
-        this.world.gotExp(
-          exp * (this.world.endlessLevel ? Math.pow(1.5, this.world.endlessLevel) : 1),
-          transformEquipLevel(level),
-        );
-        this.world.loots(loots ?? [], level, 0);
-        this.world.lootEndless();
-      } else {
-        this.world.sink.general({
-          text: `dungeon.noTicket:${this.mapData?.name ?? this.map}`,
-        });
-      }
-      this.currentPhase = null;
-      if (this.world.pendingMaps.length > 0) {
-        const [map, lvl] = this.world.pendingMaps.shift()!;
-        this.world.enterPendingMap(map, lvl);
-      } else {
-        this.world.map = this.mapData?.outside || 'home';
-      }
-      return;
-    }
-    this.phaseBorn = phaseData.monsters
-      ? phaseData.monsters.map(
-          (config, i) =>
-            new Born(
-              this.world,
-              this.clock,
-              config as MonsterSpawnConfig,
-              phaseBorn && phaseBorn[i],
-            ),
-        )
-      : null;
-    // 显式接线：任一刷怪器 over → 尝试推进阶段（原版 autorun）。
-    this.phaseBorn?.forEach((b) => {
-      if (b) {
-        b.onOver = () => this.checkPhaseAdvance();
-      }
-    });
-  }
-
-  override dispose(): void {
-    this.disposed = true;
-    if (this.borns) {
-      this.borns.forEach((v) => v?.dispose());
-    }
-    if (this.phaseBorn) {
-      this.phaseBorn.forEach((v) => v?.dispose());
-    }
-  }
-
-  override dumpState(): Record<string, unknown> {
-    const ret = super.dumpState();
-    ret.phaseBorn = this.phaseBorn && this.phaseBorn.map((v) => v && v.dumpState());
-    ret.currentPhase = this.currentPhase;
-    ret.ticketPaid = this.ticketPaid;
-    return ret;
-  }
-
-  override onPlayerDeath(): void {
-    // Failed!
-    this.world.sink.general({ text: `dungeon.failed:${this.mapData?.name ?? this.map}` });
-    this.currentPhase = null;
-    if (this.world.pendingMaps.length > 0) {
-      const [map, lvl] = this.world.pendingMaps.shift()!;
-      this.world.enterPendingMap(map, lvl);
-    } else {
-      this.world.map = this.mapData?.outside || 'home';
-    }
   }
 }

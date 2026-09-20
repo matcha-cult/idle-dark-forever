@@ -10,7 +10,7 @@
  * 表（scripts/init-db.mjs）：
  *   characters(id text pk, user_id bigint, name text, role text, career text,
  *              level int, state jsonb, created_at timestamptz, last_settle_at timestamptz)
- *   account_state(user_id bigint pk, diamonds int, player_slot_count int, highest_endless_level int, data jsonb, …)
+ *   account_state(user_id bigint pk, diamonds int, player_slot_count int, data jsonb, …)
  */
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';

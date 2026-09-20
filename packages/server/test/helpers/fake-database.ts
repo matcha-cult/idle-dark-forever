@@ -156,8 +156,8 @@ export class FakeDatabase {
         user_id: userId,
         diamonds: Number(params[1]),
         player_slot_count: existing?.player_slot_count ?? 1,
-        highest_endless_level: Number(params[2]),
-        data: parseJson(params[3]) as Record<string, unknown>,
+        highest_endless_level: existing?.highest_endless_level ?? 0,
+        data: parseJson(params[2]) as Record<string, unknown>,
       });
       return { rows: [], rowCount: 1 };
     }

@@ -42,7 +42,7 @@ import {
   pickKeystoneTier,
 } from '../rules/keystone.js';
 import { Camps } from './camps.js';
-import { EnemyBorn, DungeonState, type Born, type BornSavedState, type DungeonSavedState } from './spawner.js';
+import { EnemyBorn, type Born, type BornSavedState } from './spawner.js';
 import { EnemyUnit } from './enemy-unit.js';
 import { PlayerUnit, type PlayerLike } from './player-unit.js';
 import { SkillState } from './skill-state.js';
@@ -78,7 +78,6 @@ export interface LootSlot {
   key: string | null;
   count: number;
   quality?: number;
-  dungeonKey?: string;
   price?: number;
   kind?: 'loot' | 'build';
   handled?: 'pickup' | 'sell' | 'decompose';
@@ -97,13 +96,8 @@ export interface LootService {
   getDecomposeMaterials(slot: LootSlot): Record<string, number>;
 }
 
-/** 原版 `game.endlessTicketRate`（`game.js`，不在本任务范围内）。 */
-const DEFAULT_ENDLESS_TICKET_RATE = 0;
-
 export interface WorldStateLike {
   map?: string;
-  endlessLevel?: number;
-  pendingMaps?: Array<string | [string, number]>;
   enemyBorn?: unknown;
   units?: Array<Record<string, unknown> & { type?: string; unit?: Unit }>;
 }
@@ -117,7 +111,6 @@ export interface BattleWorldOptions {
   logger?: Logger;
   player?: PlayerLike | null;
   map?: string;
-  endlessLevel?: number;
   /** 离线快进倍率（原版 `world.updateRate`，作用于经验与掉落数量）。 */
   updateRate?: number;
   /**
@@ -132,8 +125,6 @@ export interface BattleWorldOptions {
   medicineLevel?: (type: string) => number;
   /** 原版 `game.onEnemyKilled(type, count, role)`。 */
   onEnemyKilled?: (type: string, count: number, role?: string) => void;
-  /** 原版 `game.endlessTicketRate`。 */
-  endlessTicketRate?: number;
 }
 
 /**
@@ -207,9 +198,6 @@ export class BattleWorld {
   updateRate = 1;
   /** 角色经验倍率（见 `BattleWorldOptions.expRate`）；只影响经验，不影响掉落。 */
   expRate = 1;
-  endlessLevel = 0;
-
-  pendingMaps: Array<[string, number]> = [];
 
   /** 原版 `world._map`。 */
   private _map = 'home';
@@ -217,7 +205,6 @@ export class BattleWorld {
   private readonly lootService: LootService | null;
   private readonly medicineLevel: (type: string) => number;
   private readonly onEnemyKilledHook: (type: string, count: number, role?: string) => void;
-  readonly endlessTicketRate: number;
 
   private disposed = false;
 
@@ -242,13 +229,11 @@ export class BattleWorld {
     this.scheduler = new SkillScheduler(this.logicClock);
     this.player = options.player ?? null;
     this._map = options.map ?? 'home';
-    this.endlessLevel = options.endlessLevel ?? 0;
     this.updateRate = options.updateRate ?? 1;
     this.expRate = normalizePositive(options.expRate, 1);
     this.lootService = options.lootService ?? null;
     this.medicineLevel = options.medicineLevel ?? (() => 0);
     this.onEnemyKilledHook = options.onEnemyKilled ?? (() => {});
-    this.endlessTicketRate = options.endlessTicketRate ?? DEFAULT_ENDLESS_TICKET_RATE;
 
     const root = options.rng;
     this.rng = {
@@ -272,23 +257,11 @@ export class BattleWorld {
 
   set map(map: string) {
     this._map = map;
-    this.endlessLevel = 0;
     this.onMapChanged();
   }
 
   get mapData(): MapData | undefined {
     return this.tables.maps[this._map];
-  }
-
-  /**
-   * 切到 `pendingMaps` 里的下一张图（原版在 `EnemyBorn` 里直接写
-   * `world._map` / `world._endlessLevel` 再手动 `onMapChanged()`）。
-   * 这里收敛成世界自己的方法，避免外部改私有字段。
-   */
-  enterPendingMap(map: string, level: number): void {
-    this._map = map;
-    this.endlessLevel = level;
-    this.onMapChanged();
   }
 
   getMedicineLevel(type: string): number {
@@ -362,14 +335,14 @@ export class BattleWorld {
   }
 
   /**
-   * 野外（非秘境）怪物等级覆写（W4）。
+   * 野外怪物等级覆写（W4）。
    *
    * 普通 = 地图等级 / 稀有（`quality >= 1`）+1；守关 BOSS 由 `EnemyBorn.trySpawnWorldBoss`
-   * 在生成后覆写为地图等级 +2。秘境图仍走 `enemyData.level + quality * 4` 的旧公式（W6 再改）。
+   * 在生成后覆写为地图等级 +2。
    */
   private applyOpenWorldLevelOverride(unit: EnemyUnit, quality: number): void {
     const mapData = this.mapData;
-    if (!mapData || mapData.isDungeon === true) {
+    if (!mapData) {
       return;
     }
     const mapLevel = mapData.level;
@@ -451,21 +424,12 @@ export class BattleWorld {
     const md = this.mapData;
     this.sink.mapEnter(this._map, md?.name ?? this._map);
 
-    if (md?.isDungeon) {
-      this.enemyBorn = new DungeonState(
-        this,
-        this.logicClock,
-        this._map,
-        (mapState?.enemyBorn ?? null) as DungeonSavedState | null,
-      );
-    } else {
-      this.enemyBorn = new EnemyBorn(
-        this,
-        this.logicClock,
-        this._map,
-        (mapState?.enemyBorn ?? null) as { borns?: BornSavedState[]; wave?: number } | null,
-      );
-    }
+    this.enemyBorn = new EnemyBorn(
+      this,
+      this.logicClock,
+      this._map,
+      (mapState?.enemyBorn ?? null) as { borns?: BornSavedState[]; wave?: number } | null,
+    );
   }
 
   focusEnemy(target: EnemyUnit): void {
@@ -502,7 +466,7 @@ export class BattleWorld {
   }
 
   /**
-   * 技能使用通知（数据表 `skills.ts` / `nightmare.ts` 的 `effect` 会调用）。
+   * 技能使用通知（数据表 `skills.ts` 的 `effect` 会调用）。
    *
    * ⚠️ 本方法此前**缺失**，导致使用这些技能的战斗抛
    * `world.sendSkillUsage is not a function` —— 在线时被 tick 的 try/catch 吞掉、
@@ -708,12 +672,8 @@ export class BattleWorld {
     }
     const updateRate = noUpdateRate ? 1 : this.updateRate;
 
-    if (this.endlessLevel) {
-      level += 35 * (this.endlessLevel - 1);
-    }
-
     // 掉落等级门槛：**min(怪物等级, 地图等级)**（用户口径）。
-    // `level` = 击杀时敌人等级 / 通关时地图等级（无尽层已叠加）；地图等级取 `mapData.level`。
+    // `level` = 击杀时敌人等级 / 通关时地图等级；地图等级取 `mapData.level`。
     // 地图无 `level`（如 `home`）时退化为只用 `level`，避免把无等级地图的掉落一刀切掉。
     const mapLevel = this.mapData?.level;
     const gateLevel = typeof mapLevel === 'number' ? Math.min(level, mapLevel) : level;
@@ -726,7 +686,6 @@ export class BattleWorld {
         count?: [number, number] | number;
         rate?: number;
         mfRate?: number;
-        dungeons?: Record<string, number>;
         value?: number;
         position?: string;
         items?: string[];
@@ -747,29 +706,7 @@ export class BattleWorld {
       const count =
         entry.type === 'maxLevel' ? 1 : Math.ceil(rate * updateRate - this.rng.loot.next());
       for (let i = 0; i < count; i++) {
-        if (entry.type === 'ticket') {
-          if (entry.dungeons) {
-            const keys = Object.keys(entry.dungeons);
-            const totalWeight = keys.reduce((v, key) => v + entry.dungeons![key]!, 0);
-            let dice = this.rng.loot.next() * totalWeight;
-            const result = keys.find((key) => {
-              const weight = entry.dungeons![key]!;
-              if (dice < weight) {
-                return true;
-              }
-              dice -= weight;
-              return false;
-            });
-            slots.push({
-              key: 'ticket',
-              count: 1,
-              quality: 0,
-              dungeonKey: result,
-              kind: 'loot',
-              handled: 'pickup',
-            });
-          }
-        } else if (entry.type === 'equip' || entry.type === 'specialEquip') {
+        if (entry.type === 'equip' || entry.type === 'specialEquip') {
           if (!this.lootService) {
             this.logger.warn('[combat] loots: equip entry skipped, no LootService injected', {
               level,
@@ -845,7 +782,6 @@ export class BattleWorld {
           let total = (this.rng.loot.next() * (max - min + 1) + min) * count;
           if (entry.key === 'gold') {
             total *= this.playerUnit.gf;
-            total *= this.endlessLevel ? Math.pow(1.5, this.endlessLevel) : 1;
           }
           slots.push({
             key: entry.key,
@@ -898,31 +834,11 @@ export class BattleWorld {
     this.lootGoods([{ key, count: 1, quality: 0, kind: 'loot', handled: 'pickup' }]);
   }
 
-  lootEndless(_showToast = false): LootSlot[] | undefined {
-    if (this.endlessLevel > 0) {
-      if (this.rng.loot.next() < this.endlessTicketRate) {
-        return this.lootGoods([
-          {
-            key: 'ticket',
-            count: 1,
-            quality: 0,
-            dungeonKey: 'nightmare.' + (this.endlessLevel + 1),
-            kind: 'loot',
-            handled: 'pickup',
-          },
-        ]);
-      }
-    }
-    return undefined;
-  }
-
   // ────────────────────────────── 存档 ──────────────────────────────
 
   dumpState(): Record<string, unknown> {
     return {
       map: this._map,
-      pendingMaps: this.pendingMaps.map((v) => [v[0], v[1]]),
-      endlessLevel: this.endlessLevel,
       updateRate: this.updateRate,
       enemyBorn: this.enemyBorn ? this.enemyBorn.dumpState() : undefined,
       units: this.units.map((v) => v.dumpState()),
@@ -933,17 +849,9 @@ export class BattleWorld {
   load(player: PlayerLike, worldState: WorldStateLike): void {
     this.player = player;
     this._map = worldState.map ?? 'home';
-    this.endlessLevel = worldState.endlessLevel ?? 0;
-
-    if (worldState.pendingMaps) {
-      this.pendingMaps = worldState.pendingMaps.map((v) =>
-        typeof v === 'string' ? [v, 0] : [v[0], v[1]],
-      );
-    }
 
     if (!this.tables.maps[this._map]) {
       this._map = 'home';
-      this.endlessLevel = 0;
     }
     this.onMapChanged(worldState as { enemyBorn?: unknown });
 

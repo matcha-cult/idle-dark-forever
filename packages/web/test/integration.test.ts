@@ -69,12 +69,10 @@ const PLAYER_STATE: PlayerStateDto = {
   selectedSkills: [],
   selectedEnhances: [],
   skillExp: {},
-  dungeonTickets: {},
   medicineLevel: {},
   medicineExp: 0,
   maxMedicineExp: 100,
   map: 'home',
-  endlessLevel: 0,
   pendingOfflineMs: 60_000,
 };
 
@@ -125,10 +123,8 @@ function makeSlot(overrides: Partial<InventorySlotDto> = {}): InventorySlotDto {
 
 const SNAPSHOT: WorldSnapshotDto = {
   map: 'home',
-  endlessLevel: 0,
   units: [makeUnit()],
-  maps: [{ key: 'home', name: '家园', isDungeon: false, level: 1, lockedReason: null, ticketCount: 0 }],
-  pendingMaps: [],
+  maps: [{ key: 'home', name: '家园', level: 1, lockedReason: null }],
   updateRate: 1,
   paused: false,
 };
@@ -161,7 +157,7 @@ function createHarness(storage: StorageLike = createMemoryStorage()): Harness {
 
   server
     .on(AUTH_CMD.cmd, AUTH_CMD.me, () =>
-      ok({ userId: 'u1', displayName: '测试员', diamonds: 50, playerSlotCount: 1, highestEndlessLevel: 0 }),
+      ok({ userId: 'u1', displayName: '测试员', diamonds: 50, playerSlotCount: 1 }),
     )
     .on(PLAYER_CMD.cmd, PLAYER_CMD.list, () => ok([PLAYER_META]))
     .on(PLAYER_CMD.cmd, PLAYER_CMD.select, () => ok(PLAYER_STATE))

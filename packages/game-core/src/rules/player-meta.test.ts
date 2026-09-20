@@ -12,11 +12,7 @@ import {
   asStringArray,
   asStringOrNull,
   entriesOf,
-  getEndlessKeyName,
-  getEndlessLevel,
-  getEndlessMapLevel,
   PlayerMeta,
-  romes,
   transformEquipLevel,
   untransformEquipLevel,
 } from './player-meta.js';
@@ -139,34 +135,6 @@ describe('等级换算（原样移植）', () => {
     expect(untransformEquipLevel(1000)).toBe(250);
   });
 
-  it('getEndlessLevel 只认 nightmare. 前缀', () => {
-    expect(getEndlessLevel('nightmare.3')).toBe(3);
-    expect(getEndlessLevel('nightmare.10')).toBe(10);
-    expect(getEndlessLevel('nightmare.abc')).toBe(0);
-    expect(getEndlessLevel('nightmare.')).toBe(0);
-    expect(getEndlessLevel('home')).toBeUndefined();
-    expect(getEndlessLevel('')).toBeUndefined();
-    expect(getEndlessLevel(null)).toBeUndefined();
-    expect(getEndlessLevel(undefined)).toBeUndefined();
-    expect(getEndlessLevel(42)).toBeUndefined();
-  });
-
-  it('getEndlessKeyName 使用罗马数字，超表则回退阿拉伯数字', () => {
-    expect(getEndlessKeyName('nightmare.1')).toBe('无尽噩梦I');
-    expect(getEndlessKeyName('nightmare.3')).toBe('无尽噩梦III');
-    expect(getEndlessKeyName('nightmare.20')).toBe('无尽噩梦XX');
-    expect(getEndlessKeyName('nightmare.21')).toBe('无尽噩梦21');
-    expect(getEndlessKeyName('nightmare.0')).toBeUndefined();
-    expect(getEndlessKeyName('home')).toBeUndefined();
-    expect(romes.length).toBe(21);
-  });
-
-  it('getEndlessMapLevel：250 + 35*(level-1)；非无尽得到 NaN（原版语义）', () => {
-    expect(getEndlessMapLevel('nightmare.1')).toBe(250);
-    expect(getEndlessMapLevel('nightmare.3')).toBe(320);
-    expect(Number.isNaN(getEndlessMapLevel('home'))).toBe(true);
-    expect(Number.isNaN(getEndlessMapLevel(null))).toBe(true);
-  });
 });
 
 describe('PlayerMeta', () => {

@@ -72,7 +72,7 @@ export interface TickBudget {
 export { OFFLINE_MAX_MS, OFFLINE_PAUSE_AFTER_MS } from '../shared/offline.js';
 
 /**
- * 经验倍率：实现已上移 `shared/exp-rate.ts`（dungeon 的离线编排也要用，
- * 放这里会让 dungeon 反向 import battle）。此处**再导出**保持既有 import 不破坏。
+ * 经验倍率：实现已上移 `shared/exp-rate.ts`（idle 的离线编排也要用，
+ * 放这里会让 idle 反向 import battle）。此处**再导出**保持既有 import 不破坏。
  */
 export { EXP_RATE, EXP_RATE_MAX, parseExpRate } from '../shared/exp-rate.js';

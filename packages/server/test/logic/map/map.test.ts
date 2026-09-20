@@ -1,18 +1,14 @@
 /**
  * 地图控制器与地图纯函数单测（09 R2）
  *
- * 覆盖：`resolveWorldPosition` / `evaluateMapUnlock` / `pickOpenWorldMap`（RD4）边界，
- * 以及 `MapLogicService` 的 list / enter（解锁 + 幂等转发）/ leave / continueOpenWorld。
+ * 覆盖：`resolveWorldPosition` / `evaluateMapUnlock` 边界，
+ * 以及 `MapLogicService` 的 list / enter（解锁 + 幂等转发）/ leave。
  */
 import { describe, expect, it } from 'vitest';
 import { createDefaultTables, type DataTables } from '@idle-dark/game-core';
 import { MapLogicService } from '../../../src/modules/logic/map/map.logic.service.js';
 import type { WorldService } from '../../../src/modules/logic/world/world.service.js';
-import {
-  evaluateMapUnlock,
-  pickOpenWorldMap,
-  resolveWorldPosition,
-} from '../../../src/modules/logic/shared/map-dto.js';
+import { evaluateMapUnlock, resolveWorldPosition } from '../../../src/modules/logic/shared/map-dto.js';
 import { FIXED_NOW, makeFakeContexts, makeFixture } from '../_helpers.js';
 import type { PlayerContextService } from '../../../src/modules/logic/shared/player-context.service.js';
 
@@ -50,18 +46,10 @@ function makeService(calls: WorldCalls, contexts?: PlayerContextService): MapLog
 }
 
 describe('resolveWorldPosition', () => {
-  it('缺失 → home/0；未知地图 → home；endlessLevel 非法 → 0', () => {
-    expect(resolveWorldPosition(tables, undefined)).toEqual({ map: 'home', endlessLevel: 0 });
-    expect(resolveWorldPosition(tables, { map: 'no.such.map', endlessLevel: 3 })).toEqual({
-      map: 'home',
-      endlessLevel: 3,
-    });
-    expect(resolveWorldPosition(tables, { map: 'home', endlessLevel: Number.NaN })).toEqual({
-      map: 'home',
-      endlessLevel: 0,
-    });
-    expect(resolveWorldPosition(tables, { map: 'home', endlessLevel: Number.POSITIVE_INFINITY }).endlessLevel).toBe(0);
-    expect(resolveWorldPosition(tables, { map: 'home', endlessLevel: 2.9 }).endlessLevel).toBe(2);
+  it('缺失 → home；未知地图 → home；合法地图原样', () => {
+    expect(resolveWorldPosition(tables, undefined)).toEqual({ map: 'home' });
+    expect(resolveWorldPosition(tables, { map: 'no.such.map' })).toEqual({ map: 'home' });
+    expect(resolveWorldPosition(tables, { map: 'world.1' })).toEqual({ map: 'world.1' });
   });
 });
 
@@ -90,30 +78,6 @@ describe('evaluateMapUnlock', () => {
     expect(evaluateMapUnlock(tables.maps['world.10']!.requirement, f.player, 'home')).toBe(false);
     f.player.markWorldBossKilled('world.9');
     expect(evaluateMapUnlock(tables.maps['world.10']!.requirement, f.player, 'home')).toBe(true);
-  });
-});
-
-describe('pickOpenWorldMap（RD4）', () => {
-  const dungeon = Object.keys(tables.maps).find((key) => tables.maps[key]?.isDungeon === true);
-  const open = Object.keys(tables.maps).find((key) => !tables.maps[key]?.isDungeon);
-
-  it('优先级：candidate → persisted → home', () => {
-    // world.1 是开放世界图；pickOpenWorldMap 只看"非秘境"属性。
-    expect(pickOpenWorldMap(tables, 'home', 'world.1')).toBe('home');
-    expect(pickOpenWorldMap(tables, undefined, 'world.1')).toBe('world.1');
-    expect(pickOpenWorldMap(tables, undefined, undefined)).toBe('home');
-  });
-
-  it('候选非法 / 是秘境 / 不存在 → 落到下一档，最终 home', () => {
-    expect(dungeon).toBeTruthy();
-    // nightmare.slime 在这份数据里就是秘境（isDungeon=true）
-    expect(tables.maps['nightmare.slime']?.isDungeon).toBe(true);
-    expect(pickOpenWorldMap(tables, 'nightmare.slime', 'world.1')).toBe('world.1');
-    expect(pickOpenWorldMap(tables, dungeon, 'world.1')).toBe('world.1');
-    expect(pickOpenWorldMap(tables, 'no.such.map', 'world.1')).toBe('world.1');
-    expect(pickOpenWorldMap(tables, '', '')).toBe('home');
-    expect(pickOpenWorldMap(tables, null, dungeon)).toBe('home');
-    expect(open).toBeTruthy();
   });
 });
 
@@ -211,7 +175,7 @@ describe('MapLogicService', () => {
     expect(calls.enterMap).toHaveLength(0);
   });
 
-  it('snapshot / leave 转发到 battle；continueOpenWorld 走 open-world 目标', async () => {
+  it('snapshot / leave 转发到 battle', async () => {
     const calls: WorldCalls = { enterMap: [], leave: [], snapshot: [] };
     const fixture = makeFixture();
     const contexts = makeFakeContexts(fixture);
@@ -220,19 +184,5 @@ describe('MapLogicService', () => {
     await service.leave(1, 'char-1');
     expect(calls.snapshot).toHaveLength(1);
     expect(calls.leave).toEqual([{ userId: 1, characterId: 'char-1' }]);
-
-    // 持久化位置 home（开放图，无前置）→ 队列耗尽转它（RD4 第二档）
-    fixture.extras.worldMaps['char-1'] = { map: 'home', endlessLevel: 0 };
-    await service.continueOpenWorld(1, 'char-1');
-    expect(calls.enterMap.at(-1)?.mapKey).toBe('home');
-
-    // candidate = run.outside 优先
-    await service.continueOpenWorld(1, 'char-1', 'home');
-    expect(calls.enterMap.at(-1)?.mapKey).toBe('home');
-
-    // candidate 是秘境 → 回落持久化开放位置（而非停在秘境）
-    const dungeon = Object.keys(tables.maps).find((key) => tables.maps[key]?.isDungeon === true) as string;
-    await service.continueOpenWorld(1, 'char-1', dungeon);
-    expect(calls.enterMap.at(-1)?.mapKey).toBe('home');
   });
 });
