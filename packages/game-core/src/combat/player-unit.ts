@@ -42,7 +42,15 @@ export interface EquipmentSlotLike {
   maxHp: number;
   mpRecovery?: number;
   mpFromKill?: number;
-  affixes: Array<{ affixData: { hooks?: AttrHooks }; value: number }>;
+  /**
+   * 词缀实例列表（词缀按 `key` 持久化，`affixData` 可能查不到 → `undefined`）。
+   *
+   * ⚠️ 这里曾把 `affixData` 谎报为**非空**（AGENTS §17 同类根因）：`AffixInfo.affixData`
+   * 明确可返回 `undefined`（`rules/inventory-slot.ts:123-128`），于是 `rebindEquipmentHooks`
+   * 里 `affixInfo.affixData.hooks` 在存档含「已从词缀池删除的 key」时**载入即抛 TypeError**。
+   * 类型必须允许缺失，`tsc` 才能逼出判空。
+   */
+  affixes: Array<{ affixData?: { hooks?: AttrHooks } | undefined; value: number }>;
 }
 
 export interface RoleLike {
@@ -226,7 +234,9 @@ export class PlayerUnit extends Unit {
         return;
       }
       for (const affixInfo of slot.affixes) {
-        const hooks = affixInfo.affixData.hooks;
+        // 词缀按 key 持久化：池子里已删除该 key 时 `affixData` 为 undefined（老存档 / 脏数据）。
+        // 必须判空（缺失即安全跳过），否则载入整个角色都会抛错。
+        const hooks = affixInfo.affixData?.hooks;
         if (!hooks) {
           continue;
         }
