@@ -97,7 +97,7 @@ describe('MapLogicService', () => {
       const ordered = prev.level < cur.level || (prev.level === cur.level && prev.key <= cur.key);
       expect(ordered, `${prev.key}(${prev.level}) 应排在 ${cur.key}(${cur.level}) 之前`).toBe(true);
     }
-    // 1 级角色的解锁面：home 与 level 0 的 world.1 解锁，高段图锁定且带文案。
+    // 1 级角色的解锁面：home 与 level 1 的 world.1 解锁，高段图锁定且带文案。
     const world1 = result.data.find((m) => m.key === 'world.1');
     expect(world1?.unlocked).toBe(true);
     expect(world1?.lockedReason).toBeNull();

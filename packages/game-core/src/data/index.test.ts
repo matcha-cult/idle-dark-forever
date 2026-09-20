@@ -533,11 +533,11 @@ describe('E6/P11 + 工艺通货：掉落门禁与实装清单', () => {
     }
   });
 
-  it('0 级起始战斗图存在（W3 新地图种子 world.1）', () => {
+  it('1 级起始战斗图存在（W3 新地图种子 world.1；段首取 1 级）', () => {
     const start = tables.maps['world.1'];
     expect(start).toBeDefined();
-    expect(start?.level).toBe(0);
-    expect(start?.requirement?.level).toBe(0);
+    expect(start?.level).toBe(1);
+    expect(start?.requirement?.level).toBe(1);
   });
 
   it('DEFAULT_LEVEL 的每个底材 key 都存在于 goods（W3 旧引用清理审计）', () => {

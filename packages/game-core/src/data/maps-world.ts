@@ -5,7 +5,7 @@
  * 结构：
  *  - `home`：原样保留的安全区（无怪、无进入条件）；
  *  - `world.1` ~ `world.13`：13 张战斗图，`level` = 等级段下界
- *    （`0/5/15/25/35/45/55/65/75` 各 1 张，`85+` 共 4 张）；`requirement` 只保留 `level`；
+ *    （`1/5/15/25/35/45/55/65/75` 各 1 张，`85+` 共 4 张）；`requirement` 只保留 `level`；
  *  - 每张图带一个 `boss`（守关 BOSS 的敌人 key，W4 消费）。
  *
  * ⚠️ 本文件是**纯数据模块，无模块级副作用**：只有对象字面量，不注册、不 mock、不读写全局。
@@ -62,12 +62,13 @@ const __home: MapEntry = {
 
 const __world1: MapEntry = {
   key: 'world.1',
-  level: 0,
+  // 段首图取 **1 级**（角色初始就是 1 级）：0 级不符合实际，且 0 级怪的经验窗口会被压到 <10。
+  level: 1,
   name: '边境荒野',
   hint: '王国边境的荒芜地带，弱小的史莱姆在此游荡。',
-  requirement: { level: 0 },
+  requirement: { level: 1 },
   exp: 5000,
-  // 段 0：只有 `slime.minimal` 是数值最弱的可自动索敌杂兵；BOSS 用同系的巨史莱姆。
+  // 段 0~5：只有 `slime.minimal` 是数值最弱的可自动索敌杂兵；BOSS 用同系的巨史莱姆。
   boss: 'slime.giant.enemy',
   monsters: spawn({
     'slime.minimal': 10,

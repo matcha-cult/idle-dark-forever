@@ -53,7 +53,7 @@ describe('刷怪池可战性门禁', () => {
     }
   });
 
-  it('回归：world.1（段 0）不得再用机关/中立特例，且 BOSS 必须是低数值怪', () => {
+  it('回归：world.1（段首，1 级）不得再用机关/中立特例，且 BOSS 必须是低数值怪', () => {
     const world1 = tables.maps['world.1'];
     expect(world1).toBeDefined();
     const normalKeys = (world1!.monsters ?? []).flatMap((spawn) => Object.keys(spawn.types ?? {}));

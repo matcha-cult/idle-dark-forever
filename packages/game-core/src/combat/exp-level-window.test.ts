@@ -44,8 +44,8 @@ describe('经验衰减窗口与等级段对齐', () => {
     expect(player.exp).toBe(10);
   });
 
-  it('每个段下界 L 都有经验（L=0/15/25/75/85）', () => {
-    for (const level of [0, 15, 25, 75, 85]) {
+  it('每个段下界 L 都有经验（L=1/15/25/75/85）', () => {
+    for (const level of [1, 15, 25, 75, 85]) {
       const { amounts, player } = killDummy(level, level);
       expect(amounts, `map=${level} player=${level}`).toEqual([10]);
       expect(player.exp, `map=${level}`).toBeGreaterThan(0);
@@ -64,7 +64,7 @@ describe('经验衰减窗口与等级段对齐', () => {
   });
 
   it('越级 10 级以上：归零', () => {
-    const { amounts } = killDummy(0, 15);
+    const { amounts } = killDummy(1, 15);
     expect(amounts).toEqual([]);
   });
 

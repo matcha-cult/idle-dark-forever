@@ -2,7 +2,7 @@
  * W3 新地图种子边界单测（R2）。
  *
  * 覆盖：
- *  - 9 个等级段（0/5/15/25/35/45/55/65/75）各恰好 1 张图，85+ 恰好 4 张；
+ *  - 9 个等级段（1/5/15/25/35/45/55/65/75）各恰好 1 张图，85+ 恰好 4 张；
  *  - `home` 精确保留（安全区：无怪、无进入条件）；
  *  - 每张战斗图：`requirement` = `{level}`（world.1）或 `{level, bossKilled: 上一段}`（W4 解锁链）、
  *    有 `boss`、刷怪条目合法且带一波的 `total`；
@@ -20,8 +20,8 @@ const tables: DataTables = createDefaultTables();
 const WORLD_PREFIX = 'world.';
 const worldMaps = Object.entries(tables.maps).filter(([key]) => key.startsWith(WORLD_PREFIX));
 
-/** 各等级段的段下界（§2.2 第 1 条）。 */
-const SEGMENT_LEVELS = [0, 5, 15, 25, 35, 45, 55, 65, 75] as const;
+/** 各等级段的段下界（§2.2 第 1 条；段首取 1 级，角色初始即 1 级）。 */
+const SEGMENT_LEVELS = [1, 5, 15, 25, 35, 45, 55, 65, 75] as const;
 /** 85+ 段的图数（H2 暂定 4 张）。 */
 const HIGH_SEGMENT_COUNT = 4;
 

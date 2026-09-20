@@ -722,7 +722,7 @@ __IDLE_DARK__                   // 根 store（临时排查）
 
 - 地图种子在 `packages/game-core/src/data/maps-world.ts`（旧 `data/maps.ts` 已物理删除）。
   `home`（自宅）保留；战斗图为 `world.1`…`world.13`（**9 段各 1 张**，等级 = 段下界
-  `0/5/15/25/35/45/55/65/75`；**85+ 共 4 张**，等级 85）。
+  `1/5/15/25/35/45/55/65/75`；**85+ 共 4 张**，等级 85）。段首取 **1 级**（角色初始即 1 级）。
 - 解锁：`Requirement` 只保留 `level`（**`stories`/`beforeStories` 已删除**），并新增可选
   `bossKilled?: string`（上一段守关 BOSS 所在图 key）。`world.2..9` 接 `world.(N-1)`；
   `world.10..13` 都接 `world.9`。`checkRequirement` 中 `bossKilled` 缺失即 fail-closed。
@@ -735,7 +735,7 @@ __IDLE_DARK__                   // 根 store（临时排查）
 - **怪物等级**（`EnemyUnit.levelOverride`，`BattleWorld.addEnemy` 对非混沌图设置）：
   普通 = 地图等级 / 稀有（`quality>=1`）= +1 / 守关 BOSS = +2。地图无 `level` 时回落旧公式。
 - **经验衰减必须按怪物真实等级比较**（`EnemyUnit.kill` → `world.gotExp(this.exp, this.level)`）：
-  经验窗口 = `玩家等级 < 地图等级 + 10`，与段位一一对应（world.1 → <10、world.3 → <25、world.4 → <35 …）。
+  经验窗口 = `玩家等级 < 地图等级 + 10`，与段位一一对应（world.1 → <11、world.3 → <25、world.4 → <35 …）。
   ⚠️ **不要再把怪物等级 `transformEquipLevel` 减半**：减半会让 `dis = 玩家 − 地图/2`，
   world.4（L=25）起玩家一到进图门槛就 `dis≥10`、经验恒 0 → 进度死锁在 ~Lv.20。
   `transformEquipLevel` 只用于装备等级口径（如 `stunResist`），不要用在经验判定。
