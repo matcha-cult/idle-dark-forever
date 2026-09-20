@@ -85,6 +85,7 @@ describe('maps-world 新地图种子', () => {
         expect(spawn.randomPosition, key).toBe(true);
         expect(spawn.quality, key).toEqual([90, 9, 1]);
         expect(Number.isFinite(spawn.delay), key).toBe(true);
+        expect(spawn.delay, `${key} 每只刷新间隔`).toBe(2000);
         expect(Number.isFinite(spawn.warmup), key).toBe(true);
         expect(spawn.type, `${key} 应使用加权 types 而不是单 type`).toBeUndefined();
         const types = spawn.types ?? {};

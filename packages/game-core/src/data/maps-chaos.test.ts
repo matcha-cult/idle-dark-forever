@@ -42,9 +42,10 @@ describe('maps-chaos 混沌仪地图种子', () => {
       const monsters = map.monsters ?? [];
       expect(monsters.length, key).toBeGreaterThanOrEqual(1);
       for (const spawn of monsters) {
-        // W12：每波 4 只、同屏上限 4 只（含 BOSS 与召唤物）。
+        // W12：每波 4 只、同屏上限 4 只、每只间隔 2s（含 BOSS 与召唤物）。
         expect(spawn.total, `${key} total`).toBe(4);
         expect(spawn.max, `${key} max`).toBe(4);
+        expect(spawn.delay, `${key} delay`).toBe(2000);
         const types = spawn.types ?? {};
         expect(Object.keys(types).length, key).toBeGreaterThan(0);
         for (const [enemyKey, weight] of Object.entries(types)) {

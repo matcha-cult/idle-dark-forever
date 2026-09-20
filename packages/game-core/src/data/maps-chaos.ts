@@ -21,7 +21,8 @@ import { chaosLevelOfTier, chaosMapKeyOfTier } from '../rules/chaos.js';
 /** 战斗图刷怪条目的统一展示品质分布（普通 / 稀有 / 传奇）。 */
 const QUALITY: number[] = [90, 9, 1];
 const WARMUP = 1000;
-const DELAY = 5000;
+/** 每只怪的刷新间隔（实际会在 2000 ± 500ms 内抖动，见 `Born.setTimer`）。 */
+const DELAY = 2000;
 /** 同屏最多 4 只怪物（含守关 BOSS 与召唤物；达到上限即暂停自然刷新）。 */
 const MAX = 4;
 /** 一波的刷怪总量（W4）：每 20 波出一次守关 BOSS。 */
