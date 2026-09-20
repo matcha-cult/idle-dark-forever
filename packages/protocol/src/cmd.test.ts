@@ -15,7 +15,6 @@ import {
   PRODUCE_CMD,
   PUBLIC_ACTION_KEYS,
   SHOP_CMD,
-  STORY_CMD,
   SYSTEM_CMD,
   WORLD_CMD,
   cmdMerge,
@@ -33,7 +32,6 @@ const DOMAIN_CMDS = {
   LOOTRULE_CMD,
   CAREER_CMD,
   PRODUCE_CMD,
-  STORY_CMD,
   SHOP_CMD,
   IDLE_CMD,
   MAP_CMD,
@@ -64,7 +62,6 @@ describe('cmd 段规划', () => {
     expect(LOOTRULE_CMD.cmd).toBe(CMD_SEGMENTS.lootrule);
     expect(CAREER_CMD.cmd).toBe(CMD_SEGMENTS.career);
     expect(PRODUCE_CMD.cmd).toBe(CMD_SEGMENTS.produce);
-    expect(STORY_CMD.cmd).toBe(CMD_SEGMENTS.story);
     expect(SHOP_CMD.cmd).toBe(CMD_SEGMENTS.shop);
     expect(IDLE_CMD.cmd).toBe(CMD_SEGMENTS.idle);
     expect(MAP_CMD.cmd).toBe(CMD_SEGMENTS.map);

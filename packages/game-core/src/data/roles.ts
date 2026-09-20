@@ -48,7 +48,6 @@ return  {
   atk: 0.5,
   atkSpeed: 1,
   requirement: {
-    stories: ['aleanor-startup'],
   },
 
   attrBase: {

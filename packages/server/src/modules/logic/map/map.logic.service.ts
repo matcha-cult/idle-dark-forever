@@ -34,7 +34,7 @@ export class MapLogicService {
     if (player === null) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);
     const extras = await this.contexts.extrasOf(userId);
     const position = resolveWorldPosition(this.contexts.tables, extras.worldMaps[characterId]);
-    return ok(mapListDtoOf(this.contexts.tables, player, extras, position.map));
+    return ok(mapListDtoOf(this.contexts.tables, player, position.map));
   }
 
   /** 当前世界快照（与 `world.snapshot` 同形；控制器统一入口）。 */
@@ -59,7 +59,7 @@ export class MapLogicService {
     if (player === null) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);
     const extras = await this.contexts.extrasOf(userId);
     const position = resolveWorldPosition(this.contexts.tables, extras.worldMaps[characterId]);
-    if (!evaluateMapUnlock(map.requirement, player, position.map, extras)) {
+    if (!evaluateMapUnlock(map.requirement, player, position.map)) {
       return fail(BusinessErrorCode.MAP_LOCKED);
     }
     return this.battle.enterMap(userId, characterId, mapKey, ...(opId !== undefined ? [opId] : []));

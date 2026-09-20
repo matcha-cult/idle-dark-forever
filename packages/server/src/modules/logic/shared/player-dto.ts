@@ -61,10 +61,6 @@ export interface DungeonRunEntry {
 
 /** 账号级、`Player` 之外的附加状态（服务端侧车，落在 `account_state.data`）。 */
 export interface AccountExtras {
-  /** 剧情三态：`'task'` / `'done'`（原版 `game.storiesMap`）。 */
-  storiesMap: Record<string, string>;
-  /** 进行中的击杀任务：enemyKey → { storyKey: 剩余击杀数 }。 */
-  enemyTasks: Record<string, Record<string, number>>;
   /** 药剂等级：type → level。 */
   medicineLevel: Record<string, number>;
   medicineExp: number;
@@ -107,8 +103,6 @@ export interface AccountExtras {
 
 export function createAccountExtras(): AccountExtras {
   return {
-    storiesMap: {},
-    enemyTasks: {},
     medicineLevel: {},
     medicineExp: 0,
     worldSeeds: {},
@@ -425,8 +419,6 @@ export function playerStateDtoOf(
     selectedEnhances: [...(career?.selectedEnhances ?? [])],
     skillExp: skillExpRecord(player.skillExp),
     dungeonTickets: numberRecord(player.dungeonTickets),
-    storiesDone: storiesDoneOf(options.extras),
-    enemyTasks: cloneEnemyTasks(options.extras.enemyTasks),
     medicineLevel: { ...options.extras.medicineLevel },
     medicineExp: options.extras.medicineExp,
     maxMedicineExp: 0,
@@ -447,18 +439,5 @@ function skillExpRecord(
 function numberRecord(source: ReadonlyMap<string, number>): Record<string, number> {
   const out: Record<string, number> = {};
   for (const [key, value] of source) out[key] = value;
-  return out;
-}
-
-function storiesDoneOf(extras: AccountExtras): string[] {
-  return Object.keys(extras.storiesMap).filter((key) => extras.storiesMap[key] === 'done');
-}
-
-function cloneEnemyTasks(source: Record<string, Record<string, number>>): Record<string, Record<string, number>> {
-  const out: Record<string, Record<string, number>> = {};
-  for (const key of Object.keys(source)) {
-    const inner = source[key];
-    if (inner) out[key] = { ...inner };
-  }
   return out;
 }

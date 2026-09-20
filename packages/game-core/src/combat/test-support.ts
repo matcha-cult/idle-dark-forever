@@ -104,7 +104,6 @@ function emptyTables(): DataTables {
     buffs: {},
     affixes: {},
     enemyAffixes: {},
-    stories: {},
     legends: {},
     medicines: {},
     upgrades: { bankByDiamonds: [], inventoryByDiamonds: [], inventory: [] },

@@ -1,15 +1,12 @@
 /**
- * `checkRequirement` / `checkStory` —— 原版 `src/logics/check.js` 的移植（117 行）。
+ * `checkRequirement` —— 原版 `src/logics/check.js` 的移植（117 行）。
  *
- * 去掉了单例依赖：原版读 `world.player` / `world.map` / `game.storiesMap` 三个全局，
+ * 去掉了单例依赖：原版读 `world.player` / `world.map` 两个全局，
  * 移植后统一由 `RequirementContext` 显式传入（`Player` 结构上天然满足 `player` 形状）。
- *
- * 未移植：`onStoryDone`（原版在里面直接 `game.save()` / `player.save()`，属于 IO，
- * 且依赖 `InventorySlot` 的构造与奖励发放；奖励发放应由服务端故事门面负责）。
  */
 
 import type { Requirement } from '../contracts/data.js';
-import { asNumberOrNull, asStringArray, asStringOrNull } from './player-meta.js';
+import { asNumberOrNull, asStringOrNull } from './player-meta.js';
 
 /** 判定条件所需的最小世界状态（结构类型，避免与 `Player` 互相 import）。 */
 export interface RequirementContext {
@@ -21,8 +18,6 @@ export interface RequirementContext {
   } | null;
   /** 当前所在地图 key（原版 `world.map`）。 */
   map: string | null;
-  /** 剧情三态：不存在 / `'task'` / `'done'`（原版 `game.storiesMap`）。 */
-  storiesMap: ReadonlyMap<string, string>;
 }
 
 /**
@@ -38,7 +33,6 @@ export const MAX_REQUIREMENT_DEPTH = 64;
  * 原版 `checkRequirement({...} = {})`：逐条 AND 判定，$or / $and 递归。
  *
  * 加固点（原版会抛 TypeError 的情形改为「该条件不成立 / 跳过」）：
- * - `stories` / `beforeStories` 非数组 → 跳过（原版 `for...of` 抛）；
  * - `$or` / `$and` 非数组 → 跳过（原版 `.some` 抛）；
  * - 递归深度 > {@link MAX_REQUIREMENT_DEPTH} → 判定不成立（循环 / 超深条件不再爆栈）。
  */
@@ -82,20 +76,6 @@ function checkRequirementAtDepth(
   if (map && context.map !== map) {
     return false;
   }
-  if (Array.isArray(req.stories)) {
-    for (const story of asStringArray(req.stories)) {
-      if (context.storiesMap.get(story) !== 'done') {
-        return false;
-      }
-    }
-  }
-  if (Array.isArray(req.beforeStories)) {
-    for (const story of asStringArray(req.beforeStories)) {
-      if (context.storiesMap.get(story) === 'done') {
-        return false;
-      }
-    }
-  }
   if (Array.isArray(req.$or)) {
     if (!req.$or.some((item) => checkRequirementAtDepth(item, context, depth + 1))) {
       return false;
@@ -107,15 +87,4 @@ function checkRequirementAtDepth(
     }
   }
   return true;
-}
-
-/** 原版 `checkStory`（未导出）：已完结的剧情不再可开启。 */
-export function checkStory(
-  story: { key: string; requirement?: Requirement },
-  context: RequirementContext,
-): boolean {
-  if (context.storiesMap.get(story.key) === 'done') {
-    return false;
-  }
-  return checkRequirement(story.requirement, context);
 }

@@ -71,7 +71,6 @@ describe('页面渲染冒烟（空数据）', () => {
     expect(text).toContain('包裹');
     expect(text).toContain('技能');
     expect(text).toContain('生产');
-    expect(text).toContain('故事');
   });
 
   it('每个注册域的面板都能在空数据下渲染', () => {
@@ -159,6 +158,6 @@ describe('页面渲染冒烟（有数据，防空分支假绿）', () => {
     const root = seed([CAVE]);
     const text = htmlToText(render(<>{renderPanelContent('battle')}</>, root));
     expect(text).toContain('可进入 0 / 1 张');
-    expect(text).toContain('完成当前剧情后会解锁新地图');
+    expect(text).toContain('提升等级可解锁新地图');
   });
 });

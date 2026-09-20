@@ -36,7 +36,6 @@ return  {
   name: '村间小路',
   hint: '边境之村通往邻村的一条小路。',
   requirement: {
-    stories: ['eyer-stories-1'],
   },
   monsters: [
     {
@@ -79,7 +78,6 @@ return  {
   name: '洞窟一层',
   hint: '边境之村通往邻村的一条小路旁的洞窟，里面阴森且潮湿。',
   requirement: {
-    stories: ['eyer-stories-4'],
   },
   monsters: [
     {
@@ -131,7 +129,6 @@ return  {
   isDungeon: true,
   outside: 'town.cave',
   requirement: {
-    stories: ['eyer-stories-4'],
   },
   phases: [
     {
@@ -191,7 +188,6 @@ return  {
   name: '山谷',
   hint: '靠近邻村的山谷，有各种各样的野兽。',
   requirement: {
-    stories: ['eyer-stories-6'],
   },
   monsters: [
     {
@@ -236,7 +232,6 @@ return  {
   isDungeon: true,
   outside: 'town.valley',
   requirement: {
-    stories: ['eyer-stories-8'],
   },
   phases: [
     {
@@ -299,7 +294,6 @@ return  {
   name: '矿洞入口',
   hint: '一个看似废弃已久的矿洞，被附近的狗头人霸占了。',
   requirement: {
-    stories: ['eyer-stories-10'],
   },
   monsters: [
     {
@@ -344,7 +338,6 @@ return  {
   isDungeon: true,
   outside: 'town.mine.1',
   requirement: {
-    stories: ['eyer-grow-2'],
   },
   phases: [
     {
@@ -409,7 +402,6 @@ return  {
   isDungeon: true,
   outside: 'town.mine.1',
   requirement: {
-    stories: ['eyer-grow-4'],
   },
   phases: [
     {
@@ -472,7 +464,6 @@ return  {
   name: '邻村',
   hint: '隔壁的村子。当亚莲娜赶到时，所有的村民都发狂了。',
   requirement: {
-    stories: ['aleanor-stories-2'],
   },
   monsters: [
     {
@@ -517,7 +508,6 @@ return  {
   isDungeon: true,
   outside: 'town.neighbourTown',
   requirement: {
-    stories: ['aleanor-stories-4'],
   },
   phases: [
     {
@@ -582,7 +572,6 @@ return  {
   isDungeon: true,
   outside: 'town.neighbourTown',
   requirement: {
-    stories: ['aleanor-stories-5'],
   },
   phases: [
     {
@@ -645,7 +634,6 @@ return  {
   name: '大路',
   hint: '很宽的马路。',
   requirement: {
-    stories: ['chapter3-1'],
   },
   monsters: [
     {
@@ -690,7 +678,6 @@ return  {
   isDungeon: true,
   outside: 'chapter3.road',
   requirement: {
-    stories: ['chapter3-3'],
   },
   phases: [
     {
@@ -760,7 +747,6 @@ return  {
   name: '边界森林',
   hint: '抵达奥兰帝国的必经之路。',
   requirement: {
-    stories: ['chapter3-5'],
   },
   monsters: [
     {
@@ -805,7 +791,6 @@ return  {
   isDungeon: true,
   outside: 'chapter3.wood',
   requirement: {
-    stories: ['chapter3-6'],
   },
   phases: [
     {
@@ -869,7 +854,6 @@ return  {
   name: '奥兰境内',
   hint: '抵达奥兰帝国的必经之路。',
   requirement: {
-    stories: ['chapter3-7'],
   },
   monsters: [
     {
@@ -914,7 +898,6 @@ return  {
   isDungeon: true,
   outside: 'chapter3.auran',
   requirement: {
-    stories: ['chapter3-7'],
   },
   phases: [
     {
@@ -986,7 +969,6 @@ return  {
   isDungeon: true,
   outside: 'chapter3.auran',
   requirement: {
-    stories: ['chapter3-7'],
   },
   phases: [
     {
@@ -1035,7 +1017,6 @@ return  {
   name: '混乱元素之塔',
   hint: '小湖边的镇子，到处都是鱼人。',
   requirement: {
-    stories: ['chapter3-7'],
   },
   monsters: [
     {
@@ -1087,7 +1068,6 @@ return  {
   outside: 'chapter3.tower1',
   hint: '小湖边的镇子，到处都是鱼人。',
   requirement: {
-    stories: ['chapter3-7'],
   },
   phases: [
     {
@@ -1150,7 +1130,6 @@ return  {
   name: '卡格西城',
   hint: '小湖边的镇子，到处都是鱼人。',
   requirement: {
-    stories: ['chapter3-7'],
   },
   monsters: [
     {
@@ -1201,7 +1180,6 @@ return  {
   isDungeon: true,
   outside: 'chapter3.auran3',
   requirement: {
-    stories: ['chapter3-7'],
   },
   phases: [
     {
@@ -1268,7 +1246,6 @@ return  {
   key: 'chapter4.westRolan',
   name: '东罗兰帝国',
   requirement: {
-    stories: ['chapter3-7'],
   },
   monsters: [
     {
@@ -1313,7 +1290,6 @@ return  {
   isDungeon: true,
   outside: 'chapter4.westRolan',
   requirement: {
-    stories: ['chapter3-7'],
   },
   phases: [
     {
@@ -1409,7 +1385,6 @@ return  {
   isDungeon: true,
   outside: 'chapter4.westRolan',
   requirement: {
-    stories: ['chapter3-7'],
   },
   phases: [
     {
@@ -1494,7 +1469,6 @@ return  {
   key: 'chapter4.sanAnthony',
   name: '圣安东尼帝国',
   requirement: {
-    stories: ['chapter3-7'],
   },
   monsters: [
     {
@@ -1546,7 +1520,6 @@ return  {
   isDungeon: true,
   outside: 'chapter4.sanAnthony',
   requirement: {
-    stories: ['chapter3-7'],
   },
   phases: [
     {
@@ -1692,7 +1665,6 @@ return  {
   isDungeon: true,
   outside: 'chapter4.sanAnthony',
   requirement: {
-    stories: ['chapter3-7'],
   },
   phases: [
     {
@@ -2424,7 +2396,6 @@ return  {
   key: 'chapter5.byer1',
   name: '西拜尔港',
   requirement: {
-    stories: ['chapter3-7'],
     atLeastMaxLevel: 70,
   },
   monsters: [
@@ -2470,7 +2441,6 @@ return  {
   isDungeon: true,
   outside: 'chapter5.byer1',
   requirement: {
-    stories: ['chapter3-7'],
     atLeastMaxLevel: 70,
   },
   phases: [
@@ -2526,7 +2496,6 @@ return  {
   key: 'chapter5.byer3',
   name: '梦境之森',
   requirement: {
-    stories: ['chapter3-7'],
     atLeastMaxLevel: 70,
   },
   monsters: [
@@ -2579,7 +2548,6 @@ return  {
   isDungeon: true,
   outside: 'chapter5.byer1',
   requirement: {
-    stories: ['chapter3-7'],
     atLeastMaxLevel: 70,
   },
   phases: [
@@ -2653,7 +2621,6 @@ return  {
   key: 'chapter5.byer5',
   name: '噩梦边境',
   requirement: {
-    stories: ['chapter3-7'],
     atLeastMaxLevel: 70,
   },
   monsters: [
@@ -2713,7 +2680,6 @@ return  {
   isDungeon: true,
   outside: 'chapter5.byer1',
   requirement: {
-    stories: ['chapter3-7'],
     atLeastMaxLevel: 70,
   },
   phases: [

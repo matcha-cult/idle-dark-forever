@@ -245,7 +245,7 @@ export interface MapData {
   key: string;
   name: string;
   hint?: string;
-  /** 进入条件（结构同剧情 requirement）。 */
+  /** 进入条件。 */
   requirement?: Requirement;
   monsters?: MonsterSpawnConfig[];
   /** 地城专属。 */
@@ -274,7 +274,7 @@ export interface MapData {
 
 // ────────────────────────────── 条件 ──────────────────────────────
 
-/** 剧情/地图解锁条件（原版 `src/logics/check.js`）。 */
+/** 地图解锁条件（原版 `src/logics/check.js`）。 */
 export interface Requirement {
   debug?: boolean;
   role?: string;
@@ -283,8 +283,6 @@ export interface Requirement {
   map?: string;
   atMostMaxLevel?: number;
   atLeastMaxLevel?: number;
-  stories?: string[];
-  beforeStories?: string[];
   $or?: Requirement[];
   $and?: Requirement[];
 }
@@ -381,21 +379,7 @@ export interface MedicineData {
   hooks: Record<string, (this: unknown, level: number, value: number) => number>;
 }
 
-// ────────────────────────────── 故事 / 公告 / 升级 ──────────────────────────────
-
-export interface StoryData {
-  key: string;
-  group: string;
-  name: string;
-  /** 剧情 DSL 原文（SCENE/SAY/ASIDE/WAIT 块）。 */
-  script: string;
-  requirement: Requirement;
-  taskType: 'kill' | 'purchase';
-  enemy?: string;
-  killCount?: number;
-  price?: number;
-  awards: Record<string, number | { quality: number; affixes: string[] }>;
-}
+// ────────────────────────────── 公告 / 升级 ──────────────────────────────
 
 export interface UpgradesData {
   bankByDiamonds: number[];
@@ -432,7 +416,6 @@ export interface DataTables {
    */
   affixGroups?: Record<string, readonly string[]>;
   enemyAffixes: Record<string, EnemyAffixData>;
-  stories: Record<string, StoryData>;
   legends: Record<string, LegendData>;
   medicines: Record<string, MedicineData>;
   upgrades: UpgradesData;

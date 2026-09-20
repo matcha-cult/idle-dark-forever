@@ -35,8 +35,6 @@ import type {
   RebuildCostsDto,
   ShopStateDto,
   SkillDto,
-  StoryDto,
-  StoryPlayDto,
   SystemNoticeDto,
   SystemPingDto,
   SystemVersionDto,
@@ -55,7 +53,6 @@ import {
   PLAYER_CMD,
   PRODUCE_CMD,
   SHOP_CMD,
-  STORY_CMD,
   SYSTEM_CMD,
   WORLD_CMD,
 } from '@idle-dark/protocol';
@@ -568,24 +565,6 @@ export class ProduceApi extends SegmentApi {
   }
 }
 
-// ===== story =====
-
-export class StoryApi extends SegmentApi {
-  list(options?: GameApiRequestOptions): Promise<ActionResult<StoryDto[]>> {
-    return this.call<StoryDto[]>(STORY_CMD.cmd, STORY_CMD.list, {}, options);
-  }
-
-  /** 剧情脚本（DSL 原文 + 解析结果）。 */
-  play(params: { key: string }, options?: GameApiRequestOptions): Promise<ActionResult<StoryPlayDto>> {
-    return this.call<StoryPlayDto>(STORY_CMD.cmd, STORY_CMD.play, params, options);
-  }
-
-  /** 完成击杀 / 购买类任务。 */
-  finish(params: { key: string }, options?: GameApiRequestOptions): Promise<ActionResult<StoryDto>> {
-    return this.call<StoryDto>(STORY_CMD.cmd, STORY_CMD.finish, params, options);
-  }
-}
-
 // ===== shop =====
 
 export class ShopApi extends SegmentApi {
@@ -637,7 +616,6 @@ export class GameApi {
   readonly lootrule: LootRuleApi;
   readonly career: CareerApi;
   readonly produce: ProduceApi;
-  readonly story: StoryApi;
   readonly shop: ShopApi;
   readonly idle: IdleApi;
 
@@ -654,7 +632,6 @@ export class GameApi {
     this.lootrule = new LootRuleApi(transport);
     this.career = new CareerApi(transport);
     this.produce = new ProduceApi(transport);
-    this.story = new StoryApi(transport);
     this.shop = new ShopApi(transport);
     this.idle = new IdleApi(transport);
   }

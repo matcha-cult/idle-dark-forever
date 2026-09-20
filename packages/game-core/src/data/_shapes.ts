@@ -419,15 +419,6 @@ export type MapEntry = Loose<Omit<MapData, 'monsters' | 'phases' | 'loots'>> & {
   loots?: Loot[];
 };
 
-export type StoryEntry = Loose<Omit<DataTables['stories'][string], 'taskType' | 'awards' | 'group' | 'name'>> & {
-  /** 原版 33 条剧情里只有 17 条带 taskType、2 条带 awards。 */
-  taskType?: 'kill' | 'purchase';
-  awards?: DataTables['stories'][string]['awards'];
-  /** `data/stories/purchaseRates.js` 两条只有 key + script + requirement。 */
-  group?: string;
-  name?: string;
-};
-
 /** 各表条目类型的查表（供 `packages/*` 的 `define` / `extend` 泛型使用）。 */
 export interface DataEntryMap {
   announcement: AnnouncementEntry;
@@ -442,7 +433,6 @@ export interface DataEntryMap {
   buffs: BuffEntry;
   affixes: AffixEntry;
   enemyAffixes: EnemyAffixEntry;
-  stories: StoryEntry;
   legends: LegendEntry;
   medicines: MedicineEntry;
 }

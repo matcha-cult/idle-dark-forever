@@ -8,7 +8,6 @@ import {
   LOOTRULE_CMD,
   PRODUCE_CMD,
   SHOP_CMD,
-  STORY_CMD,
 } from '@idle-dark/protocol';
 import {
   PANEL_ACTION_CLASSES,
@@ -36,7 +35,7 @@ describe('panel-actions 登记片段', () => {
     expect(findDuplicateRoutes(entries)).toEqual([]);
   });
 
-  it('覆盖七个面板域的 cmd 段', () => {
+  it('覆盖六个面板域的 cmd 段', () => {
     const entries = routesOf();
     const cmds = new Set(entries.map((entry) => entry.cmd));
     for (const segment of PANEL_CMD_SEGMENTS) expect(cmds.has(segment)).toBe(true);
@@ -54,7 +53,6 @@ describe('panel-actions 登记片段', () => {
     expect(has(LOOTRULE_CMD.cmd, LOOTRULE_CMD.setMinLevel)).toBe(true);
     expect(has(CAREER_CMD.cmd, CAREER_CMD.selectEnhance)).toBe(true);
     expect(has(PRODUCE_CMD.cmd, PRODUCE_CMD.medicineReset)).toBe(true);
-    expect(has(STORY_CMD.cmd, STORY_CMD.finish)).toBe(true);
     expect(has(SHOP_CMD.cmd, SHOP_CMD.exchange)).toBe(true);
   });
 

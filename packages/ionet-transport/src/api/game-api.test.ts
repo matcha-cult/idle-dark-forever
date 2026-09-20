@@ -34,7 +34,7 @@ function recordingTransport(
   };
 }
 
-describe('GameApi —— 15 个 cmd 段全覆盖（路由常量直接来自 protocol）', () => {
+describe('GameApi —— 14 个 cmd 段全覆盖（路由常量直接来自 protocol）', () => {
   it('每个段的方法都打到对应的 CMD_SEGMENTS 段', async () => {
     const { calls, transport } = recordingTransport();
     const api = new GameApi(transport);
@@ -51,7 +51,6 @@ describe('GameApi —— 15 个 cmd 段全覆盖（路由常量直接来自 prot
     await api.lootrule.get();
     await api.career.list();
     await api.produce.medicineState();
-    await api.story.list();
     await api.shop.state();
     await api.idle.report();
 
@@ -68,13 +67,12 @@ describe('GameApi —— 15 个 cmd 段全覆盖（路由常量直接来自 prot
       CMD_SEGMENTS.lootrule,
       CMD_SEGMENTS.career,
       CMD_SEGMENTS.produce,
-      CMD_SEGMENTS.story,
       CMD_SEGMENTS.shop,
       CMD_SEGMENTS.idle,
     ]);
   });
 
-  it('聚合入口暴露全部 15 个子 API', () => {
+  it('聚合入口暴露全部 14 个子 API', () => {
     const { transport } = recordingTransport();
     const api = new GameApi(transport);
     expect(Object.keys(api).filter((key) => key !== 'transport').sort()).toEqual(
@@ -91,7 +89,6 @@ describe('GameApi —— 15 个 cmd 段全覆盖（路由常量直接来自 prot
         'player',
         'produce',
         'shop',
-        'story',
         'system',
         'world',
       ].sort(),

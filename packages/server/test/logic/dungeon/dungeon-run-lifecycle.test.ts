@@ -19,7 +19,7 @@ import { WorldService } from '../../../src/modules/logic/world/world.service.js'
 import { FakeDatabase } from '../../helpers/fake-database.js';
 
 const tables: DataTables = createDefaultTables();
-const DUNGEON = 'town.cave2'; // 要求 eyer-stories-4；票键 = 'town.cave2'
+const DUNGEON = 'town.cave2'; // 票键 = 'town.cave2'
 
 describe('秘境 run 生命周期（M5/M7）', () => {
   let db: FakeDatabase;
@@ -55,8 +55,6 @@ describe('秘境 run 生命周期（M5/M7）', () => {
   async function giveAccess(): Promise<void> {
     const player = await context.load(1, 'c1');
     if (!player) throw new Error('player missing');
-    const extras = await context.extrasOf(1);
-    extras.storiesMap['eyer-stories-4'] = 'done';
     player.dungeonTickets.set('town.cave2', 2);
     context.markDirty(1, 'c1');
     context.markAccountDirty(1);

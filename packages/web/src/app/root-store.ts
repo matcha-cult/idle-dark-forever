@@ -17,7 +17,6 @@ import {
   CAREER_CMD,
   IDLE_CMD,
   INVENTORY_CMD,
-  STORY_CMD,
   WORLD_CMD,
 } from '@idle-dark/protocol';
 import { GameClient, resolveApiBaseUrl, resolveWsUrl } from '../services/game-client.js';
@@ -32,7 +31,6 @@ import { PlayerStore } from '../stores/player-store.js';
 import { ProduceStore } from '../stores/produce-store.js';
 import { SessionStore } from '../stores/session-store.js';
 import { ShopStore } from '../stores/shop-store.js';
-import { StoryStore } from '../stores/story-store.js';
 import { ToastStore } from '../stores/toast-store.js';
 import { UiStore } from '../stores/ui-store.js';
 import { WorldStore } from '../stores/world-store.js';
@@ -73,7 +71,6 @@ export class RootStore {
   readonly bank: BankStore;
   readonly career: CareerStore;
   readonly produce: ProduceStore;
-  readonly story: StoryStore;
   readonly shop: ShopStore;
   readonly idle: IdleStore;
 
@@ -143,7 +140,6 @@ export class RootStore {
     this.bank = new BankStore(ctx);
     this.career = new CareerStore(ctx);
     this.produce = new ProduceStore(ctx);
-    this.story = new StoryStore(ctx);
     this.shop = new ShopStore(ctx);
     this.idle = new IdleStore(ctx);
 
@@ -219,7 +215,7 @@ export class RootStore {
   }
 
   /**
-   * 并发拉取面板：player / world / inventory / bank / career / produce / story / shop / idle。
+   * 并发拉取面板：player / world / inventory / bank / career / produce / shop / idle。
    * 每个域 Store 的 `load()` 内部已 try/catch；这里再兜一层 `.catch`，
    * 确保 `Promise.all` 绝不因单个域失败而 reject。
    */
@@ -231,7 +227,6 @@ export class RootStore {
       this.bank.load().catch(() => undefined),
       this.career.load().catch(() => undefined),
       this.produce.load().catch(() => undefined),
-      this.story.load().catch(() => undefined),
       this.shop.load().catch(() => undefined),
       this.idle.load().catch(() => undefined),
       this.inventory.loadLootRule().catch(() => undefined),
@@ -300,9 +295,6 @@ export class RootStore {
         return;
       case CAREER_CMD.cmd:
         this.career.handleNotification(notification);
-        return;
-      case STORY_CMD.cmd:
-        this.story.handleNotification(notification);
         return;
       case IDLE_CMD.cmd:
         this.idle.handleNotification(notification);

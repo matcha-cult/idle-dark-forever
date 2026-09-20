@@ -10,15 +10,13 @@
  */
 import { describe, expect, it, beforeEach } from 'vitest';
 import { createDefaultTables, type DataTables } from '@idle-dark/game-core';
-import { STORY_CMD, type StoryUnlockDto, type WorldTickDto } from '@idle-dark/protocol';
+import { type WorldTickDto } from '@idle-dark/protocol';
 import type { NotificationBatcher, PushFrame } from '../src/modules/game/notification-batcher.js';
 import { OpIdempotencyService } from '../src/modules/game/op-idempotency.service.js';
 import type { OnlineSessionService } from '../src/modules/online/online-session.service.js';
 import { PanelCharacterService } from '../src/modules/logic/shared/panel-character.service.js';
 import { PlayerContextService } from '../src/modules/logic/shared/player-context.service.js';
 import { InProcessEventBus } from '../src/modules/logic/shared/event-bus.js';
-import { StoryLogicService } from '../src/modules/logic/story/story.logic.service.js';
-import { RateLimiterService } from '../src/common/services/rate-limiter.service.js';
 import { WorldService } from '../src/modules/logic/world/world.service.js';
 import { WORLD_CONFIG } from '../src/modules/logic/world/world.config.js';
 import { FakeDatabase } from './helpers/fake-database.js';
@@ -157,7 +155,8 @@ describe('WorldService', () => {
 
   it('enterMap 条件未满足 → MAP_LOCKED', async () => {
     await startInStreet();
-    const result = await service.enterMap(1, 'c1', 'town.valley');
+    // silver.warrior 要求 level 60，1 级角色不可进。
+    const result = await service.enterMap(1, 'c1', 'silver.warrior');
     expect(result.success).toBe(false);
     if (!result.success) expect(result.data.code).toBe('MAP_LOCKED');
   });
@@ -165,8 +164,6 @@ describe('WorldService', () => {
   it('enterMap 带 opId 幂等：同 opId 重复提交只切换一次', async () => {
     const session = await service.start(1, 'c1');
     expect(session).not.toBeNull();
-    const extras = await context.extrasOf(1);
-    extras.storiesMap['eyer-stories-1'] = 'done';
 
     const first = await service.enterMap(1, 'c1', 'town.street', 'op-map-1');
     expect(first.success).toBe(true);
@@ -300,179 +297,5 @@ describe('WorldService', () => {
     service.tick();
     expect(service.sessionCount).toBe(1);
     expect(service.stats.sessionReapedTotal).toBe(0);
-  });
-});
-
-describe('WorldService · 进图自动触发剧情（原版 MapPanel.checkStories）', () => {
-  let db: FakeDatabase;
-  let context: PlayerContextService;
-  let service: WorldService;
-  let events: InProcessEventBus;
-  let frames: CapturedFrame[];
-  let now: number;
-
-  beforeEach(() => {
-    db = new FakeDatabase();
-    db.seedAccount(1);
-    db.seedCharacter({ id: 'c1', user_id: 1, role: 'Eyer', career: 'warrior' });
-    now = 1_700_000_000_000;
-    context = new PlayerContextService(db.asService(), () => now, tables);
-    frames = [];
-    const batcher = {
-      enqueue: (userId: number, frame: PushFrame) => {
-        frames.push({ userId, ...frame });
-        return true;
-      },
-      registerMerger: () => undefined,
-      drop: () => 0,
-      flushAll: () => ({ users: 0, frames: 0 }),
-    } as unknown as NotificationBatcher;
-    const onlineSessions = { isOnline: () => true } as unknown as OnlineSessionService;
-    events = new InProcessEventBus();
-    const characters = new PanelCharacterService(db.asService() as unknown as GameDatabaseService);
-    service = new WorldService(
-      context,
-      onlineSessions,
-      new OpIdempotencyService(),
-      characters,
-      batcher,
-      () => now,
-      tables,
-      events,
-    );
-    // 08 §2.3 解环后：进图剧情推进 / 击杀递减由 quest 服务**订阅事件**完成，
-    // 因此本组用例必须把 StoryLogicService 接在同一条总线上。
-    new StoryLogicService(context, characters, new RateLimiterService(), batcher, events).onModuleInit();
-  });
-
-  function storyUnlocks(): StoryUnlockDto[] {
-    return frames
-      .filter((frame) => frame.cmd === STORY_CMD.cmd && frame.subCmd === STORY_CMD.unlock)
-      .map((frame) => frame.data as StoryUnlockDto);
-  }
-
-  it('会话落地在 home → 推 eyer-stories-1 且 autoPlay=true（进游戏即自动播放）', async () => {
-    await service.start(1, 'c1');
-    expect(storyUnlocks()).toEqual([
-      {
-        key: 'eyer-stories-1',
-        name: tables.stories['eyer-stories-1']?.name,
-        taskType: 'script',
-        autoPlay: true,
-      },
-    ]);
-  });
-
-  it('完成剧情 1 后进 town.street → 推剧情 2（纯剧情脚本，autoPlay=true）', async () => {
-    const extras = await context.extrasOf(1);
-    extras.storiesMap['eyer-stories-1'] = 'done';
-    await service.start(1, 'c1');
-    frames.length = 0;
-
-    const result = await service.enterMap(1, 'c1', 'town.street');
-    expect(result.success).toBe(true);
-    expect(storyUnlocks()).toEqual([
-      {
-        key: 'eyer-stories-2',
-        name: tables.stories['eyer-stories-2']?.name,
-        taskType: 'script',
-        autoPlay: true,
-      },
-    ]);
-    // 服务端不替玩家 finish：剧本仍是未开启状态
-    expect(extras.storiesMap['eyer-stories-2']).toBeUndefined();
-  });
-
-  it('剧情 2 完成后进 town.street → 静默登记剧情 3 并推 autoPlay=false', async () => {
-    const extras = await context.extrasOf(1);
-    extras.storiesMap['eyer-stories-1'] = 'done';
-    extras.storiesMap['eyer-stories-2'] = 'done';
-    await service.start(1, 'c1');
-    frames.length = 0;
-
-    const result = await service.enterMap(1, 'c1', 'town.street');
-    expect(result.success).toBe(true);
-    expect(storyUnlocks()).toEqual([
-      {
-        key: 'eyer-stories-3',
-        name: tables.stories['eyer-stories-3']?.name,
-        taskType: 'kill',
-        autoPlay: false,
-      },
-    ]);
-    expect(extras.storiesMap['eyer-stories-3']).toBe('task');
-    expect(extras.enemyTasks['slime.minimal']?.['eyer-stories-3']).toBe(10);
-  });
-
-  it('击杀任务达成 → 推 autoPlay=true（原版 checkKill 当场弹剧本）', async () => {
-    const extras = await context.extrasOf(1);
-    extras.storiesMap['eyer-stories-3'] = 'task';
-    extras.enemyTasks['slime.minimal'] = { 'eyer-stories-3': 1 };
-    await service.start(1, 'c1');
-    frames.length = 0;
-
-    // battle 内核击杀 → 发布 `EnemyKilled`（单测跳过真实战斗，直接走同一条事件路径）。
-    events.emit({
-      type: 'EnemyKilled',
-      userId: 1,
-      characterId: 'c1',
-      enemyType: 'slime.minimal',
-      count: 1,
-    });
-    expect(extras.enemyTasks['slime.minimal']?.['eyer-stories-3']).toBe(0);
-    expect(storyUnlocks()).toEqual([
-      {
-        key: 'eyer-stories-3',
-        name: tables.stories['eyer-stories-3']?.name,
-        taskType: 'script',
-        autoPlay: true,
-      },
-    ]);
-
-    // 已经为 0 的任务不会重复推送
-    frames.length = 0;
-    events.emit({
-      type: 'EnemyKilled',
-      userId: 1,
-      characterId: 'c1',
-      enemyType: 'slime.minimal',
-      count: 1,
-    });
-    expect(storyUnlocks()).toEqual([]);
-  });
-
-  it('EnemyKilled 的 count 边界（NaN / Infinity / 0 / 负数）按 1 次计，不写坏剩余数', async () => {
-    const extras = await context.extrasOf(1);
-    extras.storiesMap['eyer-stories-3'] = 'task';
-    extras.enemyTasks['slime.minimal'] = { 'eyer-stories-3': 10 };
-    await service.start(1, 'c1');
-
-    for (const count of [Number.NaN, Number.POSITIVE_INFINITY, 0, -5]) {
-      events.emit({
-        type: 'EnemyKilled',
-        userId: 1,
-        characterId: 'c1',
-        enemyType: 'slime.minimal',
-        count,
-      });
-    }
-    const remaining = extras.enemyTasks['slime.minimal']?.['eyer-stories-3'];
-    expect(remaining).toBe(6);
-    expect(Number.isNaN(remaining)).toBe(false);
-  });
-
-  it('未加载账号时 MapEntered/EnemyKilled 事件安全 no-op（peek 未命中不抛错）', () => {
-    expect(() =>
-      events.emit({ type: 'MapEntered', userId: 999, characterId: 'nope', map: 'home' }),
-    ).not.toThrow();
-    expect(() =>
-      events.emit({
-        type: 'EnemyKilled',
-        userId: 999,
-        characterId: 'nope',
-        enemyType: 'slime.minimal',
-        count: 1,
-      }),
-    ).not.toThrow();
   });
 });

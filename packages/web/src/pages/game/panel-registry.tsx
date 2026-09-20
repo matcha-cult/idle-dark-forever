@@ -9,12 +9,11 @@
  * 新增一个域只需在此文件加一项（`group` 决定落在导航的哪一段）+ 写一个面板组件，
  * `GameShellPage` 一行都不用改。
  *
- * 域划分沿用原版 5 个底部 Tab（战斗 / 包裹 / 技能 / 生产 / 故事）：
+ * 域划分沿用原版底部 Tab 的核心四项（战斗 / 包裹 / 技能 / 生产）：
  * 包裹域内含「背包 / 装备 / 储藏箱 / 拾取规则 / 神力商店」，生产域内含四个子页。
  */
 import {
   ExperimentOutlined,
-  ReadOutlined,
   ShoppingOutlined,
   ThunderboltOutlined,
   ToolOutlined,
@@ -25,15 +24,13 @@ import { BattlePanel } from './panels/BattlePanel.js';
 import { InventoryPanel } from './panels/InventoryPanel.js';
 import { ProducePanel } from './panels/ProducePanel.js';
 import { SkillsPanel } from './panels/SkillsPanel.js';
-import { StoriesPanel } from './panels/StoriesPanel.js';
 
-export type PanelKey = 'battle' | 'inventory' | 'skills' | 'produce' | 'stories';
+export type PanelKey = 'battle' | 'inventory' | 'skills' | 'produce';
 
 /** 导航分组（顺序即展示顺序）。 */
 export const PANEL_GROUPS: ReadonlyArray<{ key: string; label: string }> = [
   { key: 'war', label: '征伐' },
   { key: 'growth', label: '成长' },
-  { key: 'chronicle', label: '篇章' },
 ];
 
 export interface PanelDomainEntry {
@@ -46,14 +43,13 @@ export interface PanelDomainEntry {
 
 /**
  * 域列表。顺序 = 玩法因果链：
- * 战斗（在哪打、打成什么样）→ 包裹（拿到了什么）→ 技能（怎么变强）→ 生产（把材料变成战力）→ 故事（为什么打）。
+ * 战斗（在哪打、打成什么样）→ 包裹（拿到了什么）→ 技能（怎么变强）→ 生产（把材料变成战力）。
  */
 const DOMAINS: readonly PanelDomainEntry[] = [
   { key: 'battle', label: '战斗', icon: <ThunderboltOutlined />, group: 'war', panel: <BattlePanel /> },
   { key: 'inventory', label: '包裹', icon: <ShoppingOutlined />, group: 'war', panel: <InventoryPanel /> },
   { key: 'skills', label: '技能', icon: <ToolOutlined />, group: 'growth', panel: <SkillsPanel /> },
   { key: 'produce', label: '生产', icon: <ExperimentOutlined />, group: 'growth', panel: <ProducePanel /> },
-  { key: 'stories', label: '故事', icon: <ReadOutlined />, group: 'chronicle', panel: <StoriesPanel /> },
 ];
 
 /** 全部域（只读快照）。 */

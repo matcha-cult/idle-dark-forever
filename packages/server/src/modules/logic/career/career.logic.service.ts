@@ -60,9 +60,8 @@ export class CareerLogicService {
     career: string,
     characterId?: string,
   ): Promise<ActionResult<CareerPanelDto>> {
-    return this.runMutation(userId, 'switchCareer', RATE_LIMITS.switchCareer, characterId, async (player) => {
-      const extras = await this.contexts.extrasOf(userId);
-      opSwitchCareer(this.contexts.tables, player, career, new Map(Object.entries(extras.storiesMap)));
+    return this.runMutation(userId, 'switchCareer', RATE_LIMITS.switchCareer, characterId, (player) => {
+      opSwitchCareer(this.contexts.tables, player, career);
     });
   }
 

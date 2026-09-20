@@ -86,7 +86,6 @@ const TABLE_NAMES = [
   'buffs',
   'affixes',
   'enemyAffixes',
-  'stories',
   'legends',
   'medicines',
 ] as const;
@@ -114,7 +113,6 @@ describe('createDefaultTables', () => {
     expect(tables.buffs['manaShield']).toBeDefined();
     expect(tables.affixes['maxHp']).toBeDefined();
     expect(tables.enemyAffixes['stronger']).toBeDefined();
-    expect(tables.stories['chapter3-7']).toBeDefined();
     expect(tables.legends['copperRing-1']).toBeDefined();
     expect(tables.medicines['mainPoint']).toBeDefined();
   });

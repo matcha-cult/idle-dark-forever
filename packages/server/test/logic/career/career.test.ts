@@ -21,10 +21,7 @@ function codeOf(fn: () => void): string {
   throw new Error('expected throw');
 }
 
-const EMPTY_STORIES = new Map<string, string>();
-
-describe('career 面板与操作', () => {
-  it('面板含三种进度，且不含 currentCareer / selectedSkills 顶层字段', () => {
+describe('career 面板与操作', () => {  it('面板含三种进度，且不含 currentCareer / selectedSkills 顶层字段', () => {
     const fixture = makeFixture();
     const panel = careerPanelOf(fixture.tables, fixture.player);
     expect(panel.careers.length).toBeGreaterThan(0);
@@ -37,16 +34,16 @@ describe('career 面板与操作', () => {
   it('切换不存在的职业 → INVALID_PARAM；条件不满足 → CAREER_LOCKED', () => {
     const fixture = makeFixture('Eyer');
     expect(
-      codeOf(() => opSwitchCareer(fixture.tables, fixture.player, 'nope', EMPTY_STORIES)),
+      codeOf(() => opSwitchCareer(fixture.tables, fixture.player, 'nope')),
     ).toBe(BusinessErrorCode.INVALID_PARAM);
     expect(
-      codeOf(() => opSwitchCareer(fixture.tables, fixture.player, 'sorceress', EMPTY_STORIES)),
+      codeOf(() => opSwitchCareer(fixture.tables, fixture.player, 'sorceress')),
     ).toBe(BusinessErrorCode.CAREER_LOCKED);
   });
 
   it('切换满足条件的职业成功（Aleanor → sorceress）', () => {
     const fixture = makeFixture('Aleanor');
-    opSwitchCareer(fixture.tables, fixture.player, 'sorceress', EMPTY_STORIES);
+    opSwitchCareer(fixture.tables, fixture.player, 'sorceress');
     expect(fixture.player.currentCareer).toBe('sorceress');
   });
 

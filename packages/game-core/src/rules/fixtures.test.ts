@@ -349,17 +349,6 @@ export function createTestTables(): DataTables {
       },
     },
     enemyAffixes: {},
-    stories: {
-      prologue: {
-        key: 'prologue',
-        group: 'main',
-        name: '序章',
-        script: '',
-        requirement: {},
-        taskType: 'kill',
-        awards: {},
-      },
-    },
     legends: {
       flame: {
         key: 'flame',

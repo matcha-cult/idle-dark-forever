@@ -111,7 +111,7 @@ export function parseLegacyPlayerSave(content: unknown): LegacySaveResult {
 
   const state = unwrapState(decoded);
   if (!looksLikePlayerState(state)) {
-    // 明文 JWT 常见于账号级 `game` 存档（只有神力 / 剧情 / 银行，没有角色数据）。
+    // 明文 JWT 常见于账号级 `game` 存档（只有神力 / 银行等账号数据，没有角色数据）。
     return {
       ok: false,
       code: kind === 'jwt' ? BusinessErrorCode.SAVE_IMPORT_UNSUPPORTED : BusinessErrorCode.SAVE_IMPORT_INVALID,

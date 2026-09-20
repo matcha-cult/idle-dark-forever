@@ -5,7 +5,7 @@
  * `number` 再索引 `quality` → 恒不命中、永远回退 `minLootLevel`，玩家感觉「设置自动
  * 出售/分解完全没用」。本脚本用真实 REST + WS + PostgreSQL 复现这条链路：
  *
- *   注册/登录 → 建角色（Eyer）→ 完成 eyer-stories-1（解锁 town.street）
+ *   注册/登录 → 建角色（Eyer）
  *   → lootrule.get 取规则矩阵 → lootrule.update 全部设为「出售」（minLevel=0）
  *   → lootrule.get 复核（落库往返）→ world.enterMap town.street
  *   → 等待 (cmd=40,subCmd=2) 掉落推送 → 断言装备掉落的 handled === 'sell'
@@ -118,13 +118,12 @@ async function call(ws, cmd, subCmd, data, timeoutMs) {
   return { ok, action, envelope, transport: false };
 }
 
-const CMD = { player: 20, world: 30, battle: 40, lootrule: 70, story: 100 };
+const CMD = { player: 20, world: 30, battle: 40, lootrule: 70 };
 const SUB = {
   player: { create: 2, select: 6 },
   world: { enterMap: 2 },
   battle: { loot: 2 },
   lootrule: { get: 1, update: 2, setMinLevel: 3 },
-  story: { list: 1, play: 2, finish: 3 },
 };
 
 function lootPushes() {
@@ -178,16 +177,7 @@ try {
   const selected = await call(ws, CMD.player, SUB.player.select, { key: characterKey });
   check('player.select 成功', selected.ok, JSON.stringify(selected.action).slice(0, 160));
 
-  // 1) 完成 eyer-stories-1（town.street 的前置条件）
-  const stories = await call(ws, CMD.story, SUB.story.list, { key: characterKey });
-  const first = stories.action?.data?.find?.((story) => story.key === 'eyer-stories-1');
-  check('story.list 含 eyer-stories-1', first !== undefined, JSON.stringify(stories.action).slice(0, 160));
-  const played = await call(ws, CMD.story, SUB.story.play, { key: 'eyer-stories-1', characterId: characterKey });
-  check('story.play eyer-stories-1 成功', played.ok, JSON.stringify(played.action).slice(0, 200));
-  const finished = await call(ws, CMD.story, SUB.story.finish, { key: 'eyer-stories-1', characterId: characterKey });
-  check('story.finish eyer-stories-1 成功', finished.ok, JSON.stringify(finished.action).slice(0, 200));
-
-  // 2) 面板：读规则矩阵
+  // 1) 面板：读规则矩阵
   const initialState = await call(ws, CMD.lootrule, SUB.lootrule.get, { characterId: characterKey });
   const rules = initialState.action?.data?.rules;
   check(

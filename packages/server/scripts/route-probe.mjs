@@ -30,7 +30,6 @@ const ROUTES = [
   [70, 1, 'lootrule.get'],
   [80, 1, 'career.list'],
   [90, 1, 'produce.enchantCosts'],
-  [100, 1, 'story.list'],
   [110, 1, 'shop.state'],
   [120, 1, 'idle.report'],
   [130, 1, 'map.list'],

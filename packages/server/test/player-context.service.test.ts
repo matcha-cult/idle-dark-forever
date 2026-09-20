@@ -84,12 +84,11 @@ describe('PlayerContextService', () => {
     expect(reloaded?.account.highestEndlessLevel).toBe(5);
   });
 
-  it('账号侧车（世界种子 / 地图 / 剧情三态）落库后重载一致', async () => {
+  it('账号侧车（世界种子 / 地图）落库后重载一致', async () => {
     await ctx.create(1, 'c1', 'Eyer', 'warrior');
     const extras = await ctx.extrasOf(1);
     extras.worldSeeds['c1'] = 424242;
     extras.worldMaps['c1'] = { map: 'home', endlessLevel: 3 };
-    extras.storiesMap['s1'] = 'done';
     ctx.markAccountDirty(1);
     await ctx.flushAccount(1);
 
@@ -97,7 +96,6 @@ describe('PlayerContextService', () => {
     const reloaded = await ctx.extrasOf(1);
     expect(reloaded.worldSeeds['c1']).toBe(424242);
     expect(reloaded.worldMaps['c1']).toEqual({ map: 'home', endlessLevel: 3 });
-    expect(reloaded.storiesMap['s1']).toBe('done');
   });
 
   it('账号侧车（挑战队列 / 秘境冷却）落库后重载一致', async () => {

@@ -68,13 +68,13 @@ describe('resolveWorldPosition', () => {
 describe('evaluateMapUnlock', () => {
   it('空条件解锁；条件不满足不解锁；判定异常 fail-closed', () => {
     const f = makeFixture();
-    expect(evaluateMapUnlock({}, f.player, 'home', f.extras)).toBe(true);
-    expect(evaluateMapUnlock({ level: 999 }, f.player, 'home', f.extras)).toBe(false);
+    expect(evaluateMapUnlock({}, f.player, 'home')).toBe(true);
+    expect(evaluateMapUnlock({ level: 999 }, f.player, 'home')).toBe(false);
     // 自引用循环条件：深度护栏 → 不成立而不是爆栈
     const cyclic: { $or: unknown[] } = { $or: [] };
     cyclic.$or.push(cyclic);
-    expect(() => evaluateMapUnlock(cyclic as never, f.player, 'home', f.extras)).not.toThrow();
-    expect(evaluateMapUnlock(cyclic as never, f.player, 'home', f.extras)).toBe(false);
+    expect(() => evaluateMapUnlock(cyclic as never, f.player, 'home')).not.toThrow();
+    expect(evaluateMapUnlock(cyclic as never, f.player, 'home')).toBe(false);
   });
 });
 
@@ -83,7 +83,7 @@ describe('pickOpenWorldMap（RD4）', () => {
   const open = Object.keys(tables.maps).find((key) => !tables.maps[key]?.isDungeon);
 
   it('优先级：candidate → persisted → home', () => {
-    // town.street 是开放世界图（有前置剧情要求，但 pickOpenWorldMap 只看"非秘境"）
+    // town.street 是开放世界图；pickOpenWorldMap 只看"非秘境"属性。
     expect(pickOpenWorldMap(tables, 'home', 'town.valley')).toBe('home');
     expect(pickOpenWorldMap(tables, undefined, 'town.valley')).toBe('town.valley');
     expect(pickOpenWorldMap(tables, undefined, undefined)).toBe('home');
@@ -141,8 +141,8 @@ describe('MapLogicService', () => {
   it('enter：条件未满足的地图 → MAP_LOCKED（不转发）', async () => {
     const calls: WorldCalls = { enterMap: [], leave: [], snapshot: [] };
     const service = makeService(calls);
-    // town.street 需要前置剧情，裸角色不可进
-    const result = await service.enter(1, 'char-1', 'town.street');
+    // silver.warrior 要求 level 60，裸角色（1 级）不可进
+    const result = await service.enter(1, 'char-1', 'silver.warrior');
     expect(result.success).toBe(false);
     if (!result.success) expect(result.data.code).toBe('MAP_LOCKED');
     expect(calls.enterMap).toHaveLength(0);
@@ -153,7 +153,7 @@ describe('MapLogicService', () => {
     const contexts = {
       tables,
       load: async () => null,
-      extrasOf: async () => ({ worldMaps: {}, storiesMap: {} }),
+      extrasOf: async () => ({ worldMaps: {} }),
     } as unknown as PlayerContextService;
     const service = makeService(calls, contexts);
     const result = await service.enter(1, 'char-1', 'home');

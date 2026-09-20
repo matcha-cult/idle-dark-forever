@@ -37,7 +37,7 @@ import { BattleLogicModule } from '../modules/logic/battle/battle-logic.module.j
 import { IdleLogicModule } from '../modules/logic/idle/idle-logic.module.js';
 import { MapLogicModule } from '../modules/logic/map/map-logic.module.js';
 import { DungeonLogicModule } from '../modules/logic/dungeon/dungeon-logic.module.js';
-// 面板域（inventory/bank/lootrule/career/produce/story/shop）的登记片段由面板域维护，
+// 面板域（inventory/bank/lootrule/career/produce/shop）的登记片段由面板域维护，
 // 集成方只做组合 —— 避免两处各写一份清单而漂移。
 import { PANEL_ACTION_CLASSES, PANEL_LOGIC_MODULES } from '../modules/logic/panel-actions.js';
 

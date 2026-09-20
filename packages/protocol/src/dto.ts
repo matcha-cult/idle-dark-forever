@@ -204,10 +204,6 @@ export interface PlayerStateDto {
   skillExp: Record<string, { level: number; exp: number }>;
   /** 副本钥匙计数：group|key → count。 */
   dungeonTickets: Record<string, number>;
-  /** 已通关故事 key 集合。 */
-  storiesDone: string[];
-  /** 进行中的击杀任务：enemyKey → { storyKey: remaining }。 */
-  enemyTasks: Record<string, Record<string, number>>;
   /** 药剂等级。 */
   medicineLevel: Record<string, number>;
   medicineExp: number;
@@ -391,62 +387,7 @@ export interface MedicineStateDto {
   bowelUpgradePrice: number;
 }
 
-// ────────────────────────────── 故事 / 商店 / 离线 ──────────────────────────────
-
-export interface StoryDto {
-  key: string;
-  group: string;
-  name: string;
-  /** 'none' | 'task' | 'done' */
-  status: 'none' | 'task' | 'done';
-  /**
-   * 剧情类型。
-   *
-   * - `'kill'`：需要击杀指定敌人若干只
-   * - `'purchase'`：需要花费神力购买情报
-   * - `'script'`：**纯剧情脚本**，没有任务目标 —— 原版在**进入满足条件的地图时自动播放**，
-   *   条件满足即可直接完成。数据表里相当一部分条目没有 `taskType` 字段，就是这一类；
-   *   早期版本把这类错报成 `'kill'`，导致前端显示一个永远完不成的击杀进度。
-   */
-  taskType: 'kill' | 'purchase' | 'script';
-  enemy?: string;
-  killCount?: number;
-  remaining?: number;
-  price?: number;
-  /** 是否满足开启条件（服务端判定）。 */
-  canStart: boolean;
-  lockedReason: string | null;
-}
-
-export interface StoryPlayDto {
-  key: string;
-  name: string;
-  /** 已解析的剧情脚本节点（前端只负责播放）。 */
-  nodes: Array<{ type: string; args: string[] }>;
-  awards: Record<string, unknown>;
-}
-
-/**
- * `(story, unlock)` 推送载荷。
- *
- * 触发时机（服务端判定，前端只按 `autoPlay` 决定是否自动打开）：
- * - **进入地图**时该图条件满足的剧情（原版 `MapPanel.checkStories()`）；
- * - 完成一段剧情后新解锁的剧情；
- * - 击杀任务恰好达成时（`taskType='kill'` 且剩余 0）。
- */
-export interface StoryUnlockDto {
-  key: string;
-  name: string;
-  /** 该条剧情的类型（`'script'` = 纯剧情脚本，无任务目标）。 */
-  taskType: 'kill' | 'purchase' | 'script';
-  /**
-   * 是否应当**自动播放**（原版进入满足条件的地图即弹剧本）。
-   *
-   * - `true`：纯剧情脚本刚可开启，或击杀任务刚达成 —— 前端应直接打开剧本；
-   * - `false`：击杀 / 购买类任务刚被登记 —— 只提示 + 刷新列表，等玩家去打 / 去买。
-   */
-  autoPlay: boolean;
-}
+// ────────────────────────────── 商店 / 离线 ──────────────────────────────
 
 export interface ShopStateDto {
   playerSlotCount: number;

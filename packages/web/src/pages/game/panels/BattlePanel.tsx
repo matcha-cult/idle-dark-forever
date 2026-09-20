@@ -149,7 +149,7 @@ export const BattlePanel = observer(function BattlePanel() {
               <Flex justify="space-between" align="center" gap={token.paddingXS} wrap>
                 <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
                   {`可进入 ${unlockedCount} / ${world.maps.length} 张`}
-                  {unlockedCount === 0 ? ' —— 完成当前剧情后会解锁新地图' : ''}
+                  {unlockedCount === 0 ? ' —— 提升等级可解锁新地图' : ''}
                 </Typography.Text>
                 <Space>
                   <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
@@ -252,7 +252,7 @@ export const BattlePanel = observer(function BattlePanel() {
                   extra={
                     <Flex gap={4}>
                       {/* 黄名中立怪：不主动攻击、也不会被溅射打到，必须玩家手动点它才会开战
-                          （原版「单位」面板语义；`eyer-stories-4` 要求击杀大史莱姆）。 */}
+                          （原版「单位」面板语义）。 */}
                       {unit.camp === 'neutral' ? <Tag color="gold">中立</Tag> : null}
                       {world.allies.some((ally) => ally.targetId === unit.id) ? (
                         <Tag color="red">被锁定</Tag>

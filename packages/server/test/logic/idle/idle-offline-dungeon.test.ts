@@ -10,7 +10,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDefaultTables, type DataTables } from '@idle-dark/game-core';
 import { PlayerContextService } from '../../../src/modules/logic/shared/player-context.service.js';
-import { InProcessEventBus } from '../../../src/modules/logic/shared/event-bus.js';
 import {
   IdleService,
   offlineExtrapolationMs,
@@ -34,7 +33,7 @@ describe('IdleService · R5-b 离线队列顺序模拟', () => {
     db.seedCharacter({ id: 'c1', user_id: 1, role: 'Eyer', career: 'warrior' });
     now = 1_700_000_000_000;
     context = new PlayerContextService(db.asService(), () => now, tables);
-    service = new IdleService(context, () => now, tables, new InProcessEventBus());
+    service = new IdleService(context, () => now, tables);
     await context.create(1, 'c1', 'Eyer', 'warrior');
   });
 

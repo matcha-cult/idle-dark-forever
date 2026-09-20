@@ -66,8 +66,6 @@ interface AccountDataJson {
   banned?: boolean;
   updateRate?: number;
   bank?: unknown[];
-  storiesMap?: Record<string, string>;
-  enemyTasks?: Record<string, Record<string, number>>;
   medicineLevel?: Record<string, number>;
   medicineExp?: number;
   worldSeeds?: Record<string, number>;
@@ -306,8 +304,6 @@ export class PlayerContextService {
       banned: entry.account.banned,
       updateRate: entry.account.updateRate,
       bank: entry.account.bank.map((slot) => slot.toJSON()),
-      storiesMap: { ...entry.extras.storiesMap },
-      enemyTasks: cloneTasks(entry.extras.enemyTasks),
       medicineLevel: { ...entry.extras.medicineLevel },
       medicineExp: entry.extras.medicineExp,
       worldSeeds: { ...entry.extras.worldSeeds },
@@ -422,24 +418,6 @@ function applyAccountData(
       .map((item) => new InventorySlot(tables, 'bank').fromJSON(item ?? {}))
       .filter((slot) => !slot.empty);
   }
-  if (data.storiesMap && typeof data.storiesMap === 'object') {
-    for (const key of Object.keys(data.storiesMap)) {
-      const value = data.storiesMap[key];
-      if (typeof value === 'string') extras.storiesMap[key] = value;
-    }
-  }
-  if (data.enemyTasks && typeof data.enemyTasks === 'object') {
-    for (const key of Object.keys(data.enemyTasks)) {
-      const inner = data.enemyTasks[key];
-      if (!inner || typeof inner !== 'object') continue;
-      const out: Record<string, number> = {};
-      for (const storyKey of Object.keys(inner)) {
-        const count = inner[storyKey];
-        if (typeof count === 'number' && Number.isFinite(count)) out[storyKey] = count;
-      }
-      extras.enemyTasks[key] = out;
-    }
-  }
   if (data.medicineLevel && typeof data.medicineLevel === 'object') {
     for (const key of Object.keys(data.medicineLevel)) {
       const level = data.medicineLevel[key];
@@ -523,15 +501,6 @@ function applyAccountData(
       };
     }
   }
-}
-
-function cloneTasks(source: Record<string, Record<string, number>>): Record<string, Record<string, number>> {
-  const out: Record<string, Record<string, number>> = {};
-  for (const key of Object.keys(source)) {
-    const inner = source[key];
-    if (inner) out[key] = { ...inner };
-  }
-  return out;
 }
 
 function cloneWorldMaps(

@@ -18,7 +18,6 @@ import {
   PLAYER_CMD,
   PRODUCE_CMD,
   SHOP_CMD,
-  STORY_CMD,
   WORLD_CMD,
   businessErrorMessage,
 } from '@idle-dark/protocol';
@@ -26,7 +25,6 @@ import type {
   InventorySlotDto,
   PlayerMetaDto,
   PlayerStateDto,
-  StoryDto,
   UnitStateDto,
   WorldSnapshotDto,
   WorldTickDto,
@@ -74,8 +72,6 @@ const PLAYER_STATE: PlayerStateDto = {
   selectedEnhances: [],
   skillExp: {},
   dungeonTickets: {},
-  storiesDone: [],
-  enemyTasks: {},
   medicineLevel: {},
   medicineExp: 0,
   maxMedicineExp: 100,
@@ -180,7 +176,6 @@ function createHarness(storage: StorageLike = createMemoryStorage()): Harness {
     .on(PRODUCE_CMD.cmd, PRODUCE_CMD.medicineState, () =>
       ok({ levels: {}, exp: 0, maxExp: 100, bowelLevel: 1, bowelEffect: 1, bowelUpgradePrice: 100 }),
     )
-    .on(STORY_CMD.cmd, STORY_CMD.list, () => ok([]))
     .on(SHOP_CMD.cmd, SHOP_CMD.state, () =>
       ok({ playerSlotCount: 1, playerSlotMax: 5, nextSlotPrice: 100, diamonds: 50, exchangeOptions: [] }),
     )
@@ -401,128 +396,7 @@ describe('断线重连：自动重新进入当前角色', () => {
   });
 });
 
-describe('进图自动播放剧情（(story, unlock) 推送）', () => {
-  /** 等待 `handleNotification` 内部的异步编排（load → open）落定。 */
-  async function waitFor(condition: () => boolean, tries = 50): Promise<void> {
-    for (let i = 0; i < tries; i += 1) {
-      if (condition()) return;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-    throw new Error('waitFor 超时');
-  }
-
-  const SCRIPT_STORY: StoryDto = {
-    key: 'eyer-stories-1',
-    group: '艾尔的故事',
-    name: '艾尔的故事 - 序章 - 1',
-    status: 'none',
-    taskType: 'script',
-    canStart: true,
-    lockedReason: null,
-  };
-
-  function registerStoryRoutes(server: Harness['server'], story: StoryDto): void {
-    const ok = (data: unknown): { data: unknown } => ({ data: { success: true, data } });
-    server
-      .on(STORY_CMD.cmd, STORY_CMD.list, () => ok([story]))
-      .on(STORY_CMD.cmd, STORY_CMD.play, () =>
-        ok({ key: story.key, name: story.name, nodes: [{ type: 'say', args: ['艾尔', '你好'] }], awards: {} }),
-      );
-  }
-
-  it('autoPlay=true → 自动打开剧本并切到「故事」面板（服务端不替玩家 finish）', async () => {
-    const { root, server } = createHarness();
-    opened.push(root);
-    await root.login('tester', 'secret123');
-    await root.selectCharacter('k1');
-    registerStoryRoutes(server, SCRIPT_STORY);
-
-    server.pushRoute(STORY_CMD.cmd, STORY_CMD.unlock, {
-      key: 'eyer-stories-1',
-      name: SCRIPT_STORY.name,
-      taskType: 'script',
-      autoPlay: true,
-    });
-
-    await waitFor(() => root.story.play !== null);
-    expect(root.ui.activePanelKey).toBe('stories');
-    expect(root.story.play?.key).toBe('eyer-stories-1');
-    expect(root.story.nodes).toHaveLength(1);
-    // 前端只播放，不推导完成：服务端仍是 none/task，由玩家点「结算」触发 finish
-    expect(root.story.stories[0]?.status).toBe('none');
-  });
-
-  it('autoPlay=false（击杀/购买任务刚登记）→ 只刷新列表，不跳面板、不打开剧本', async () => {
-    const { root, server } = createHarness();
-    opened.push(root);
-    await root.login('tester', 'secret123');
-    await root.selectCharacter('k1');
-    registerStoryRoutes(server, { ...SCRIPT_STORY, taskType: 'kill', status: 'task' });
-
-    server.pushRoute(STORY_CMD.cmd, STORY_CMD.unlock, {
-      key: 'eyer-stories-3',
-      name: '序章 3',
-      taskType: 'kill',
-      autoPlay: false,
-    });
-
-    await waitFor(() => root.story.stories.length === 1);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(root.story.play).toBeNull();
-    expect(root.ui.activePanelKey).toBeNull();
-  });
-
-  it('玩家正在读另一段剧情 → 不打断', async () => {
-    const { root, server } = createHarness();
-    opened.push(root);
-    await root.login('tester', 'secret123');
-    await root.selectCharacter('k1');
-    registerStoryRoutes(server, SCRIPT_STORY);
-    await root.story.open('eyer-stories-1');
-    expect(root.story.play).not.toBeNull();
-
-    server.pushRoute(STORY_CMD.cmd, STORY_CMD.unlock, {
-      key: 'eyer-stories-2',
-      name: '序章 2',
-      taskType: 'script',
-      autoPlay: true,
-    });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(root.story.play?.key).toBe('eyer-stories-1');
-  });
-
-  it('已完成的剧情即便 autoPlay=true 也不打开', async () => {
-    const { root, server } = createHarness();
-    opened.push(root);
-    await root.login('tester', 'secret123');
-    await root.selectCharacter('k1');
-    registerStoryRoutes(server, { ...SCRIPT_STORY, status: 'done' });
-
-    server.pushRoute(STORY_CMD.cmd, STORY_CMD.unlock, {
-      key: 'eyer-stories-1',
-      name: SCRIPT_STORY.name,
-      taskType: 'script',
-      autoPlay: true,
-    });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(root.story.play).toBeNull();
-  });
-
-  it('载荷缺 key / 是非剧本命令时安全忽略', async () => {
-    const { root, server } = createHarness();
-    opened.push(root);
-    await root.login('tester', 'secret123');
-    await root.selectCharacter('k1');
-    registerStoryRoutes(server, SCRIPT_STORY);
-
-    server.pushRoute(STORY_CMD.cmd, STORY_CMD.unlock, { autoPlay: true });
-    server.pushRoute(STORY_CMD.cmd, STORY_CMD.play, { key: 'eyer-stories-1' });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(root.story.play).toBeNull();
-  });
-});
-
-describe('中立（黄名）单位必须可被点选攻击（eyer-stories-4 的前置）', () => {
+describe('中立（黄名）单位必须可被点选攻击', () => {
   it('中立怪进入「可攻击」列表、但不被算作敌方；友军/幽灵不入列', async () => {
     const { root, server } = createHarness();
     opened.push(root);

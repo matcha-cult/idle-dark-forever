@@ -14,7 +14,7 @@
  */
 import { describe, expect, it, beforeEach } from 'vitest';
 import { createDefaultTables, type DataTables } from '@idle-dark/game-core';
-import { STORY_CMD, WORLD_CMD, type StoryUnlockDto, type WorldTickDto } from '@idle-dark/protocol';
+import { WORLD_CMD, type WorldTickDto } from '@idle-dark/protocol';
 import type { DatabaseService } from '../src/modules/database/database.service.js';
 import type { GameDatabaseService } from '../src/modules/database/game-database.service.js';
 import { CharacterService } from '../src/modules/character/character.service.js';
@@ -25,8 +25,6 @@ import { PanelCharacterService } from '../src/modules/logic/shared/panel-charact
 import { PlayerLogicService } from '../src/modules/logic/player/player-logic.service.js';
 import { PlayerContextService } from '../src/modules/logic/shared/player-context.service.js';
 import { InProcessEventBus } from '../src/modules/logic/shared/event-bus.js';
-import { StoryLogicService } from '../src/modules/logic/story/story.logic.service.js';
-import { RateLimiterService } from '../src/common/services/rate-limiter.service.js';
 import { WorldService } from '../src/modules/logic/world/world.service.js';
 import { FakeDatabase } from './helpers/fake-database.js';
 
@@ -78,8 +76,6 @@ describe('角色会话归属（切人 / 当前角色 / 推送范围）', () => {
       tables,
       events,
     );
-    // 解环后进图剧情由 quest 订阅事件完成：接上真实订阅方，回归才有意义。
-    new StoryLogicService(context, panelCharacters, new RateLimiterService(), batcher, events).onModuleInit();
     const characters = new CharacterService(
       db.asService() as unknown as DatabaseService,
       context,
@@ -215,17 +211,5 @@ describe('角色会话归属（切人 / 当前角色 / 推送范围）', () => {
     runTicks(2);
     // 两次 tick → 两帧（同一批内同路由会合并，不存在「一个 tick 两帧」）
     expect(tickFrames().length).toBe(2);
-  });
-
-  it('剧情解锁推送也只属于当前角色（回归：切人后不再替旧角色推进）', async () => {
-    await players.select(1, X);
-    const unlocksOf = (): StoryUnlockDto[] =>
-      frames
-        .filter((frame) => frame.cmd === STORY_CMD.cmd && frame.subCmd === STORY_CMD.unlock)
-        .map((frame) => frame.data as StoryUnlockDto);
-    // 两个角色的进度互不影响：X 的推进不应出现在 Y 的会话里
-    expect(Array.isArray(unlocksOf())).toBe(true);
-    await players.select(1, Y);
-    expect(context.peek(1, Y)).toBeTruthy();
   });
 });

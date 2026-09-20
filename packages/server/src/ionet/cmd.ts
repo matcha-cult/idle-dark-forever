@@ -20,7 +20,6 @@ export {
   LOOTRULE_CMD,
   CAREER_CMD,
   PRODUCE_CMD,
-  STORY_CMD,
   SHOP_CMD,
   IDLE_CMD,
   cmdMerge,

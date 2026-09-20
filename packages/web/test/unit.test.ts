@@ -32,8 +32,8 @@ describe('UiStore', () => {
   it('默认无面板；设置后生效；reset 回到默认', () => {
     const ui = new UiStore();
     expect(ui.activePanelKey).toBeNull();
-    ui.setActivePanel('stories');
-    expect(ui.activePanelKey).toBe('stories');
+    ui.setActivePanel('battle');
+    expect(ui.activePanelKey).toBe('battle');
     ui.reset();
     expect(ui.activePanelKey).toBeNull();
   });
@@ -50,8 +50,8 @@ describe('UiStore', () => {
   it('autoBind：解构出去的方法仍能改到实例（推送侧直接传引用）', () => {
     const ui = new UiStore();
     const { setActivePanel } = ui;
-    setActivePanel('stories');
-    expect(ui.activePanelKey).toBe('stories');
+    setActivePanel('battle');
+    expect(ui.activePanelKey).toBe('battle');
   });
 });
 

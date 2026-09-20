@@ -306,7 +306,6 @@ define(tables, 'maps', 'nightmare.slime', {
   outside: 'home',
   group: 'nightmare.1',
   requirement: {
-    stories: ['chapter3-7'],
     atLeastMaxLevel: 70,
   },
   phases: [
@@ -540,7 +539,6 @@ define(tables, 'maps', 'nightmare.wolf', {
   outside: 'home',
   group: 'nightmare.1',
   requirement: {
-    stories: ['chapter3-7'],
     atLeastMaxLevel: 70,
   },
   phases: [
@@ -824,7 +822,6 @@ define(tables, 'maps', 'nightmare.kobold', {
   outside: 'home',
   group: 'nightmare.1',
   requirement: {
-    stories: ['chapter3-7'],
     atLeastMaxLevel: 70,
   },
   phases: [
@@ -1021,7 +1018,6 @@ define(tables, 'maps', 'nightmare.undead', {
   outside: 'home',
   group: 'nightmare.1',
   requirement: {
-    stories: ['chapter3-7'],
     atLeastMaxLevel: 70,
   },
   phases: [
@@ -1278,7 +1274,6 @@ define(tables, 'maps', 'nightmare.fire', {
   outside: 'home',
   group: 'nightmare.2',
   requirement: {
-    stories: ['chapter3-7'],
     atLeastMaxLevel: 70,
   },
   phases: [
@@ -1525,7 +1520,6 @@ define(tables, 'maps', 'nightmare.knight', {
   outside: 'home',
   group: 'nightmare.2',
   requirement: {
-    stories: ['chapter3-7'],
     atLeastMaxLevel: 70,
   },
   phases: [

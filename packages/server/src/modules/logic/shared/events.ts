@@ -1,8 +1,7 @@
 /**
  * 逻辑域**跨服事件契约**（08 §2.3 解环用；R1-a2）
  *
- * 背景：`world/story/inventory/career` 之间存在三条真实环（见 09 §0.3 环快照）：
- * - `world → story`（进图推进剧情）↔ `story → world`（读当前地图）
+ * 背景：`world/inventory/career` 之间存在真实环（见 09 §0.3 环快照）：
  * - `world → inventory`（推送助手 / 当前角色，已由 R1-a1 上移 shared 消除）
  * - `inventory/career/produce → world`（`markCombatDirty`）↔ `world → inventory`
  *
@@ -14,26 +13,6 @@
  * - 载荷只用原始类型，**不携带 `Player` / 服务实例**，便于将来序列化。
  * - 事件名即 `type` 字段，订阅按名注册。
  */
-
-/** 进入（或首次落在地图）某张图：由 battle 会话宿主发布，quest 订阅推进剧情。 */
-export interface MapEnteredEvent {
-  readonly type: 'MapEntered';
-  readonly userId: number;
-  readonly characterId: string;
-  /** 地图 key（`tables.maps` 的键）。 */
-  readonly map: string;
-}
-
-/** 战斗内核击杀：由 battle 发布，quest 订阅递减剧情击杀任务。 */
-export interface EnemyKilledEvent {
-  readonly type: 'EnemyKilled';
-  readonly userId: number;
-  readonly characterId: string;
-  /** 怪物类型 key（`tables.monsters` 的键，如 `slime.minimal`）。 */
-  readonly enemyType: string;
-  /** 本次击杀数量（内核保证 ≥1）。 */
-  readonly count: number;
-}
 
 /** 战斗 hook 需重绑：由 item / character 面板域发布，battle 订阅置脏标记。 */
 export interface CombatHooksDirtyEvent {
@@ -63,8 +42,6 @@ export interface RunEndedEvent {
 
 /** 事件名 → 载荷 的映射（订阅端的类型来源）。 */
 export interface DomainEventMap {
-  MapEntered: MapEnteredEvent;
-  EnemyKilled: EnemyKilledEvent;
   CombatHooksDirty: CombatHooksDirtyEvent;
   RunEnded: RunEndedEvent;
 }

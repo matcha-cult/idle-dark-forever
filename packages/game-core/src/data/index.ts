@@ -29,7 +29,6 @@ import { medicines } from './medicines.js';
 import { passives } from './passives.js';
 import { roles } from './roles.js';
 import { skills } from './skills.js';
-import { stories } from './stories.js';
 import { upgrades } from './upgrades.js';
 
 import { registerNightmare } from './packages/nightmare.js';
@@ -56,7 +55,6 @@ const baseTables = {
   buffs,
   affixes,
   enemyAffixes,
-  stories,
   legends,
   medicines,
   upgrades,

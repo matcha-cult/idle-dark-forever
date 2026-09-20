@@ -2,7 +2,7 @@
  * 逻辑服架构边界门禁（08 §3；R1-b）
  *
  * 这是**会失败的测试**，不是文档约定。四类断言：
- * 1. **无环**：文件级 SCC = 0；逻辑服级图无环（含 world/story/inventory 三条已知环的回归）；
+ * 1. **无环**：文件级 SCC = 0；逻辑服级图无环（含 world/inventory 已知环的回归）；
  * 2. **禁止跨服深路径 import**：只允许过渡白名单（`TRANSITIONAL_DEEP_IMPORTS`，禁止增长），
  *    且共享层不得反向依赖任何逻辑服；
  * 3. **cmd 段唯一归属**：`CMD_SEGMENTS` 的每一段恰好属于一个服；
@@ -80,16 +80,14 @@ describe('逻辑服边界门禁 · 真实源码', () => {
     expect(cycles.map((c) => c.join(' <-> '))).toEqual([]);
   });
 
-  it('逻辑服级无环（含 world/story/inventory 三条环的回归）', () => {
+  it('逻辑服级无环（含 world/inventory 已知环的回归）', () => {
     const nodes = [...SERVER_NAMES, 'shared'];
     const edges = graph.edges.map((e) => ({ from: ownerOf(e.from), to: ownerOf(e.to) }));
     expect(findCycles(nodes, edges).map((c) => c.join(' <-> '))).toEqual([]);
   });
 
-  it('三条已知环的边确实已消失（回归）', () => {
+  it('已知环的边确实已消失（回归）', () => {
     const pairs = new Set(graph.edges.map((e) => `${e.from} -> ${e.to}`));
-    expect(pairs.has('modules/logic/world/world.service.ts -> modules/logic/story/internal/story-ops.ts')).toBe(false);
-    expect(pairs.has('modules/logic/story/story.logic.service.ts -> modules/logic/world/world.service.ts')).toBe(false);
     expect(pairs.has('modules/logic/inventory/inventory.logic.service.ts -> modules/logic/world/world.service.ts')).toBe(false);
     expect(pairs.has('modules/logic/career/career.logic.service.ts -> modules/logic/world/world.service.ts')).toBe(false);
     expect(pairs.has('modules/logic/produce/produce.logic.service.ts -> modules/logic/world/world.service.ts')).toBe(false);

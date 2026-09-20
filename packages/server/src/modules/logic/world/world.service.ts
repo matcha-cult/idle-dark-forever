@@ -163,7 +163,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     @Inject(NOTIFICATION_BATCHER) private readonly batcher: NotificationBatcher,
     @Inject(GAME_CLOCK) now: NowSource,
     @Inject(DATA_TABLES) tables: DataTables,
-    /** 跨服事件总线（08 §2.3）：发布 `MapEntered`/`EnemyKilled`，订阅 `CombatHooksDirty`。 */
+    /** 跨服事件总线（08 §2.3）：订阅 `CombatHooksDirty`。 */
     @Inject(EVENT_BUS) private readonly events: EventBus,
   ) {
     this.now = now;
@@ -569,8 +569,8 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
 
     const extras = await this.playerContext.extrasOf(userId);
     const position = resolveWorldPosition(this.tables, extras.worldMaps[characterId]);
-    // 持久化位置是「当前地图」的**唯一权威**（08 §2.3 / 09 §4.3）：quest 域据此判定
-    // 剧情的地图条件，不再反向调用 battle。会话启动即写入，保证从未进过图的角色也有位置。
+    // 持久化位置是「当前地图」的**唯一权威**（08 §2.3 / 09 §4.3）。
+    // 会话启动即写入，保证从未进过图的角色也有位置。
     extras.worldMaps[characterId] = { map: position.map, endlessLevel: position.endlessLevel };
     this.playerContext.markAccountDirty(userId);
     const storedSeed = extras.worldSeeds[characterId];
@@ -627,8 +627,6 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       updateRate: 1,
       expRate: EXP_RATE,
       medicineLevel: (type) => extras.medicineLevel[type] ?? 0,
-      onEnemyKilled: (type, count) =>
-        this.events.emit({ type: 'EnemyKilled', userId, characterId, enemyType: type, count }),
       lootRecorder: {
         record: (slot, handled) => {
           session.pendingLoot.push(toLootDto(slot, handled));
@@ -646,10 +644,6 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
 
     this.sessions.set(key, session);
     this.activeByUser.set(userId, characterId);
-    // 会话首次落地在该地图 = 「进入地图」：补一次剧情推进，否则
-    // `enterMap(当前图)` 会走 early-return 分支，剧情永远不会自动触发。
-    // 由 quest 服务订阅同步处理（解环：battle 不再 import story）。
-    this.events.emit({ type: 'MapEntered', userId, characterId, map: position.map });
     return session;
   }
 
@@ -877,9 +871,8 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       const player = session.world.player as Player | null;
       if (!player) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);
 
-      const extras = await this.playerContext.extrasOf(userId);
       // 解锁判定唯一入口（shared/map-dto）：map 控制器与 battle 会话宿主共用同一实现。
-      const unlocked = evaluateMapUnlock(map.requirement, player, session.world.map, extras);
+      const unlocked = evaluateMapUnlock(map.requirement, player, session.world.map);
       if (!unlocked) {
         this.opIds.abort(userId, opId ?? '');
         return fail(BusinessErrorCode.MAP_LOCKED);
@@ -908,9 +901,6 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
         session.run = null;
       }
       await this.persistPosition(session);
-      // 进图剧情推进必须在 flush 之前：击杀任务登记落在 extras 里，要一起落库。
-      // 由 quest 服务订阅 `MapEntered` 同步处理（08 §2.3 解环）。
-      this.events.emit({ type: 'MapEntered', userId, characterId, map: mapKey });
       player.timestamp = this.now();
       this.playerContext.markDirty(userId, characterId);
       await this.playerContext.flush(userId, characterId);
@@ -981,7 +971,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       map: session.world.map,
       endlessLevel: session.world.endlessLevel,
       units: session.world.units.map((unit) => unitStateDtoOf(unit, session.world.playerUnit)),
-      maps: player ? mapListDtoOf(this.tables, player, extras, session.world.map) : [],
+      maps: player ? mapListDtoOf(this.tables, player, session.world.map) : [],
       pendingMaps: session.world.pendingMaps.map(([key, endlessLevel]) => ({ key, endlessLevel })),
       updateRate: session.world.updateRate,
       paused: session.clock.isPaused(),

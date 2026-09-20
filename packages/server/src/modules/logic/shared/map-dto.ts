@@ -5,19 +5,9 @@
  */
 import type { MapDto, PlayerStateDto } from '@idle-dark/protocol';
 import { checkRequirement, Player, type DataTables, type Requirement, type RequirementContext } from '@idle-dark/game-core';
-import type { AccountExtras } from './player-dto.js';
 
 /** 当前玩家所在地图（原版 `world.map`，不在 `Player` 存档里）。 */
-export function requirementContextOf(
-  player: Player,
-  map: string,
-  extras: AccountExtras,
-): RequirementContext {
-  const storiesMap = new Map<string, string>();
-  for (const key of Object.keys(extras.storiesMap)) {
-    const value = extras.storiesMap[key];
-    if (value !== undefined) storiesMap.set(key, value);
-  }
+export function requirementContextOf(player: Player, map: string): RequirementContext {
   return {
     player: {
       role: player.role,
@@ -26,17 +16,15 @@ export function requirementContextOf(
       maxLevel: player.maxLevel,
     },
     map,
-    storiesMap,
   };
 }
 
 export function mapListDtoOf(
   tables: DataTables,
   player: Player,
-  extras: AccountExtras,
   currentMap: string,
 ): MapDto[] {
-  const context = requirementContextOf(player, currentMap, extras);
+  const context = requirementContextOf(player, currentMap);
   const out: MapDto[] = [];
   for (const key of Object.keys(tables.maps)) {
     const map = tables.maps[key];
@@ -116,10 +104,9 @@ export function evaluateMapUnlock(
   requirement: Requirement | null | undefined,
   player: Player,
   currentMap: string,
-  extras: AccountExtras,
 ): boolean {
   try {
-    return checkRequirement(requirement, requirementContextOf(player, currentMap, extras));
+    return checkRequirement(requirement, requirementContextOf(player, currentMap));
   } catch {
     return false;
   }

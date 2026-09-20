@@ -37,7 +37,6 @@ import {
 } from '@idle-dark/protocol';
 import {
   DATA_TABLES,
-  EVENT_BUS,
   GAME_CLOCK,
   PlayerContextService,
   pickOpenWorldMap,
@@ -45,7 +44,6 @@ import {
   type ChallengeEntry,
   type DungeonCooldownEntry,
   type DungeonRunEntry,
-  type EventBus,
   type NowSource,
 } from '../shared/index.js';
 import { BattleCollector } from '../shared/battle-collector.js';
@@ -100,7 +98,6 @@ interface OfflineWalk {
   kills: number;
   loots: Array<{ key: string; count: number; quality: Quality }>;
   materials: Array<{ key: string; count: number }>;
-  killsByType: Record<string, number>;
   finalMap: string;
   finalEndlessLevel: number;
   /** 已消费后剩余的挑战队列。 */
@@ -114,8 +111,6 @@ interface SimResult {
   gainedExp: number;
   gainedGold: number;
   kills: number;
-  /** 本次**真实模拟**击杀的按怪种计数（RD2：离线击杀计入剧情击杀任务）。 */
-  killsByType: Record<string, number>;
   loots: Array<{ key: string; count: number; quality: Quality }>;
   materials: Array<{ key: string; count: number }>;
 }
@@ -136,7 +131,6 @@ export class IdleService {
     private readonly playerContext: PlayerContextService,
     @Inject(GAME_CLOCK) now: NowSource,
     @Inject(DATA_TABLES) tables: DataTables,
-    @Inject(EVENT_BUS) private readonly events: EventBus,
   ) {
     this.now = now;
     this.tables = tables;
@@ -228,9 +222,6 @@ export class IdleService {
       addMaterial(player, this.tables, material.key, material.count);
     }
 
-    // RD2：离线**真实模拟**的击杀计入剧情击杀任务（quest 唯一写者，恰好一次）。
-    this.emitSimulatedKills(userId, characterId, walk.killsByType);
-
     // 落库：位置 / 挑战队列 / run 档（M7）/ 冷却与票（RC2/RC3）。
     extras.worldMaps[characterId] = { map: walk.finalMap, endlessLevel: walk.finalEndlessLevel };
     extras.challengeQueue[characterId] = walk.finalQueue;
@@ -315,7 +306,6 @@ export class IdleService {
     let kills = 0;
     const loots: Array<{ key: string; count: number; quality: Quality }> = [];
     const materials: Array<{ key: string; count: number }> = [];
-    const killsByType: Record<string, number> = {};
     let finalMap = entries[0]?.key ?? 'home';
     let finalEndlessLevel = entries[0]?.endlessLevel ?? 0;
     let consumed = 0;
@@ -358,7 +348,6 @@ export class IdleService {
           entry,
           seed,
           budget: remaining,
-          killsByType,
           paid: true,
           isDungeon: true,
           ...(enemyBorn === undefined ? {} : { enemyBornState: enemyBorn }),
@@ -399,7 +388,6 @@ export class IdleService {
         entry,
         seed,
         budget: remaining,
-        killsByType,
         paid: false,
         isDungeon: false,
       });
@@ -434,7 +422,6 @@ export class IdleService {
           },
           seed,
           budget: remaining,
-          killsByType,
           paid: false,
           isDungeon: false,
         });
@@ -455,7 +442,6 @@ export class IdleService {
       kills,
       loots,
       materials,
-      killsByType,
       finalMap,
       finalEndlessLevel,
       finalQueue: queue.slice(Math.min(consumed, queue.length)),
@@ -506,7 +492,6 @@ export class IdleService {
     entry: OfflineEntry;
     seed: number;
     budget: number;
-    killsByType: Record<string, number>;
     paid: boolean;
     isDungeon: boolean;
     enemyBornState?: unknown;
@@ -527,11 +512,6 @@ export class IdleService {
         updateRate: 1,
         expRate: EXP_RATE,
         medicineLevel: (type) => extras.medicineLevel[type] ?? 0,
-        onEnemyKilled: (type, count) => {
-          const n = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
-          if (n <= 0) return;
-          params.killsByType[type] = (params.killsByType[type] ?? 0) + n;
-        },
         ...(params.enemyBornState === undefined ? {} : { enemyBornState: params.enemyBornState }),
       }).world;
       if (params.paid && world.enemyBorn instanceof DungeonState) {
@@ -627,25 +607,6 @@ export class IdleService {
     extras.worldSeeds[characterId] = seed;
     this.playerContext.markAccountDirty(userId);
     return seed;
-  }
-
-  /** RD2：把离线模拟的按怪种击杀数发布为 `EnemyKilled`（quest 订阅后递减任务，恰好一次）。 */
-  private emitSimulatedKills(
-    userId: number,
-    characterId: string,
-    killsByType: Record<string, number>,
-  ): void {
-    for (const enemyType of Object.keys(killsByType)) {
-      const count = killsByType[enemyType];
-      if (typeof count !== 'number' || !Number.isFinite(count) || count <= 0) continue;
-      this.events.emit({
-        type: 'EnemyKilled',
-        userId,
-        characterId,
-        enemyType,
-        count: Math.trunc(count),
-      });
-    }
   }
 }
 

@@ -90,10 +90,9 @@ export class WorldStore {
   /**
    * 可被指定为攻击目标的单位 = 敌方 + 中立。
    *
-   * ⚠️ 为什么必须含中立：原版剧情明确教玩家「黄色名字的魔物不会主动攻击英雄们，
-   * 溅射和群体伤害也不会攻击他们。但如果英雄主动攻击他们，他们就会加入战斗」，
-   * 且 `eyer-stories-4` 的任务正是**击杀 1 只大史莱姆（中立）**。
-   * 早期前端只列 `camp === 'enemy'`，中立怪既看不到也点不动 → 主线到此卡死。
+   * ⚠️ 为什么必须含中立：原版设定明确「黄色名字的魔物不会主动攻击英雄们，
+   * 溅射和群体伤害也不会攻击他们。但如果英雄主动攻击他们，他们就会加入战斗」。
+   * 早期前端只列 `camp === 'enemy'`，中立怪既看不到也点不动。
    */
   get attackables(): WorldSnapshotDto['units'] {
     return this.units.filter((unit) => isAttackableCamp(unit.camp));

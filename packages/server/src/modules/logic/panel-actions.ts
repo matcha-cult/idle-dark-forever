@@ -11,7 +11,7 @@
  * （`PanelCharacterService`），各面板域共享同一实例。必须列入模块表一次。
  *
  * 覆盖的 cmd 段：inventory(50) / bank(60) / lootrule(70) / career(80) / produce(90) /
- * story(100) / shop(110)。
+ * shop(110)。
  */
 import { CMD_SEGMENTS } from '@idle-dark/protocol';
 import { InventoryAction } from './inventory/inventory.action.js';
@@ -19,7 +19,6 @@ import { BankAction } from './bank/bank.action.js';
 import { LootRuleAction } from './lootrule/lootrule.action.js';
 import { CareerAction } from './career/career.action.js';
 import { ProduceAction } from './produce/produce.action.js';
-import { StoryAction } from './story/story.action.js';
 import { ShopAction } from './shop/shop.action.js';
 
 import { PanelCharacterModule } from './shared/panel-character.module.js';
@@ -28,7 +27,6 @@ import { BankLogicModule } from './bank/bank-logic.module.js';
 import { LootRuleLogicModule } from './lootrule/lootrule-logic.module.js';
 import { CareerLogicModule } from './career/career-logic.module.js';
 import { ProduceLogicModule } from './produce/produce-logic.module.js';
-import { StoryLogicModule } from './story/story-logic.module.js';
 import { ShopLogicModule } from './shop/shop-logic.module.js';
 
 /** 面板域的 Action 类（登记到 `GAME_ACTION_CLASSES`）。 */
@@ -38,7 +36,6 @@ export const PANEL_ACTION_CLASSES = [
   LootRuleAction,
   CareerAction,
   ProduceAction,
-  StoryAction,
   ShopAction,
 ] as const;
 
@@ -50,7 +47,6 @@ export const PANEL_LOGIC_MODULES = [
   LootRuleLogicModule,
   CareerLogicModule,
   ProduceLogicModule,
-  StoryLogicModule,
   ShopLogicModule,
 ] as const;
 
@@ -61,6 +57,5 @@ export const PANEL_CMD_SEGMENTS = [
   CMD_SEGMENTS.lootrule,
   CMD_SEGMENTS.career,
   CMD_SEGMENTS.produce,
-  CMD_SEGMENTS.story,
   CMD_SEGMENTS.shop,
 ] as const;

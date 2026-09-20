@@ -38,8 +38,8 @@ export const GameShellPage = observer(function GameShellPage() {
   const { token } = theme.useToken();
   const { player, world, idle, connection } = root;
   const navItems = useMemo(() => createPanelNavItems(), []);
-  // 面板 key 是 Store 状态（不是局部 state）：推送驱动的跳转（如进图自动播放剧情
-  // 要跳到「故事」面板）必须能从域 Store 侧发起，见 `stores/ui-store.ts`。
+  // 面板 key 是 Store 状态（不是局部 state）：推送驱动的跳转必须能从域 Store 侧发起，
+  // 见 `stores/ui-store.ts`。
   const activeKey = root.ui.activePanelKey ?? (listPanelKeys()[0] ?? 'battle');
   const [collapsed, setCollapsed] = useState(false);
 

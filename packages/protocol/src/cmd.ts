@@ -32,8 +32,6 @@ export const CMD_SEGMENTS = {
   career: 80,
   /** 生产：附魔 / 重铸 / 炼金 / 分解 */
   produce: 90,
-  /** 故事与剧情 */
-  story: 100,
   /** 神力商店与兑换（原内购页） */
   shop: 110,
   /** 离线结算 */
@@ -180,18 +178,6 @@ export const PRODUCE_CMD = {
   medicineUse: 6,
   /** 药剂重置（金币 / 神力） */
   medicineReset: 7,
-} as const;
-
-/** 故事段 */
-export const STORY_CMD = {
-  cmd: CMD_SEGMENTS.story,
-  list: 1,
-  /** 剧情脚本（DSL 原文 + 解析结果） */
-  play: 2,
-  /** 完成击杀 / 购买类任务 */
-  finish: 3,
-  /** (push) 可开启新剧情 */
-  unlock: 4,
 } as const;
 
 /** 神力商店段 */

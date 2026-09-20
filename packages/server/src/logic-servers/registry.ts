@@ -3,7 +3,7 @@
  *
  * 08 §2.2 的目标划分（A2 单进程阶段）：
  * ```
- * external ──► battle / item / quest / character / dungeon / map
+ * external ──► battle / item / character / dungeon / map
  *                                   └────────► shared（协议/时钟/端口/事件总线，无业务）
  * ```
  *
@@ -75,11 +75,6 @@ export const SERVER_DEFINITIONS = {
       CMD_SEGMENTS.produce,
       CMD_SEGMENTS.shop,
     ],
-  },
-  quest: {
-    name: 'quest',
-    roots: ['modules/logic/story'],
-    cmdSegments: [CMD_SEGMENTS.story],
   },
   character: {
     name: 'character',

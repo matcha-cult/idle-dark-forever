@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkRequirement, checkStory, type RequirementContext } from './check.js';
+import { checkRequirement, type RequirementContext } from './check.js';
 
 function makeContext(overrides: Partial<RequirementContext> = {}): RequirementContext {
   return {
     player: { role: 'Eyer', currentCareer: 'warrior', level: 20, maxLevel: 60 },
     map: 'home',
-    storiesMap: new Map(),
     ...overrides,
   };
 }
@@ -59,32 +58,6 @@ describe('checkRequirement', () => {
     expect(checkRequirement({ map: 'home' }, makeContext({ map: null }))).toBe(false);
   });
 
-  it('stories：全部 done 才成立', () => {
-    const context = makeContext({
-      storiesMap: new Map([
-        ['a', 'done'],
-        ['b', 'task'],
-      ]),
-    });
-    expect(checkRequirement({ stories: ['a'] }, context)).toBe(true);
-    expect(checkRequirement({ stories: ['a', 'b'] }, context)).toBe(false);
-    expect(checkRequirement({ stories: ['missing'] }, context)).toBe(false);
-    expect(checkRequirement({ stories: [] }, context)).toBe(true);
-  });
-
-  it('beforeStories：任何一个 done 就不成立', () => {
-    const context = makeContext({ storiesMap: new Map([['a', 'done']]) });
-    expect(checkRequirement({ beforeStories: ['a'] }, context)).toBe(false);
-    expect(checkRequirement({ beforeStories: ['b'] }, context)).toBe(true);
-    expect(checkRequirement({ beforeStories: [] }, context)).toBe(true);
-  });
-
-  it('stories / beforeStories 非数组时跳过（原版会抛 TypeError）', () => {
-    const context = makeContext();
-    expect(checkRequirement({ stories: 'a' as unknown as string[] }, context)).toBe(true);
-    expect(checkRequirement({ beforeStories: 1 as unknown as string[] }, context)).toBe(true);
-  });
-
   it('$or：任一成立；空数组为不成立（原版 `.some` 语义）', () => {
     const context = makeContext();
     expect(checkRequirement({ $or: [{ level: 1 }, { level: 999 }] }, context)).toBe(true);
@@ -112,8 +85,8 @@ describe('checkRequirement', () => {
   });
 
   it('多条件同时存在时是 AND 关系', () => {
-    const context = makeContext({ storiesMap: new Map([['a', 'done']]) });
-    expect(checkRequirement({ role: 'Eyer', career: 'warrior', level: 20, map: 'home', stories: ['a'] }, context)).toBe(
+    const context = makeContext();
+    expect(checkRequirement({ role: 'Eyer', career: 'warrior', level: 20, map: 'home' }, context)).toBe(
       true,
     );
     expect(checkRequirement({ role: 'Eyer', career: 'warrior', level: 20, map: 'forest' }, context)).toBe(false);
@@ -142,28 +115,5 @@ describe('checkRequirement', () => {
     let ok: Record<string, unknown> = { level: 20 };
     for (let i = 0; i < 30; i += 1) ok = { $and: [ok] };
     expect(checkRequirement(ok as never, context)).toBe(true);
-  });
-});
-
-describe('checkStory', () => {
-  it('已 done 的剧情不可再开启', () => {
-    const context = makeContext({ storiesMap: new Map([['s1', 'done']]) });
-    expect(checkStory({ key: 's1', requirement: {} }, context)).toBe(false);
-    expect(checkStory({ key: 's2', requirement: {} }, context)).toBe(true);
-  });
-
-  it('未完成时按 requirement 判定', () => {
-    const context = makeContext();
-    expect(checkStory({ key: 's1', requirement: { level: 21 } }, context)).toBe(false);
-    expect(checkStory({ key: 's1', requirement: { level: 20 } }, context)).toBe(true);
-  });
-
-  it('requirement 缺失视为无附加条件', () => {
-    expect(checkStory({ key: 's1' }, makeContext())).toBe(true);
-  });
-
-  it('task 态不算 done，仍可开启', () => {
-    const context = makeContext({ storiesMap: new Map([['s1', 'task']]) });
-    expect(checkStory({ key: 's1', requirement: {} }, context)).toBe(true);
   });
 });

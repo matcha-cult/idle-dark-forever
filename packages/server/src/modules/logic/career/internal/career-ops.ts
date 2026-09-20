@@ -74,8 +74,8 @@ export function careerPanelOf(tables: DataTables, player: Player): CareerPanelDt
   };
 }
 
-function requirementContext(player: Player, storiesMap: ReadonlyMap<string, string>): RequirementContext {
-  return { player, map: null, storiesMap };
+function requirementContext(player: Player): RequirementContext {
+  return { player, map: null };
 }
 
 /** 切换职业（需通过职业解锁条件）。 */
@@ -83,11 +83,10 @@ export function opSwitchCareer(
   tables: DataTables,
   player: Player,
   career: string,
-  storiesMap: ReadonlyMap<string, string>,
 ): void {
   const data = tables.careers[career];
   if (!data) throw new OpError(BusinessErrorCode.INVALID_PARAM, '职业不存在');
-  if (!player.careers.has(career) && !checkRequirement(data.requirement, requirementContext(player, storiesMap))) {
+  if (!player.careers.has(career) && !checkRequirement(data.requirement, requirementContext(player))) {
     throw new OpError(BusinessErrorCode.CAREER_LOCKED);
   }
   player.selectCareer(career);

@@ -151,7 +151,6 @@ return  {
   description: '擅长从阴影中伏击敌人。',
   requirement: {
     role: 'Eyer',
-    stories: ['chapter3-5'],
   },
   equipments: {
     weapon: 'stickDagger',
@@ -216,7 +215,6 @@ return  {
   description: '圣光谦卑的仆从，谦卑，怜悯。',
   requirement: {
     role: 'Eyer',
-    stories: ['chapter3-5'],
   },
   equipments: {
     weapon: 'stickSword',
@@ -280,7 +278,6 @@ return  {
   description: '与精灵签订契约就职魔法少女，掌握超自然的力量以击败魔族。',
   requirement: {
     role: 'Aleanor',
-    stories: ['chapter3-5'],
   },
   equipments: {
     weapon: 'stickWand',

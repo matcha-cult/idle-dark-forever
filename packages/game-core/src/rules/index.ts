@@ -16,7 +16,7 @@
  * - 拾取规则编码与判定（`lootRuleKeyOf` / `lootRuleActionOf` …，跨域唯一定义）
  * - `randomAffixValue` / `randomAffixes` / `isValidAffix` / `generateEquip` / `randomEquip`
  *   / `getMaterialLevel` / `getDecomposeMatrials`
- * - `checkRequirement` / `checkStory`
+ * - `checkRequirement`
  */
 
 export * from './player-meta.js';

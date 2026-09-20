@@ -44,7 +44,7 @@ model users {
 }
 
 /// 账号级状态（**跨角色共享**）：神力、角色栏位、最高无尽层，以及一个 `data` 侧车 JSONB
-/// （存放 `banned` / `updateRate` / `bank` / `storiesMap` / `enemyTasks` / `medicineLevel` /
+/// （存放 `banned` / `updateRate` / `bank` / `medicineLevel` /
 /// `worldSeeds` / `worldMaps` 等 game-core 的 `PlayerAccountState` 与 `AccountExtras`）。
 ///
 /// 为什么用 JSONB 侧车而不是逐列展开：这些结构由 `game-core` 的 `toJSON()` 决定，

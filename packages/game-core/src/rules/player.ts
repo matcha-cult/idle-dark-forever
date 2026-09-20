@@ -123,7 +123,7 @@ export class Player extends PlayerMeta {
   skillExp = new Map<string, { level: number; exp: number }>();
   /** 锻造/分解空格。 */
   buildInventory: InventorySlot[] = [];
-  /** 任务/剧情奖励空格。 */
+  /** 奖励物品空格。 */
   awardInventory: InventorySlot[] = [];
   migrateMap = new Map<string, number>();
   lootRule = new Map<string, number>();
