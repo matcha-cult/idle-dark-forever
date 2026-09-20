@@ -36,7 +36,7 @@ export type { EquipPosition };
 
 export interface EquipmentSlotLike {
   empty: boolean;
-  goodData?: { type?: string; class?: string } | null;
+  goodData?: { type?: string; class?: string; equipCategory?: string } | null;
   level: number;
   atk: number;
   atkSpeed: number;
@@ -109,6 +109,9 @@ export interface PlayerSavedState extends UnitSavedState {
 
 export class PlayerUnit extends Unit {
   player: PlayerLike | null = null;
+
+  /** 双持交替（P12/E5.5）：下一次普攻用哪只手。 */
+  activeHand: 'main' | 'off' = 'main';
 
   rebornTimer: TimerHandle | null = null;
   rebornTimerStart: number | null = null;
@@ -603,7 +606,7 @@ export class PlayerUnit extends Unit {
   }
 
   override get atk(): number {
-    return this.atkOf('main');
+    return this.atkOf(this.activeHand);
   }
 
   override get critRate(): number {
@@ -703,7 +706,48 @@ export class PlayerUnit extends Unit {
   }
 
   override get atkSpeed(): number {
-    return this.atkSpeedOf('main');
+    return this.atkSpeedOf(this.activeHand);
+  }
+
+  /**
+   * 双持交替攻击（P12 / E5.5）：本方法在**每次出手后**被 `SkillState.effect` 调用。
+   *
+   * 冷却取**刚出手那只手**（`activeHand` 尚未翻转）的攻速；手的切换在冷却结束时发生
+   * （`onAttackCoolDown`），因此两只手各按自己底材的节奏轮流出手，
+   * 总节奏**不等于**两把武器攻速之和。非双持恒用主手。
+   */
+  override setAttackCoolDown(): void {
+    if (this.attackCoolDownTimer) {
+      // 清除未到期的旧计时器：否则重复调用会产生两个回调，双持时把手来回翻两次。
+      this.clock.clearTimeout(this.attackCoolDownTimer);
+      this.attackCoolDownTimer = null;
+    }
+    this.attackCooledDown = false;
+    this.attackCoolDownTimer = this.clock.setTimeout(
+      this.onAttackCoolDown,
+      1000 / this.atkSpeedOf(this.activeHand),
+    );
+    this.scheduleSkillEvaluation();
+  }
+
+  /** 冷却结束：双持时换手（非双持恒回主手）。 */
+  override onAttackCoolDown = (): void => {
+    this.attackCoolDownTimer = null;
+    this.attackCooledDown = true;
+    this.activeHand = this.isDualWielding() ? (this.activeHand === 'main' ? 'off' : 'main') : 'main';
+    this.scheduleSkillEvaluation();
+  };
+
+  /** 是否真正双持：两只手都是「单手武器」。 */
+  isDualWielding(): boolean {
+    const main = this.handSlot('main');
+    const off = this.handSlot('off');
+    return (
+      !!main &&
+      !!off &&
+      main.goodData?.equipCategory === 'oneHand' &&
+      off.goodData?.equipCategory === 'oneHand'
+    );
   }
 
   override damage(type: string, from: Unit | null, v: number): boolean {
