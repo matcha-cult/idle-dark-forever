@@ -17,6 +17,7 @@
  * - `randomAffixValue` / `randomAffixes` / `isValidAffix` / `generateEquip` / `randomEquip`
  *   / `getMaterialLevel` / `getDecomposeMatrials`
  * - `checkRequirement`
+ * - 混沌钥石阶位与掉落掷骰（`keystoneTierOfLevel` / `pickKeystoneTier` …）
  */
 
 export * from './player-meta.js';
@@ -28,4 +29,5 @@ export * from './damage.js';
 export * from './check.js';
 export * from './combat-area.js';
 export * from './dungeon.js';
+export * from './keystone.js';
 export * from './player.js';

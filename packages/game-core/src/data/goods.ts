@@ -1190,6 +1190,32 @@ const __goods_craft = ((): GoodEntry[] => {
   ];
 })();
 
+// ── 混沌钥石 16 种（W5：PoE 式「白图」物品）──
+//
+// 约定（13 号任务书 §1 R3 / §2.4 Q4）：
+// - `keystone.t01..t16` 是本期**背包物品**，**不是钱包物品**（故**不设** `wallet`）；
+// - 同阶可堆叠（`stack`），不同阶不堆叠；`goodOrder` 让 T1..T16 稳定成组、按阶排序；
+// - **白图**：不接 `AffixInfo`，故**不设** `affixGroup` / `position` / `equipCategory`
+//   或任何词缀字段（词缀化 + 加工随 A1 后延，见 §7 H4）；
+// - `price` 按阶线性放大（纯估值，本期不可卖店）。
+// - 掉落规则见 `rules/keystone.ts`（仅 85+ 区域、怪物最多掉自身阶 + 1）。
+const __goods_keystone = ((): GoodEntry[] => {
+  const out: GoodEntry[] = [];
+  for (let tier = 1; tier <= 16; tier += 1) {
+    const nn = String(tier).padStart(2, '0');
+    out.push({
+      key: `keystone.t${nn}`,
+      type: 'material',
+      name: `混沌钥石 T${tier}`,
+      description: `混沌仪的启动媒介，可开启 ${84 + tier} 级的混沌领域（T${tier}）。本期无词缀白图。`,
+      stack: 9999,
+      price: 100 * tier,
+      goodOrder: 4000 + tier,
+    });
+  }
+  return out;
+})();
+
 export const goods: Record<string, GoodEntry> = arrayToMap([
   ...__goods_0,
   ...__goods_1,
@@ -1197,4 +1223,5 @@ export const goods: Record<string, GoodEntry> = arrayToMap([
   ...__goods_3,
   ...__goods_4,
   ...__goods_craft,
+  ...__goods_keystone,
 ]);

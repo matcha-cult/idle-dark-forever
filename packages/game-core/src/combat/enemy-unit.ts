@@ -475,6 +475,8 @@ export class EnemyUnit extends Unit {
       this.world.loots(this.enemyData.loots, this.level, this.quality);
       // TODO: 包裹已满丢弃物品
     }
+    // W5：85+ 区域掉落混沌钥石（与掉落表无关，独立判定；只用 W4 覆写后的 `this.level`）。
+    this.world.rollKeystoneDrop(this.level);
     this.world.onEnemyKilled(this.type, 1);
     this.world.removeUnit(this);
   };

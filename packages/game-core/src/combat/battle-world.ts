@@ -34,6 +34,13 @@ import type { DataTables, LootEntry, MapData } from '../contracts/data.js';
 import { Timeline } from '../sim/index.js';
 import { lootRuleActionOf } from '../rules/loot-rule.js';
 import { absorbAttrKey, mitigationKindOf, resistAttrKey } from '../rules/damage.js';
+import {
+  KEYSTONE_DROP_RATE,
+  MIN_KEYSTONE_LEVEL,
+  keystoneKeyOfTier,
+  keystoneTierOfLevel,
+  pickKeystoneTier,
+} from '../rules/keystone.js';
 import { Camps } from './camps.js';
 import { EnemyBorn, DungeonState, type Born, type BornSavedState, type DungeonSavedState } from './spawner.js';
 import { EnemyUnit } from './enemy-unit.js';
@@ -853,6 +860,42 @@ export class BattleWorld {
     }
 
     return this.lootGoods(slots);
+  }
+
+  /**
+   * W5：混沌钥石掉落判定（PoE 式白图；只做「物品 + 掉落」，不生成词缀）。
+   *
+   * - 仅在 **85+ 区域**：`mapData.level` 缺失 / 非有限 / `< 85` 时立即返回（且不耗随机数）；
+   * - 怪阶由**传入的怪物等级**推导（调用方应传 W4 覆写后的 `EnemyUnit.level`）；
+   * - 先掷 {@link KEYSTONE_DROP_RATE} 基础率，成功后再由 {@link pickKeystoneTier} 掷阶
+   *   （怪最多掉「自身阶 + 1」，最高 T16）；
+   * - 产出走 `lootGoods` → 复用既有拾取 / 丢失 / 推送路径（进**背包**，不进钱包）。
+   */
+  rollKeystoneDrop(monsterLevel: number): void {
+    const mapLevel = this.mapData?.level;
+    if (
+      typeof mapLevel !== 'number' ||
+      !Number.isFinite(mapLevel) ||
+      mapLevel < MIN_KEYSTONE_LEVEL
+    ) {
+      return;
+    }
+    const monsterTier = keystoneTierOfLevel(monsterLevel);
+    if (monsterTier === null) {
+      return;
+    }
+    if (this.rng.loot.next() >= KEYSTONE_DROP_RATE) {
+      return;
+    }
+    const tier = pickKeystoneTier(monsterTier, this.rng.loot);
+    if (tier === null) {
+      return;
+    }
+    const key = keystoneKeyOfTier(tier);
+    if (key === null) {
+      return;
+    }
+    this.lootGoods([{ key, count: 1, quality: 0, kind: 'loot', handled: 'pickup' }]);
   }
 
   lootEndless(_showToast = false): LootSlot[] | undefined {
