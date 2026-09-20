@@ -64,7 +64,7 @@ export function unitStateDtoOf(unit: Unit, playerUnit: PlayerUnit | null): UnitS
   }
 
   const quality = unit instanceof EnemyUnit ? unit.quality : 0;
-  return {
+  const dto: UnitStateDto = {
     id: unit.id,
     kind: unitKindOf(unit, playerUnit),
     typeKey: typeKeyOf(unit, playerUnit),
@@ -85,4 +85,7 @@ export function unitStateDtoOf(unit: Unit, playerUnit: PlayerUnit | null): UnitS
     castingProgress: castingProgressOf(unit),
     buffs,
   };
+  // W4：守关 BOSS 显式标记（**不要用 key 比较**：同一敌人既可能是某图 BOSS 又是另一图普通怪）。
+  if (unit instanceof EnemyUnit && unit.worldBoss) dto.boss = true;
+  return dto;
 }

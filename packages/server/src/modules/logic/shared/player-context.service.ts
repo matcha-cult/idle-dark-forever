@@ -61,7 +61,7 @@ interface AccountDataJson {
   medicineLevel?: Record<string, number>;
   medicineExp?: number;
   worldSeeds?: Record<string, number>;
-  worldMaps?: Record<string, { map?: unknown }>;
+  worldMaps?: Record<string, { map?: unknown; wave?: unknown }>;
 }
 
 @Injectable()
@@ -415,16 +415,31 @@ function applyAccountData(
       const entry = data.worldMaps[key];
       if (!entry || typeof entry !== 'object') continue;
       const map = typeof entry.map === 'string' && entry.map !== '' ? entry.map : 'home';
-      extras.worldMaps[key] = { map };
+      // W4：波数是世界侧车状态。非有限数 / 负数 / 非数字 → 0（不落 `wave: 0`，保持旧形状）。
+      const wave = worldWaveOf(entry.wave);
+      extras.worldMaps[key] = wave > 0 ? { map, wave } : { map };
     }
   }
 }
 
-function cloneWorldMaps(source: Record<string, { map: string }>): Record<string, { map: string }> {
-  const out: Record<string, { map: string }> = {};
+/**
+ * 波次存档值 → 安全整数。
+ *
+ * `NaN` / `Infinity` / 负数 / 非数字 / 0 一律归 0（0 波等价于「本图无进度」）。
+ */
+export function worldWaveOf(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
+}
+
+function cloneWorldMaps(
+  source: Record<string, { map: string; wave?: number }>,
+): Record<string, { map: string; wave?: number }> {
+  const out: Record<string, { map: string; wave?: number }> = {};
   for (const key of Object.keys(source)) {
     const entry = source[key];
-    if (entry) out[key] = { map: entry.map };
+    if (!entry) continue;
+    const wave = worldWaveOf(entry.wave);
+    out[key] = wave > 0 ? { map: entry.map, wave } : { map: entry.map };
   }
   return out;
 }

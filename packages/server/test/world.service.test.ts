@@ -9,13 +9,16 @@
  * - `leave` 结束会话。
  */
 import { describe, expect, it, beforeEach } from 'vitest';
-import { createDefaultTables, type DataTables } from '@idle-dark/game-core';
+import { createDefaultTables, WORLD_BOSS_WAVE_INTERVAL, type DataTables } from '@idle-dark/game-core';
 import { type WorldTickDto } from '@idle-dark/protocol';
 import type { NotificationBatcher, PushFrame } from '../src/modules/game/notification-batcher.js';
 import { OpIdempotencyService } from '../src/modules/game/op-idempotency.service.js';
 import type { OnlineSessionService } from '../src/modules/online/online-session.service.js';
 import { PanelCharacterService } from '../src/modules/logic/shared/panel-character.service.js';
-import { PlayerContextService } from '../src/modules/logic/shared/player-context.service.js';
+import {
+  PlayerContextService,
+  worldWaveOf,
+} from '../src/modules/logic/shared/player-context.service.js';
 import { InProcessEventBus } from '../src/modules/logic/shared/event-bus.js';
 import { WorldService } from '../src/modules/logic/world/world.service.js';
 import { WORLD_CONFIG } from '../src/modules/logic/world/world.config.js';
@@ -297,5 +300,107 @@ describe('WorldService', () => {
     service.tick();
     expect(service.sessionCount).toBe(1);
     expect(service.stats.sessionReapedTotal).toBe(0);
+  });
+
+  // ─────────────────────────── W4：波次下发与持久化 ───────────────────────────
+
+  it('tick 下发 wave / bossEvery（服务端权威波次）', async () => {
+    await startInStreet();
+    now += 1000;
+    service.tick();
+    const ticks = tickFrames();
+    expect(ticks.length).toBeGreaterThan(0);
+    expect(ticks[0]?.wave).toBe(0);
+    expect(ticks[0]?.bossEvery).toBe(WORLD_BOSS_WAVE_INTERVAL);
+  });
+
+  it('snapshot 下发 wave / bossEvery', async () => {
+    await startInStreet();
+    const result = await service.snapshot(1, 'c1');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.wave).toBe(0);
+    expect(result.data.bossEvery).toBe(WORLD_BOSS_WAVE_INTERVAL);
+  });
+
+  it('wave 持久化往返：stop 保存 → start 恢复（会话重启不丢波数）', async () => {
+    await startInStreet();
+    const live = await service.start(1, 'c1');
+    expect(live?.world.enemyBorn).not.toBeNull();
+    if (!live || !live.world.enemyBorn) return;
+    live.world.enemyBorn.wave = 7;
+
+    await service.stop(1, 'c1');
+    const extras = await context.extrasOf(1);
+    expect(extras.worldMaps['c1']).toEqual({ map: 'world.1', wave: 7 });
+
+    const restarted = await service.start(1, 'c1');
+    expect(restarted?.world.enemyBorn?.wave).toBe(7);
+    const snapshot = await service.snapshot(1, 'c1');
+    expect(snapshot.success).toBe(true);
+    if (snapshot.success) expect(snapshot.data.wave).toBe(7);
+  });
+
+  it('切图后波数归 0（换图重建 EnemyBorn）', async () => {
+    await startInStreet();
+    const live = await service.start(1, 'c1');
+    if (!live?.world.enemyBorn) throw new Error('缺少刷怪器');
+    live.world.enemyBorn.wave = 7;
+
+    // world.1 → home（安全区，无进入条件）。
+    const entered = await service.enterMap(1, 'c1', 'home');
+    expect(entered.success).toBe(true);
+    const extras = await context.extrasOf(1);
+    expect(extras.worldMaps['c1']?.map).toBe('home');
+    expect(worldWaveOf(extras.worldMaps['c1']?.wave)).toBe(0);
+
+    // 回到 world.1：波数从 0 开始（不残留 7）。
+    await service.enterMap(1, 'c1', 'world.1');
+    const back = await service.start(1, 'c1');
+    expect(back?.world.enemyBorn?.wave).toBe(0);
+  });
+
+  it('重复进入当前地图（重置本图）→ 波数归 0 并落库', async () => {
+    await startInStreet();
+    const live = await service.start(1, 'c1');
+    if (!live?.world.enemyBorn) throw new Error('缺少刷怪器');
+    live.world.enemyBorn.wave = 9;
+
+    const result = await service.enterMap(1, 'c1', 'world.1');
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.wave).toBe(0);
+    const extras = await context.extrasOf(1);
+    expect(worldWaveOf(extras.worldMaps['c1']?.wave)).toBe(0);
+  });
+
+  it('第 20 波刷出的守关 BOSS 在 tick 中带 boss 标记', async () => {
+    await startInStreet();
+    const live = await service.start(1, 'c1');
+    if (!live?.world.enemyBorn) throw new Error('缺少刷怪器');
+    for (let i = 0; i < WORLD_BOSS_WAVE_INTERVAL; i += 1) live.world.enemyBorn.completeWave();
+
+    now += 1000;
+    service.tick();
+    const last = tickFrames().at(-1);
+    expect(last?.wave).toBe(WORLD_BOSS_WAVE_INTERVAL);
+    expect(last?.units.some((unit) => unit.boss === true)).toBe(true);
+    // `boss` 是可选字段：非 BOSS 单位一律省略（不为 false）。
+    expect(last?.units.every((unit) => unit.boss === undefined || unit.boss === true)).toBe(true);
+  });
+
+  it('脏波数（NaN / Infinity / -1 / 非数字 / 0）一律解析为 0', async () => {
+    for (const dirty of [Number.NaN, Number.POSITIVE_INFINITY, -1, 'x', null, 0, {}]) {
+      db.accounts.get(1)!.data = { worldMaps: { c1: { map: 'world.1', wave: dirty } } };
+      const fresh = new PlayerContextService(db.asService(), () => now, tables);
+      const extras = await fresh.extrasOf(1);
+      expect(worldWaveOf(extras.worldMaps['c1']?.wave)).toBe(0);
+    }
+  });
+
+  it('合法波数（含小数）解析为截断正整数', async () => {
+    db.accounts.get(1)!.data = { worldMaps: { c1: { map: 'world.1', wave: 7.9 } } };
+    const fresh = new PlayerContextService(db.asService(), () => now, tables);
+    const extras = await fresh.extrasOf(1);
+    expect(worldWaveOf(extras.worldMaps['c1']?.wave)).toBe(7);
   });
 });

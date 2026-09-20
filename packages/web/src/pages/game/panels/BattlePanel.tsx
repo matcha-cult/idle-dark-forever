@@ -125,6 +125,17 @@ export const BattlePanel = observer(function BattlePanel() {
         title="地图"
         extra={
           <Space>
+            {/* W4：波次进度（服务端权威下发）。BOSS 波时明确提示「守关 BOSS 现身」。 */}
+            <Typography.Text type="secondary" data-testid="battle-wave">
+              {`波次 ${world.wave}`}
+            </Typography.Text>
+            <Typography.Text
+              type="secondary"
+              data-testid="battle-boss"
+              style={world.bossWave ? { color: token.colorWarning } : undefined}
+            >
+              {world.bossWave ? '守关 BOSS 现身' : `距守关 BOSS ${world.wavesToBoss} 波`}
+            </Typography.Text>
             <Typography.Text type="secondary">
               {world.updateRate > 1 ? `模拟倍速 ×${world.updateRate.toFixed(1)}` : '实时模拟'}
             </Typography.Text>
@@ -240,6 +251,8 @@ export const BattlePanel = observer(function BattlePanel() {
                       {/* 黄名中立怪：不主动攻击、也不会被溅射打到，必须玩家手动点它才会开战
                           （原版「单位」面板语义）。 */}
                       {unit.camp === 'neutral' ? <Tag color="gold">中立</Tag> : null}
+                      {/* W4：守关 BOSS（服务端 `UnitStateDto.boss` 显式标记）。 */}
+                      {unit.boss ? <Tag color="volcano">守关 BOSS</Tag> : null}
                       {world.allies.some((ally) => ally.targetId === unit.id) ? (
                         <Tag color="red">被锁定</Tag>
                       ) : null}

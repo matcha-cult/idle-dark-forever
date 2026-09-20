@@ -239,6 +239,8 @@ export interface UnitStateDto {
   castingProgress: number | null;
   /** 生效中的 Buff 展示态。 */
   buffs: Array<{ key: string; name: string; stack: number; remainMs: number }>;
+  /** 该单位是否是本图守关 BOSS（供前端高亮；非 BOSS 省略）。 */
+  boss?: boolean;
 }
 
 /** 地图展示态。 */
@@ -267,6 +269,10 @@ export interface WorldSnapshotDto {
   /** 累计模拟速率（原版 updateRate），用于 UI 展示加速倍率。 */
   updateRate: number;
   paused: boolean;
+  /** 当前已完成的波数（W4；服务端权威，前端零推导）。 */
+  wave?: number;
+  /** 守关 BOSS 的刷新间隔（波；缺省 20）。 */
+  bossEvery?: number;
 }
 
 /** 战斗事件（推送给前端做日志渲染 / Toast）。 */
@@ -288,6 +294,10 @@ export interface WorldTickDto {
   /** 本次批次内的经验/金币增量，便于 HUD 累加显示。 */
   gainedExp: number;
   gainedGold: number;
+  /** 当前已完成的波数（W4；服务端权威，前端零推导）。 */
+  wave?: number;
+  /** 守关 BOSS 的刷新间隔（波；缺省 20）。 */
+  bossEvery?: number;
 }
 
 /** (battle, loot) 推送载荷。 */

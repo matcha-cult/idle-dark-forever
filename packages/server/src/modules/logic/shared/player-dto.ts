@@ -44,12 +44,16 @@ export interface AccountExtras {
    */
   worldSeeds: Record<string, number>;
   /**
-   * 每角色当前所在地图（characterId → {map}）。
+   * 每角色当前所在地图（characterId → {map, wave}）。
    *
    * 原版 `worldState`（在飞的战斗快照）按方案 §9.2 **不迁**；但「玩家上次在哪张图」
    * 必须记住，否则每次重连都回到 `home`。
+   *
+   * `wave`（W4）是**世界侧车状态**：按角色 + 当前地图记录已完成波数，会话重启
+   * （刷新 / 断线重连 / 空闲回收）不丢波数。它**不进** `characters.state`
+   * （`Player` 存档只放角色自身状态）。
    */
-  worldMaps: Record<string, { map: string }>;
+  worldMaps: Record<string, { map: string; wave?: number }>;
 }
 
 export function createAccountExtras(): AccountExtras {

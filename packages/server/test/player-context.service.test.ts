@@ -96,6 +96,25 @@ describe('PlayerContextService', () => {
     expect(reloaded.worldMaps['c1']).toEqual({ map: 'home' });
   });
 
+  it('波次侧车（worldMaps.wave）落库后重载一致；0 / 非法值不落 wave 键', async () => {
+    await ctx.create(1, 'c1', 'Eyer', 'warrior');
+    const extras = await ctx.extrasOf(1);
+    extras.worldMaps['c1'] = { map: 'world.1', wave: 13 };
+    ctx.markAccountDirty(1);
+    await ctx.flushAccount(1);
+
+    ctx.reset();
+    const reloaded = await ctx.extrasOf(1);
+    expect(reloaded.worldMaps['c1']).toEqual({ map: 'world.1', wave: 13 });
+  });
+
+  it('DB 里的脏 wave（NaN / -1 / 字符串）读回 → 0（不落 wave 键）', async () => {
+    db.accounts.get(1)!.data = { worldMaps: { c1: { map: 'world.1', wave: Number.NaN } } };
+    const fresh = new PlayerContextService(db.asService(), () => NOW, tables);
+    const extras = await fresh.extrasOf(1);
+    expect(extras.worldMaps['c1']).toEqual({ map: 'world.1' });
+  });
+
   it('旧占位行（state = {}）在 load 时按列 role/career 补齐并落库', async () => {
     db.seedCharacter({ id: 'legacy', user_id: 1, role: 'Aleanor', career: 'sorceress', state: {} });
     const player = await ctx.load(1, 'legacy');

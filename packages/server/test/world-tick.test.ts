@@ -10,13 +10,16 @@ import { mergeLoot, mergeWorldTick, WORLD_TICK_MS } from '../src/modules/logic/w
 import { WORLD_CONFIG } from '../src/modules/logic/world/world.config.js';
 
 function tick(partial: Partial<WorldTickDto>): WorldTickDto {
-  return {
+  const out: WorldTickDto = {
     serverTime: partial.serverTime ?? 0,
     units: partial.units ?? [],
     events: partial.events ?? [],
     gainedExp: partial.gainedExp ?? 0,
     gainedGold: partial.gainedGold ?? 0,
   };
+  if (partial.wave !== undefined) out.wave = partial.wave;
+  if (partial.bossEvery !== undefined) out.bossEvery = partial.bossEvery;
+  return out;
 }
 
 describe('mergeWorldTick', () => {
@@ -60,6 +63,19 @@ describe('mergeWorldTick', () => {
     expect(merged.units).toEqual([]);
     expect(merged.events).toEqual([]);
     expect(merged.gainedExp).toBe(0);
+  });
+
+  it('波次取最新帧（batcher 合并不得回退波数）；缺字段时回落上一帧', () => {
+    const a = tick({ serverTime: 100, wave: 3, bossEvery: 20 });
+    const b = tick({ serverTime: 200, wave: 4, bossEvery: 20 });
+    const merged = mergeWorldTick(a, b);
+    expect(merged.wave).toBe(4);
+    expect(merged.bossEvery).toBe(20);
+
+    // 最新帧缺 wave / bossEvery（旧客户端 / 旧帧）→ 回落上一帧。
+    const c = tick({ serverTime: 300 });
+    expect(mergeWorldTick(b, c).wave).toBe(4);
+    expect(mergeWorldTick(b, c).bossEvery).toBe(20);
   });
 });
 

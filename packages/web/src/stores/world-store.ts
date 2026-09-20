@@ -29,6 +29,9 @@ export interface BattleLogEntry {
 /** 日志保留上限（避免长时间挂机把内存吃满）。 */
 const MAX_LOG_ENTRIES = 200;
 
+/** 守关 BOSS 刷新间隔的兜底（服务端 `bossEvery` 缺失 / 非法时使用）。 */
+export const DEFAULT_BOSS_EVERY = 20;
+
 /**
  * 该阵营是否**允许被玩家点选为攻击目标**。
  *
@@ -51,6 +54,11 @@ export class WorldStore {
   log: BattleLogEntry[] = [];
   loading = false;
   error: string | null = null;
+
+  /** 服务端下发的当前波数（observable 源；对外经只读 `wave` getter 暴露）。 */
+  private waveValue = 0;
+  /** 服务端下发的守关 BOSS 刷新间隔（observable 源；对外经只读 `bossEvery` getter）。 */
+  private bossEveryValue = DEFAULT_BOSS_EVERY;
 
   private readonly guard = new LoadGuard();
   private logSeq = 0;
@@ -98,6 +106,31 @@ export class WorldStore {
 
   get currentMap(): string {
     return this.snapshot?.map ?? this.ctx.root().player.map;
+  }
+
+  /** 当前已完成的波数（服务端权威）。 */
+  get wave(): number {
+    return this.waveValue;
+  }
+
+  /** 守关 BOSS 刷新间隔（波；服务端缺失 / 非法时缺省 20）。 */
+  get bossEvery(): number {
+    const n = this.bossEveryValue;
+    return Number.isFinite(n) && n > 0 ? Math.trunc(n) : DEFAULT_BOSS_EVERY;
+  }
+
+  /**
+   * 距下一个守关 BOSS 还有多少波。
+   *
+   * 刚刷新过 BOSS（`wave % bossEvery === 0`）时按**一整轮**算，即 0 波显示「距 BOSS 20 波」。
+   */
+  get wavesToBoss(): number {
+    return this.bossEvery - (this.wave % this.bossEvery);
+  }
+
+  /** 当前是否正好是守关 BOSS 波（0 波不算）。 */
+  get bossWave(): boolean {
+    return this.wave > 0 && this.wave % this.bossEvery === 0;
   }
 
   /** 拉取世界快照。 */
@@ -220,6 +253,7 @@ export class WorldStore {
       runInAction(() => {
         this.units = tick.units;
         this.log = appendEvents(this.log, tick.events ?? [], tick.serverTime, () => (this.logSeq += 1));
+        this.applyWave(tick.wave, tick.bossEvery);
       });
       this.ctx.root().player.noteTickGain(tick.gainedExp ?? 0, tick.gainedGold ?? 0, tick.serverTime);
       return;
@@ -255,6 +289,21 @@ export class WorldStore {
     this.maps = snapshot.maps;
     this.updateRate = snapshot.updateRate;
     this.paused = snapshot.paused;
+    this.applyWave(snapshot.wave, snapshot.bossEvery);
+  }
+
+  /**
+   * 应用服务端下发的波次状态（tick / snapshot 共用）。
+   *
+   * 只做**防御性校验**，不做任何数值推导：非法值保留上一份权威值。
+   */
+  private applyWave(wave: unknown, bossEvery: unknown): void {
+    if (typeof wave === 'number' && Number.isFinite(wave) && wave >= 0) {
+      this.waveValue = Math.trunc(wave);
+    }
+    if (typeof bossEvery === 'number' && Number.isFinite(bossEvery) && bossEvery > 0) {
+      this.bossEveryValue = Math.trunc(bossEvery);
+    }
   }
 }
 

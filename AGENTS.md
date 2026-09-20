@@ -728,6 +728,13 @@ __IDLE_DARK__                   // 根 store（临时排查）
   `world.10..13` 都接 `world.9`。`checkRequirement` 中 `bossKilled` 缺失即 fail-closed。
 - **波次**（`combat/spawner.ts`）：1 波 = 该图 `monsters` 全部条目刷满 `config.total` 且清空；
   `Born.reset()` 单调推进，`EnemyBorn.wave` 随 `dumpState` 往返（离线/读档不丢波数）。
+- **波次下发 + 持久化**：`WorldTickDto` / `WorldSnapshotDto` 带可选 `wave` / `bossEvery`
+  （`WorldService.emitTick` / `snapshotOf`；`mergeWorldTick` 取**最新**帧，不得回退波数），
+  前端 `world-store` 暴露 `wave` / `bossEvery` / `wavesToBoss` / `bossWave` 并显示在 `BattlePanel`。
+  波数是**世界侧车状态**：落在 `AccountExtras.worldMaps[characterId].wave`（**不进** `characters.state`），
+  `WorldService.start()` 恢复、`persistPosition()` 写回、切图 / 重复进图（重置本图）自然归 0；
+  脏值（NaN / 负数 / 非数字）一律按 0 处理（`worldWaveOf`）。
+  ⚠️ `unitStateDtoOf` 在 `server/.../world/internal/unit-state.ts`（**不在** `shared/`）。
 - **守关 BOSS**：每 `WORLD_BOSS_WAVE_INTERVAL = 20` 波尝试刷新；同屏一只；
   **一次性**——击杀记在角色 `Player.worldBossKilled: Set<string>`（`PlayerJson.worldBossKilled`），
   已击杀的图不再刷 BOSS 但普通怪照常 farm。BOSS 单位用显式 `worldBoss` 标记（**不要用 key 比较**：

@@ -16,6 +16,7 @@ import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nest
 import {
   RealClock,
   EnemyUnit,
+  WORLD_BOSS_WAVE_INTERVAL,
   chaosTierOfMapKey,
   isChaosMap,
   type Clock,
@@ -47,6 +48,7 @@ import {
   type EventBus,
   type NowSource,
   slotDtoOf,
+  worldWaveOf,
 } from '../shared/index.js';
 import { PanelCharacterService } from '../shared/panel-character.service.js';
 import { BattleCollector } from '../shared/battle-collector.js';
@@ -388,6 +390,9 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       events: frame.events,
       gainedExp: frame.gainedExp,
       gainedGold: frame.gainedGold,
+      // W4：波次随 tick 下发（`EnemyBorn` 尚未建立时按 0 波）。
+      wave: session.world.enemyBorn?.wave ?? 0,
+      bossEvery: WORLD_BOSS_WAVE_INTERVAL,
     };
     this.batcher.enqueue(session.userId, {
       cmd: WORLD_CMD.cmd,
@@ -561,10 +566,18 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     if (!player) return null;
 
     const extras = await this.playerContext.extrasOf(userId);
-    const position = resolveWorldPosition(this.tables, extras.worldMaps[characterId]);
+    const storedPosition = extras.worldMaps[characterId];
+    const position = resolveWorldPosition(this.tables, storedPosition);
+    // W4：会话重启（刷新 / 断线重连 / 空闲回收）时恢复本图**已完成的波数**。
+    // 存档漂移（未知 mapKey → `home`）视为换图，波数归 0；`wave` 只在 > 0 时携带。
+    const restoredWave =
+      storedPosition !== undefined && storedPosition.map === position.map
+        ? worldWaveOf(storedPosition.wave)
+        : 0;
     // 持久化位置是「当前地图」的**唯一权威**（08 §2.3 / 09 §4.3）。
     // 会话启动即写入，保证从未进过图的角色也有位置。
-    extras.worldMaps[characterId] = { map: position.map };
+    extras.worldMaps[characterId] =
+      restoredWave > 0 ? { map: position.map, wave: restoredWave } : { map: position.map };
     this.playerContext.markAccountDirty(userId);
     const storedSeed = extras.worldSeeds[characterId];
     let seed = typeof storedSeed === 'number' && Number.isFinite(storedSeed) ? storedSeed : 0;
@@ -604,6 +617,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       updateRate: 1,
       expRate: EXP_RATE,
       medicineLevel: (type) => extras.medicineLevel[type] ?? 0,
+      ...(restoredWave > 0 ? { enemyBornState: { wave: restoredWave } } : {}),
       lootRecorder: {
         record: (slot, handled) => {
           session.pendingLoot.push(toLootDto(slot, handled));
@@ -738,7 +752,11 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
 
   private async persistPosition(session: WorldSession): Promise<void> {
     const extras = await this.playerContext.extrasOf(session.userId);
-    extras.worldMaps[session.characterId] = { map: session.world.map };
+    // W4：连同波数一起落库（世界侧车状态；`wave: 0` 由 `cloneWorldMaps` 归一为不落）。
+    extras.worldMaps[session.characterId] = {
+      map: session.world.map,
+      wave: session.world.enemyBorn?.wave ?? 0,
+    };
     this.playerContext.markAccountDirty(session.userId);
   }
 
@@ -787,6 +805,9 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     // 不报 ALREADY_IN_MAP —— 这样前端 select 后直接 enterMap 永远可用。
     if (session.world.map === mapKey) {
       session.world.onMapChanged();
+      // W4：重置本图 → `onMapChanged()` 重建 `EnemyBorn`（波数归 0），这里把 0 落库，
+      // 避免旧波数残留在 `AccountExtras` 里、下次重进读出错误进度。
+      await this.persistPosition(session);
       return ok(await this.snapshotOf(session));
     }
 
@@ -885,6 +906,8 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       maps: player ? mapListDtoOf(this.tables, player, session.world.map) : [],
       updateRate: session.world.updateRate,
       paused: session.clock.isPaused(),
+      wave: session.world.enemyBorn?.wave ?? 0,
+      bossEvery: WORLD_BOSS_WAVE_INTERVAL,
     };
   }
 }
@@ -895,14 +918,29 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
 export function mergeWorldTick(prev: unknown, next: unknown): WorldTickDto {
   const a = asTick(prev);
   const b = asTick(next);
-  if (!a) return b ?? { serverTime: 0, units: [], events: [], gainedExp: 0, gainedGold: 0 };
+  if (!a) {
+    return (
+      b ?? {
+        serverTime: 0,
+        units: [],
+        events: [],
+        gainedExp: 0,
+        gainedGold: 0,
+        wave: 0,
+        bossEvery: WORLD_BOSS_WAVE_INTERVAL,
+      }
+    );
+  }
   if (!b) return a;
+  // 波次取**最新**帧（`b`）：同一批次内的旧帧不得把波数回退。
   return {
     serverTime: Math.max(a.serverTime, b.serverTime),
     units: b.units,
     events: [...a.events, ...b.events],
     gainedExp: a.gainedExp + b.gainedExp,
     gainedGold: a.gainedGold + b.gainedGold,
+    wave: b.wave ?? a.wave ?? 0,
+    bossEvery: b.bossEvery ?? a.bossEvery ?? WORLD_BOSS_WAVE_INTERVAL,
   };
 }
 
@@ -910,13 +948,18 @@ function asTick(value: unknown): WorldTickDto | null {
   if (value === null || typeof value !== 'object') return null;
   const record = value as Partial<WorldTickDto>;
   if (!Array.isArray(record.units)) return null;
-  return {
+  const tick: WorldTickDto = {
     serverTime: typeof record.serverTime === 'number' ? record.serverTime : 0,
     units: record.units,
     events: Array.isArray(record.events) ? record.events : [],
     gainedExp: typeof record.gainedExp === 'number' ? record.gainedExp : 0,
     gainedGold: typeof record.gainedGold === 'number' ? record.gainedGold : 0,
   };
+  if (typeof record.wave === 'number' && Number.isFinite(record.wave)) tick.wave = record.wave;
+  if (typeof record.bossEvery === 'number' && Number.isFinite(record.bossEvery)) {
+    tick.bossEvery = record.bossEvery;
+  }
+  return tick;
 }
 
 /** `battle.loot` 合并器：同批次多次掉落累积成数组。 */
