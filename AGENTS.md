@@ -616,3 +616,68 @@ __IDLE_DARK__                   // 根 store（临时排查）
 `sendSkillUsage` / `sendGeneralMsg` 这类「原版 `world.*` 但内核没有」的调用，
 一律在 `BattleWorld` 上加**适配器**，不要把数据层改成别的写法。
 
+---
+
+## 18. 装备与伤害体系（12 号任务书 E0–E7 重构后的硬约定）
+
+> 来源：[`ai-docs/12-装备与伤害体系重构任务书.md`](ai-docs/12-装备与伤害体系重构任务书.md)。
+> **P1：不做存量兼容**（当前无真实玩家、测试号可删号重开）；`idle_dark` 清库用 `DELETE FROM users;`。
+
+### 18.1 装备槽与副手判定：唯一真相在 `@idle-dark/protocol` 的 `equip.ts`
+
+- 装备位有 **9 个**：`weapon / offHand / plastron / gloves / belt / boots / amulet / ring1 / ring2`
+  （**箭袋属副手，不是第 10 槽**）。
+- `GoodData.position` 使用同一联合；`GoodData.equipCategory` 标武器类别：
+  主手 `oneHand | twoHandMelee | bow`，副手专属 `shield | quiver`。
+- `canEquipOffHand(main, off)` 是**前后端共用的唯一判定表**（禁止在 server/web 各写一份）：
+  主手空→盾/箭袋；单手→双持/盾（禁箭袋）；双手近战→锁定；弓→箭袋（禁盾）。
+- `Player.equip(slot)` 返回 **boolean**：判定表拒绝或副手腾不出空位时为 `false`；
+  单手武器在主手已占且副手空时自动落副手（双持）；双手武器落主手前把副手挪回背包；
+  戒指在两个戒指槽里取第一个空的。`opEquip` 必须处理 `false`（抛 `INVALID_PARAM`）。
+- `EQUIP_SLOTS`（`career-info.ts`）与 `EQUIP_POSITIONS`（protocol）是同一份；server 面板槽位
+  走 `slot-ref.ts` 自动覆盖。前端只渲染协议常量，不硬编码槽位。
+
+### 18.2 品质三档（P4）
+
+- `protocol` 的 `Quality = 0|1|2`（普通 / 优秀 / 传奇），`QUALITY_NAMES` 是值导出；
+  ui-kit 镜像 `QUALITY_LABELS` 并由 `game/quality.test.ts` 做一致性门禁。
+- `BASE_QUALITY_RATE = [1, 0.5, 0.005, 0]`（长度绑定最大品质，2 档分别为 ~49.5% / ~0.5%）。
+- ⚠️ `UnitStateDto.quality` 是**敌人词缀条数**（`EnemyUnit.quality`，可 >2），与装备 `Quality`
+  **同名不同义**，类型是 `number` —— 不要把它夹到 0..2。
+
+### 18.3 词缀前后缀骨架（P5，只做预分类）
+
+- `AffixData.affixType?: 'prefix' | 'suffix'`（缺省 prefix）+ `tag?: string`；
+  不变式：**同一 tag 只归属前缀或后缀之一**（`data/index.test.ts` 有门禁）。
+- `generateEquip` 按**前后缀分池**抽取：普通 1+1、优秀 3+3、传奇 3+3 + 末尾 1 条传奇
+  （传奇词缀**豁免**前后缀规则）；某侧候选不足时按可用数抽取，整池为空才抛错。
+- `GoodData.affixGroup` 是「底材 → 词缀池」的挂点：`affixPoolOf(tables, goodData)` 优先查
+  `DataTables.affixGroups[group]`，未命中回落全池。具体分组分布下期（P5）。
+
+### 18.4 伤害类型与元素分类（P6/P7）
+
+- 唯一真相 `game-core/src/rules/damage.ts`：元素 = `fire/cold/lightning`；
+  物理 = `melee`；**混沌 `chaos` 非元素**（`allResist` 不作用于它）。
+- `battle-world.sendDamage` 的护甲/抗性分支收口到 `mitigationKindOf`，**禁止**再散落
+  `camelCase(type + '-resist')` 判定。
+- **附加元素伤害本期未开工**（P6）：不要给 `GoodData`/`InventorySlot` 加半成品元素字段。
+
+### 18.5 词缀作用域二元划分与双持（P12）
+
+- **区域词缀**（武器 / 副手）：只在该武器出手时生效。`rebindEquipmentHooks` **不挂** weapon/offHand；
+  `PlayerUnit.weaponAffixAttr(slot, key, value)` 按手叠加到该手武器底材值上。
+- **全局词缀**（防具 / 饰品）：沿用 `addAttrHook` 挂 Unit。
+- 按手取值：`atkOf / atkSpeedOf / critRateOf / critBonusOf / leechOf / hpFromKillOf`
+  （默认主手）。**攻速基准取自该手武器底材**，双持总节奏**不等于**两把武器攻速之和。
+- 双持交替：`PlayerUnit.activeHand` + `setAttackCoolDown`（冷却取当前手攻速、并清除未到期旧计时器）
+  + `onAttackCoolDown`（冷却结束换手）；非双持恒用主手。
+
+### 18.6 掉落与商店（P8/P10/P11）
+
+- 怪物与副本**都不再产装备**（184 条 equip 掉落条目已物理删除）；数据门禁断言「无 equip 掉落」。
+- 12 通货 + 12 精华是 `type:'material'` + `stack` 的**占位物品**（无能力函数）；
+  `registerPlaceholders(tables)` 把它们接入掉落池，**`count` 一律用 `[n,n]` 数组**
+  （`battle-world.loots` 对 `count` 只认数组，标量会算出 0）。
+- 0 级地图 `town` 与 `baseCatalogOf(tables)`（数据驱动底材目录）是商店入口骨架；
+  底材目录与购买 Action 下期（P8）。`lootRule` 域因装备不再掉落而**休眠**（未删除）。
+
