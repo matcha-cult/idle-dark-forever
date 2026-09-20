@@ -79,32 +79,43 @@ export function createDefaultTables(): DataTables {
   return tables;
 }
 
+/** 一条工艺通货的掉落规格。 */
+export interface CraftDropSpec {
+  /** 基础掉落率（敌人每击杀；地图通关 = ×{@link MAP_DROP_MULTIPLIER}）。 */
+  rate: number;
+  /** 掉落等级门槛，判定等级 = **min(怪物等级, 地图等级)**；0 = 无门槛。 */
+  minLevel: number;
+}
+
 /**
- * 工艺通货掉落速率（**敌人每击杀**；地图通关 = ×{@link MAP_DROP_MULTIPLIER}）。
+ * 工艺通货掉落规格（敌人每击杀；地图通关 = ×{@link MAP_DROP_MULTIPLIER}）。
  *
  * 顺序 = 稀有度**递增**（越靠后越稀有）。用户口径：
  * - `mirror`（映道镜）**极稀有**：用极低概率控制持有量；
  * - `divine`（神圣石）/ `fracture`（破溃宝珠）掉落高于映道镜，是**大额交易通货**（类比百元钞）；
- * - 其余按稀有度顺序排列。数值可随时调整（纯数据）。
+ * - `annul`（剥离石）**比 `wisp`（古灵溶液）还稀有**；
+ * - 等级门槛（`minLevel`，判定 = `min(怪物等级, 地图等级)`）：
+ *   `scour`（重铸石）起 **40 级**、`exalt`（崇高石）起 **60 级**、`fracture`（破溃宝珠）起 **100 级**。
  *
- * ⚠️ 修仙原表 13 种里 **不含 `vaal`**（瓦尔宝珠，用户指定不实装）。
+ * ⚠️ 修仙原表 13 种里 **不含 `vaal`**（瓦尔宝珠，用户指定不实装）。数值可随时调整（纯数据）。
  */
-export const CRAFT_DROP_RATES: Readonly<Record<string, number>> = {
-  'currency.transmute': 0.12,
-  'currency.alchemy': 0.08,
-  'currency.chaos': 0.05,
-  'currency.scour': 0.03,
-  'currency.annul': 0.02,
-  'currency.blessed': 0.012,
-  'currency.exalt': 0.008,
-  'currency.ember': 0.005,
-  'currency.wisp': 0.005,
-  'currency.divine': 0.0025,
-  'currency.fracture': 0.0018,
-  'currency.mirror': 0.0001,
+export const CRAFT_DROP_SPECS: Readonly<Record<string, CraftDropSpec>> = {
+  'currency.transmute': { rate: 0.12, minLevel: 0 },
+  'currency.alchemy': { rate: 0.08, minLevel: 0 },
+  'currency.chaos': { rate: 0.05, minLevel: 0 },
+  'currency.scour': { rate: 0.03, minLevel: 40 },
+  'currency.blessed': { rate: 0.012, minLevel: 40 },
+  'currency.exalt': { rate: 0.008, minLevel: 60 },
+  'currency.ember': { rate: 0.005, minLevel: 60 },
+  'currency.wisp': { rate: 0.005, minLevel: 60 },
+  // 用户指定：剥离石比古灵溶液还稀有。
+  'currency.annul': { rate: 0.0035, minLevel: 60 },
+  'currency.divine': { rate: 0.0025, minLevel: 60 },
+  'currency.fracture': { rate: 0.0018, minLevel: 100 },
+  'currency.mirror': { rate: 0.0001, minLevel: 100 },
 };
 
-/** 精华掉落速率（本期实装 6 种，统一 2%；具体分布下期）。 */
+/** 精华掉落速率（本期实装 6 种，统一 2%、无等级门槛；具体分布下期）。 */
 export const ESSENCE_DROP_RATES: Readonly<Record<string, number>> = {
   'essence.atk': 0.02,
   'essence.spirit': 0.02,
@@ -118,22 +129,37 @@ export const ESSENCE_DROP_RATES: Readonly<Record<string, number>> = {
 export const MAP_DROP_MULTIPLIER = 5;
 
 /**
- * P8/P10：把**实装的工艺通货 + 精华**接入掉落池（`{ key, count:[n,n], rate }` 形态）。
+ * P8/P10：把**实装的工艺通货 + 精华**接入掉落池（`{ key, count:[n,n], rate, minLevel? }` 形态）。
  *
  * ⚠️ `battle-world.loots` 对 `count` **只认数组**：写标量会算出 0（§3.2 陷阱），故一律 `[n,n]`。
  * `essence.07..12`（空位）**不在**速率表里 → 不参与掉落。
  */
 export function registerCraftDrops(tables: MutableDataTables): void {
-  const drops = { ...CRAFT_DROP_RATES, ...ESSENCE_DROP_RATES };
   for (const enemy of Object.values(tables.enemies)) {
     if (!enemy.loots) continue;
-    for (const [key, rate] of Object.entries(drops)) {
+    for (const [key, spec] of Object.entries(CRAFT_DROP_SPECS)) {
+      enemy.loots.push({
+        key,
+        count: [1, 1],
+        rate: spec.rate,
+        ...(spec.minLevel > 0 ? { minLevel: spec.minLevel } : {}),
+      });
+    }
+    for (const [key, rate] of Object.entries(ESSENCE_DROP_RATES)) {
       enemy.loots.push({ key, count: [1, 1], rate });
     }
   }
   for (const map of Object.values(tables.maps)) {
     if (!map.loots) continue;
-    for (const [key, rate] of Object.entries(drops)) {
+    for (const [key, spec] of Object.entries(CRAFT_DROP_SPECS)) {
+      map.loots.push({
+        key,
+        count: [1, 1],
+        rate: spec.rate * MAP_DROP_MULTIPLIER,
+        ...(spec.minLevel > 0 ? { minLevel: spec.minLevel } : {}),
+      });
+    }
+    for (const [key, rate] of Object.entries(ESSENCE_DROP_RATES)) {
       map.loots.push({ key, count: [1, 1], rate: rate * MAP_DROP_MULTIPLIER });
     }
   }

@@ -680,10 +680,15 @@ __IDLE_DARK__                   // 根 store（临时排查）
     （取自修仙设计稿，**不含 `vaal` 瓦尔宝珠**）；`description` 写有效果说明，但**炼器效果尚未接线**（下期 P9）。
   - 精华 key `essence.<code>` = `atk/spirit/def/hp/regen/insight`（按前后缀 + 词缀族定向）。
   - 精华槽共 12 个：`essence.07..12` 是**空位**（下期实装，**不参与掉落**）。
-- 掉落速率表在 `data/index.ts` 的 `CRAFT_DROP_RATES` / `ESSENCE_DROP_RATES`，`registerCraftDrops(tables)`
-  接线（地图通关 = ×`MAP_DROP_MULTIPLIER`）。稀有度口径：**`mirror` 最低（控制持有量）**，
-  `divine` / `fracture` 高于它且是**大额交易通货**，其余按序递减；**`count` 一律 `[n,n]` 数组**
+- 掉落规格表在 `data/index.ts` 的 `CRAFT_DROP_SPECS`（`{ rate, minLevel }`）/ `ESSENCE_DROP_RATES`，
+  `registerCraftDrops(tables)` 接线（地图通关 = ×`MAP_DROP_MULTIPLIER`）。稀有度口径：
+  **`mirror` 最低（控制持有量）**，`divine` / `fracture` 高于它且是**大额交易通货**，
+  **`annul`（剥离石）比 `wisp`（古灵溶液）更稀有**；**`count` 一律 `[n,n]` 数组**
   （`battle-world.loots` 对 `count` 只认数组，标量会算出 0）。改数值只动这张表。
+- **掉落等级门槛**（`LootEntry.minLevel` / `maxLevel`，见 `battle-world.loots`）：
+  判定等级 = **`min(怪物等级, 地图等级)`**；地图无 `level`（剧情图）时退化为只用怪物等级。
+  门槛在**消耗 RNG 之前**判定（门槛外不扰动掉落流）。通货门槛：`scour`（重铸石）起 **40**、
+  `exalt`（崇高石）起 **60**、`fracture`（破溃宝珠）起 **100**。
 - 0 级地图 `town` 与 `baseCatalogOf(tables)`（数据驱动底材目录）是商店入口骨架；
   底材目录与购买 Action 下期（P8）。`lootRule` 域因装备不再掉落而**休眠**（未删除）。
 

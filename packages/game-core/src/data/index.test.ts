@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { DataTables } from '../contracts/data.js';
 import type { Rng } from '../contracts/ports.js';
-import { CRAFT_DROP_RATES, ESSENCE_DROP_RATES, createDefaultTables } from './index.js';
+import { CRAFT_DROP_SPECS, ESSENCE_DROP_RATES, createDefaultTables } from './index.js';
 
 const tables: DataTables = createDefaultTables();
 const tables2: DataTables = createDefaultTables();
@@ -499,26 +499,56 @@ describe('E6/P11 + 工艺通货：掉落门禁与实装清单', () => {
     }
   });
 
-  it('稀有度阶梯：映道镜最低；神圣石/破溃宝珠高于映道镜；其余按序非递增', () => {
-    const mirror = CRAFT_DROP_RATES['currency.mirror'];
+  it('稀有度阶梯：映道镜最低；神圣石/破溃宝珠高于映道镜；剥离石比古灵溶液稀有', () => {
+    const mirror = CRAFT_DROP_SPECS['currency.mirror']!.rate;
     expect(mirror).toBeGreaterThan(0);
-    for (const [key, rate] of Object.entries(CRAFT_DROP_RATES)) {
+    for (const [key, spec] of Object.entries(CRAFT_DROP_SPECS)) {
       if (key === 'currency.mirror') continue;
-      expect(rate, key).toBeGreaterThan(mirror!);
+      expect(spec.rate, key).toBeGreaterThan(mirror);
     }
-    expect(CRAFT_DROP_RATES['currency.divine']!).toBeGreaterThan(mirror!);
-    expect(CRAFT_DROP_RATES['currency.fracture']!).toBeGreaterThan(mirror!);
+    expect(CRAFT_DROP_SPECS['currency.divine']!.rate).toBeGreaterThan(mirror);
+    expect(CRAFT_DROP_SPECS['currency.fracture']!.rate).toBeGreaterThan(mirror);
+    // 用户指定：剥离石比古灵溶液还稀有
+    expect(CRAFT_DROP_SPECS['currency.annul']!.rate).toBeLessThan(
+      CRAFT_DROP_SPECS['currency.wisp']!.rate,
+    );
 
     // 声明的顺序 = 稀有度递增（非严格，ember/wisp 同档）
-    const ordered = Object.keys(CRAFT_DROP_RATES);
+    const ordered = Object.keys(CRAFT_DROP_SPECS);
     for (let i = 1; i < ordered.length; i += 1) {
-      const prev = CRAFT_DROP_RATES[ordered[i - 1]!]!;
-      const cur = CRAFT_DROP_RATES[ordered[i]!]!;
+      const prev = CRAFT_DROP_SPECS[ordered[i - 1]!]!.rate;
+      const cur = CRAFT_DROP_SPECS[ordered[i]!]!.rate;
       expect(cur, `${ordered[i - 1]} >= ${ordered[i]}`).toBeLessThanOrEqual(prev);
     }
     for (const [key, rate] of Object.entries(ESSENCE_DROP_RATES)) {
-      expect(rate, key).toBeGreaterThan(mirror!);
+      expect(rate, key).toBeGreaterThan(mirror);
     }
+  });
+
+  it('等级门槛：重铸石起 40、崇高石起 60、破溃宝珠起 100，且已写入掉落条目', () => {
+    const levelOf = (key: string): number => CRAFT_DROP_SPECS[key]!.minLevel;
+    expect(levelOf('currency.transmute')).toBe(0);
+    expect(levelOf('currency.alchemy')).toBe(0);
+    expect(levelOf('currency.chaos')).toBe(0);
+    expect(levelOf('currency.scour')).toBe(40);
+    expect(levelOf('currency.blessed')).toBe(40);
+    expect(levelOf('currency.exalt')).toBe(60);
+    expect(levelOf('currency.ember')).toBe(60);
+    expect(levelOf('currency.wisp')).toBe(60);
+    expect(levelOf('currency.annul')).toBe(60);
+    expect(levelOf('currency.divine')).toBe(60);
+    expect(levelOf('currency.fracture')).toBe(100);
+    expect(levelOf('currency.mirror')).toBe(100);
+
+    // 门槛必须真的落到 loots 条目上（否则等于没写）
+    const allLoots = allLootEntries();
+    const minLevelOf = (key: string): unknown =>
+      allLoots.find((item) => item['key'] === key)?.['minLevel'];
+    expect(minLevelOf('currency.scour')).toBe(40);
+    expect(minLevelOf('currency.exalt')).toBe(60);
+    expect(minLevelOf('currency.fracture')).toBe(100);
+    expect(minLevelOf('currency.mirror')).toBe(100);
+    expect(minLevelOf('currency.chaos')).toBeUndefined();
   });
 
   it('空位精华（essence.07..12）不参与掉落', () => {

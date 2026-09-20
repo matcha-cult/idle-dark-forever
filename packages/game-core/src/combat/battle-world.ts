@@ -655,6 +655,12 @@ export class BattleWorld {
       level += 35 * (this.endlessLevel - 1);
     }
 
+    // 掉落等级门槛：**min(怪物等级, 地图等级)**（用户口径）。
+    // `level` = 击杀时敌人等级 / 通关时地图等级（无尽层已叠加）；地图等级取 `mapData.level`。
+    // 地图无 `level`（如 `home`）时退化为只用 `level`，避免把无等级地图的掉落一刀切掉。
+    const mapLevel = this.mapData?.level;
+    const gateLevel = typeof mapLevel === 'number' ? Math.min(level, mapLevel) : level;
+
     for (const rawEntry of loots) {
       // 判别联合太窄，这里用宽松形状读取（原版就是解构 + 逐字段判断）。
       const entry = rawEntry as unknown as {
@@ -667,7 +673,16 @@ export class BattleWorld {
         value?: number;
         position?: string;
         items?: string[];
+        minLevel?: number;
+        maxLevel?: number;
       };
+      // 等级门槛：低于 / 高于门槛直接跳过（**在消耗 RNG 之前**，门槛外不扰动掉落流）。
+      if (entry.minLevel !== undefined && gateLevel < entry.minLevel) {
+        continue;
+      }
+      if (entry.maxLevel !== undefined && gateLevel > entry.maxLevel) {
+        continue;
+      }
       const countSpec = entry.count;
       const [min, max] = Array.isArray(countSpec) ? countSpec : [0, 0];
       const rate = entry.rate ?? 0;

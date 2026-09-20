@@ -24,7 +24,19 @@ export type AttrHooks = Record<string, AttrHook>;
 
 /** 掉落条目：要么是具体物品 key，要么是特殊类型（装备/钥匙/满级/传奇）。 */
 export type LootEntry =
-  | { key: string; rate: number; count: [number, number] | number; mfRate?: number; qualityRate?: number }
+  | {
+      key: string;
+      rate: number;
+      count: [number, number] | number;
+      mfRate?: number;
+      qualityRate?: number;
+      /**
+       * 掉落等级门槛。判定等级 = **min(怪物等级, 地图等级)**（用户口径）；
+       * 无尽层的地图等级取 `mapData.level`，怪物等级含 `35×(层-1)` 的加成。
+       */
+      minLevel?: number;
+      maxLevel?: number;
+    }
   | { type: 'equip'; rate: number; mfRate?: number; qualityRate?: number; position?: string; minLevel?: number; maxLevel?: number }
   | { type: 'ticket'; rate: number; dungeons?: Record<string, number> }
   | { type: 'specialEquip'; rate: number; items: string[]; mfRate?: number }
