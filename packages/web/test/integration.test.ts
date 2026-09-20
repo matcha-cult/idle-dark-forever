@@ -12,6 +12,7 @@ import {
   AUTH_CMD,
   BANK_CMD,
   CAREER_CMD,
+  CHAOS_CMD,
   IDLE_CMD,
   INVENTORY_CMD,
   LOOTRULE_CMD,
@@ -185,6 +186,17 @@ function createHarness(storage: StorageLike = createMemoryStorage()): Harness {
         loots: [],
         materials: [],
         pausedByMaxOffline: false,
+      }),
+    )
+    .on(CHAOS_CMD.cmd, CHAOS_CMD.state, () =>
+      ok({
+        unlocked: false,
+        tiers: [],
+        sequence: [],
+        failMode: 'normal',
+        active: false,
+        currentTier: null,
+        retry: 0,
       }),
     )
     .on(LOOTRULE_CMD.cmd, LOOTRULE_CMD.get, () => ok({ enabled: true, minLevel: 1, rules: [] }));

@@ -36,6 +36,11 @@ const ROUTES = [
   [130, 2, 'map.snapshot'],
   [130, 3, 'map.enter'],
   [130, 4, 'map.leave'],
+  [140, 1, 'chaos.state'],
+  [140, 2, 'chaos.setSequence'],
+  [140, 3, 'chaos.setFailMode'],
+  [140, 4, 'chaos.start'],
+  [140, 5, 'chaos.stop'],
 ];
 
 const token = jwt.sign({ id: 42, username: 'route-probe' }, secret, { expiresIn: 60 });

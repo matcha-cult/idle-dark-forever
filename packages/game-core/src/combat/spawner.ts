@@ -13,6 +13,7 @@
 
 import type { Clock, Rng, TimerHandle } from '../contracts/ports.js';
 import type { MapData, MonsterSpawnConfig } from '../contracts/data.js';
+import { isChaosMap } from '../rules/chaos.js';
 import type { BattleWorld } from './battle-world.js';
 import { EnemyUnit } from './enemy-unit.js';
 
@@ -319,7 +320,9 @@ export class EnemyBorn {
     if (!bossKey || !this.world.tables.enemies[bossKey]) {
       return;
     }
-    if (this.world.player?.hasWorldBossKilled?.(this.map)) {
+    // W6：混沌图的守关 BOSS **可重复刷**（每次 run 第 20 波起都会再出），
+    // 因此**跳过**「已击杀」一次性判据；野外图保持一次性语义。
+    if (!isChaosMap(mapData) && this.world.player?.hasWorldBossKilled?.(this.map)) {
       return;
     }
     if (this.world.units.some((u) => u instanceof EnemyUnit && u.worldBoss)) {

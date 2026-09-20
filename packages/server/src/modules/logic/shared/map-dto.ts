@@ -4,7 +4,14 @@
  * 解锁判定在服务端（`checkRequirement`），客户端只渲染 `lockedReason`。
  */
 import type { MapDto, PlayerStateDto } from '@idle-dark/protocol';
-import { checkRequirement, Player, type DataTables, type Requirement, type RequirementContext } from '@idle-dark/game-core';
+import {
+  checkRequirement,
+  isChaosMap,
+  Player,
+  type DataTables,
+  type Requirement,
+  type RequirementContext,
+} from '@idle-dark/game-core';
 
 /** 当前玩家所在地图（原版 `world.map`，不在 `Player` 存档里）。 */
 export function requirementContextOf(player: Player, map: string): RequirementContext {
@@ -30,6 +37,8 @@ export function mapListDtoOf(
   for (const key of Object.keys(tables.maps)) {
     const map = tables.maps[key];
     if (!map) continue;
+    // W6：混沌图**不出现在普通地图列表**（开图 UI 只显示 T 阶，由混沌仪面板渲染）。
+    if (isChaosMap(map)) continue;
     const unlocked = checkRequirement(map.requirement, context);
     const dto: MapDto = {
       key,

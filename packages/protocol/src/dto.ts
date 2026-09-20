@@ -469,3 +469,49 @@ export interface CareerPanelDto {
   maxEnhanceCount: number;
 }
 
+// ────────────────────────────── 混沌仪（无尽，W6） ──────────────────────────────
+
+/** 挑战失败选项：`normal` = 回普通地图挂机；`continue` = 继续挑战（默认重试当前钥石）。 */
+export type ChaosFailMode = 'normal' | 'continue';
+
+/** 单个 T 阶的展示态（服务端权威；前端不做任何数值推导）。 */
+export interface ChaosTierDto {
+  /** 阶（1~16）。 */
+  tier: number;
+  /** 混沌地图 key（`chaos.t01..t16`）。 */
+  mapKey: string;
+  name: string;
+  level: number;
+  keystoneKey: string;
+  /** 角色背包里该阶钥石的数量。 */
+  keystoneCount: number;
+  /** 混沌仪是否已解锁（解锁判据 = 通关全部野外 BOSS）。 */
+  unlocked: boolean;
+}
+
+/** 混沌仪面板状态。 */
+export interface ChaosStateDto {
+  unlocked: boolean;
+  tiers: ChaosTierDto[];
+  /** 玩家编排的钥石序列（规范 key，≤16，可重复）。 */
+  sequence: string[];
+  failMode: ChaosFailMode;
+  /** 是否正在按序列自动推进。 */
+  active: boolean;
+  /** 当前挑战的阶；未运行 / 序列走完 → null。 */
+  currentTier: number | null;
+  /** 当前钥石的连续失败次数。 */
+  retry: number;
+}
+
+/** 保存钥石序列（`chaos.setSequence`）。 */
+export interface ChaosSequenceInput {
+  sequence: string[];
+}
+
+/** 设置失败选项（`chaos.setFailMode`）。 */
+export interface ChaosFailModeInput {
+  failMode: ChaosFailMode;
+}
+
+

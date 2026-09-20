@@ -881,6 +881,8 @@ export class PlayerUnit extends Unit {
   override kill(): void {
     super.kill();
     this.world.enemyBorn?.onPlayerDeath();
+    // W6：混沌图中阵亡 = 本 run 结算为 `death`（上层据此走失败分支）。
+    this.world.noteChaosPlayerDeath();
     const rebornIn = 10 + this.level * 0.5;
     // 原版 `message.sendPlayerDeath` 没有对应契约事件，用 general 承载（见差异清单）。
     this.world.sink.general({ text: `player.death:${this.displayName}:${rebornIn}` });

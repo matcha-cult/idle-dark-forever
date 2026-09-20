@@ -21,9 +21,25 @@ export interface CombatHooksDirtyEvent {
   readonly characterId: string;
 }
 
+/**
+ * 混沌仪一次挑战已结算（W6）：由 battle 发布，`idle`（混沌仪）订阅。
+ *
+ * - `outcome: 'clear'` = 混沌图守关 BOSS 被击杀；`'death'` = 玩家在混沌图中阵亡；
+ * - `tier` = 本次挑战的 T 阶（1~16）；battle 只报告事实，**不决定**下一步（失败分支在混沌仪）。
+ * - 只在**在线 tick** 发布；离线推进由 `IdleService` 直接读内核的同一结果。
+ */
+export interface ChaosRunEndedEvent {
+  readonly type: 'ChaosRunEnded';
+  readonly userId: number;
+  readonly characterId: string;
+  readonly tier: number;
+  readonly outcome: 'clear' | 'death';
+}
+
 /** 事件名 → 载荷 的映射（订阅端的类型来源）。 */
 export interface DomainEventMap {
   CombatHooksDirty: CombatHooksDirtyEvent;
+  ChaosRunEnded: ChaosRunEndedEvent;
 }
 
 export type DomainEventName = keyof DomainEventMap;

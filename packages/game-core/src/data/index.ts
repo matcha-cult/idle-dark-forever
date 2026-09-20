@@ -26,6 +26,7 @@ import { enhances } from './enhances.js';
 import { goods } from './goods.js';
 import { legends } from './legends.js';
 import { maps } from './maps-world.js';
+import { chaosMaps } from './maps-chaos.js';
 import { medicines } from './medicines.js';
 import { passives } from './passives.js';
 import { roles } from './roles.js';
@@ -46,7 +47,7 @@ export { registerYear2018 };
 const baseTables = {
   careers,
   roles,
-  maps,
+  maps: { ...maps, ...chaosMaps },
   enemies,
   skills,
   goods,

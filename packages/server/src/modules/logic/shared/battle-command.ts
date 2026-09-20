@@ -25,12 +25,16 @@ export interface BattleCommandPort {
   snapshot(userId: number, characterId: string): Promise<ActionResult<WorldSnapshotDto>>;
   /**
    * 切换到某张图：**会做解锁判定**；`opId` 幂等。
+   *
+   * `options.allowChaos = true` 只允许混沌仪（`chaos` 域）放行 `chaos.tNN` ——
+   * 普通 `map.enter` / `world.enterMap` 一律拒绝混沌图（W6）。
    */
   enterMap(
     userId: number,
     characterId: string,
     mapKey: string,
     opId?: string,
+    options?: { readonly allowChaos?: boolean },
   ): Promise<ActionResult<WorldSnapshotDto>>;
   /** 关闭会话（离开地图 / 切人 / 登出）。 */
   leave(userId: number, characterId: string): Promise<ActionResult<null>>;

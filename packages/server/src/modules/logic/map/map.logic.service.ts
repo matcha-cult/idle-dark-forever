@@ -19,6 +19,7 @@ import {
   resolveWorldPosition,
 } from '../shared/index.js';
 import { BATTLE_COMMAND, type BattleCommandPort } from '../shared/index.js';
+import { isChaosMap } from '@idle-dark/game-core';
 
 @Injectable()
 export class MapLogicService {
@@ -54,6 +55,8 @@ export class MapLogicService {
   ): Promise<ActionResult<WorldSnapshotDto>> {
     const map = this.contexts.tables.maps[mapKey];
     if (!map) return fail(BusinessErrorCode.MAP_LOCKED, '地图不存在');
+    // W6：混沌图只能由混沌仪进入（`chaos.start` / 事件推进），普通控制器一律拒绝。
+    if (isChaosMap(map)) return fail(BusinessErrorCode.MAP_LOCKED, '混沌图只能通过混沌仪进入');
     const player = await this.contexts.load(userId, characterId);
     if (player === null) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);
     const extras = await this.contexts.extrasOf(userId);

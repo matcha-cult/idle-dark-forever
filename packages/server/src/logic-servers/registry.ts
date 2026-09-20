@@ -83,9 +83,10 @@ export const SERVER_DEFINITIONS = {
   },
   idle: {
     name: 'idle',
-    // 09 §6.3：离线结算编排（cmd 120）。W6 起旧氪金秘境域（dungeon, cmd 140）已物理删除。
-    roots: ['modules/logic/idle'],
-    cmdSegments: [CMD_SEGMENTS.idle],
+    // 09 §6.3：离线结算编排（cmd 120）。W6 起旧氪金秘境域（dungeon, cmd 140）已物理删除，
+    // 140 段重定义为**混沌仪**（`modules/logic/chaos`）—— 与离线结算同服（同一套状态机）。
+    roots: ['modules/logic/idle', 'modules/logic/chaos'],
+    cmdSegments: [CMD_SEGMENTS.idle, CMD_SEGMENTS.chaos],
   },
   map: {
     name: 'map',

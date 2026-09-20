@@ -51,6 +51,11 @@ export const BusinessErrorCode = {
   ALREADY_IN_MAP: 'ALREADY_IN_MAP',
   NOT_IN_MAP: 'NOT_IN_MAP',
 
+  /** 混沌仪 / 无尽（W6） */
+  CHAOS_LOCKED: 'CHAOS_LOCKED',
+  CHAOS_KEYSTONE_MISSING: 'CHAOS_KEYSTONE_MISSING',
+  CHAOS_ALREADY_ACTIVE: 'CHAOS_ALREADY_ACTIVE',
+
   /** 故事 */
   STORY_NOT_FOUND: 'STORY_NOT_FOUND',
   STORY_LOCKED: 'STORY_LOCKED',
@@ -94,6 +99,9 @@ export const BUSINESS_ERROR_MESSAGE: Record<string, string> = {
   NO_TICKET: '缺少副本钥匙',
   ALREADY_IN_MAP: '已经在当前地图中',
   NOT_IN_MAP: '当前不在战斗中',
+  CHAOS_LOCKED: '混沌仪尚未解锁（需通关全部野外 BOSS）',
+  CHAOS_KEYSTONE_MISSING: '缺少所需的混沌钥石',
+  CHAOS_ALREADY_ACTIVE: '混沌仪已在运行中',
   STORY_NOT_FOUND: '剧情不存在',
   STORY_LOCKED: '剧情条件未满足',
   STORY_ALREADY_DONE: '剧情已完成',

@@ -21,6 +21,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   InventorySlot,
   VirtualClock,
+  chaosMapKeyOfTier,
+  isChaosMap,
   isCombatArea,
   type DataTables,
   type Player,
@@ -43,6 +45,7 @@ import {
 import { BattleCollector } from '../shared/battle-collector.js';
 import { buildBattleWorld, nextWorldSeed } from '../shared/headless.js';
 import { EXP_RATE, OFFLINE_MAX_MS, OFFLINE_PAUSE_AFTER_MS } from '../shared/index.js';
+import { countsOf, nextChaosStep } from '../chaos/internal/chaos-ops.js';
 
 /** 离线结算硬上限（保持原版 72h 语义）。 */
 export const MAX_OFFLINE_MS = OFFLINE_MAX_MS;
@@ -56,6 +59,25 @@ export const SIM_KILL_BUDGET = 5_000;
 export const SIM_CALLBACK_BUDGET = 5_000;
 /** 单次结算最多调用 `advanceBy` 的次数（防病态循环）。 */
 export const SIM_MAX_CALLS = 360;
+/** 混沌仪离线推进的 run 次数上限（序列 ≤16 + 重试；防病态循环）。 */
+export const CHAOS_MAX_RUNS = 64;
+/** 混沌仪中断 / 序列走完后角色回到的普通地图。 */
+const HOME_MAP = 'home';
+
+/** 混沌仪离线推进的产出。 */
+interface ChaosSimResult {
+  simulatedMs: number;
+  exp: number;
+  gold: number;
+  kills: number;
+  loots: Array<{ key: string; count: number; quality: Quality }>;
+  materials: Array<{ key: string; count: number }>;
+  /** 推进结束后角色所在地图（混沌图 = 停在当前钥石；`home` = 已停止）。 */
+  map: string;
+  active: boolean;
+  index: number;
+  retry: number;
+}
 
 /** 单张地图快进模拟的产出。 */
 interface MapSimResult {
@@ -65,6 +87,8 @@ interface MapSimResult {
   kills: number;
   loots: Array<{ key: string; count: number; quality: Quality }>;
   materials: Array<{ key: string; count: number }>;
+  /** W6：混沌图本次 run 的结算（`null` = 未结算 / 非混沌图）。 */
+  chaosOutcome: 'clear' | 'death' | null;
 }
 
 @Injectable()
@@ -141,6 +165,47 @@ export class IdleService {
     }
 
     const seed = await this.seedOf(userId, characterId, extras);
+
+    // W6：混沌仪运行中且持久化地图是混沌图 → 按钥石序列推进（**不做速率外推**）。
+    if (player.chaosActive && isChaosMap(this.tables.maps[currentMap])) {
+      const chaos = this.simulateChaosRun(
+        player,
+        extras,
+        currentMap,
+        seed,
+        Math.min(cappedMs, SIM_BUDGET_MS),
+      );
+      if (chaos.gold > 0) player.gold += chaos.gold;
+      if (chaos.exp > 0) applyExpBounded(player, chaos.exp);
+      for (const material of chaos.materials) {
+        addMaterial(player, this.tables, material.key, material.count);
+      }
+      extras.worldMaps[characterId] = { map: chaos.map };
+      player.chaosActive = chaos.active;
+      player.chaosIndex = chaos.index;
+      player.chaosRetry = chaos.retry;
+      player.timestamp = now;
+      this.playerContext.markDirty(userId, characterId);
+      this.playerContext.markAccountDirty(userId);
+      await this.playerContext.flush(userId, characterId);
+
+      const chaosReport: OfflineReportDto = {
+        offlineMs: rawMs,
+        cappedMs,
+        // 混沌部分**只报真实模拟时长**，`extrapolatedMs` 恒为 0（预算耗尽停在当前钥石）。
+        simulatedMs: chaos.simulatedMs,
+        extrapolatedMs: 0,
+        gainedExp: chaos.exp,
+        gainedGold: chaos.gold,
+        kills: chaos.kills,
+        loots: chaos.loots,
+        materials: chaos.materials,
+        pausedByMaxOffline,
+      };
+      this.cached.set(this.keyOf(userId, characterId), chaosReport);
+      return ok(chaosReport);
+    }
+
     const sim = this.simulateOnMap({
       player,
       extras,
@@ -246,6 +311,7 @@ export class IdleService {
           .filter((loot) => loot.handled === 'pickup')
           .map((loot) => ({ key: loot.key, count: loot.count, quality: clampQuality(loot.quality) })),
         materials: snapshot.materials,
+        chaosOutcome: world.chaosOutcome,
       };
     } catch (error) {
       this.logger.warn('离线快进模拟失败（按无收益处理）', {
@@ -259,6 +325,7 @@ export class IdleService {
         kills: 0,
         loots: [],
         materials: [],
+        chaosOutcome: null,
       };
     } finally {
       try {
@@ -277,6 +344,108 @@ export class IdleService {
     extras.worldSeeds[characterId] = seed;
     this.playerContext.markAccountDirty(userId);
     return seed;
+  }
+
+  /**
+   * 混沌仪离线推进（W6）：按钥石序列在同一 `VirtualClock` 预算内逐把模拟。
+   *
+   * - 每次 `simulateOnMap` 得到 `chaosOutcome` 后用 `chaos-ops` 的**同一状态机**决定下一步；
+   * - 结算 `clear`/`death` → 消耗下一把钥石并切换混沌图继续（预算内）；
+   * - `stop`（序列走完 / 缺钥石 / `normal` 中断）→ 回普通地图并清运行态；
+   * - **预算耗尽 / run 未结算** → 停在当前钥石：保留 `active` 与当前下标，**不外推**。
+   */
+  private simulateChaosRun(
+    player: Player,
+    extras: AccountExtras,
+    map: string,
+    seed: number,
+    budget: number,
+  ): ChaosSimResult {
+    const loots = new Map<string, { key: string; count: number; quality: Quality }>();
+    const materials = new Map<string, number>();
+    let exp = 0;
+    let gold = 0;
+    let kills = 0;
+    let simulatedMs = 0;
+    let remaining = budget;
+    let currentMap = map;
+    let index = player.chaosIndex;
+    let retry = player.chaosRetry;
+    let active = player.chaosActive;
+    let guard = 0;
+
+    while (guard < CHAOS_MAX_RUNS) {
+      guard += 1;
+      if (remaining <= 0) break;
+      const sim = this.simulateOnMap({
+        player,
+        extras,
+        map: currentMap,
+        seed,
+        budget: remaining,
+      });
+      exp += sim.gainedExp;
+      gold += sim.gainedGold;
+      kills += sim.kills;
+      simulatedMs += sim.simulatedMs;
+      remaining -= sim.simulatedMs;
+      for (const loot of sim.loots) {
+        const key = `${loot.key}:${loot.quality}`;
+        const existing = loots.get(key);
+        if (existing) existing.count += loot.count;
+        else loots.set(key, { ...loot });
+      }
+      for (const material of sim.materials) {
+        materials.set(material.key, (materials.get(material.key) ?? 0) + material.count);
+      }
+
+      // run 未结算（预算耗尽 / 打不动也没死）→ 停在当前钥石，保留运行态。
+      if (sim.chaosOutcome === null) break;
+
+      const step = nextChaosStep(
+        { sequence: player.chaosSequence, index, retry, failMode: player.chaosFailMode },
+        sim.chaosOutcome,
+        countsOf(player),
+      );
+      if (step.action === 'stop') {
+        active = false;
+        currentMap = HOME_MAP;
+        index = 0;
+        retry = 0;
+        break;
+      }
+      if (player.costGood(step.keystone, 1) !== 0) {
+        active = false;
+        currentMap = HOME_MAP;
+        index = 0;
+        retry = 0;
+        break;
+      }
+      index = step.index;
+      retry = step.retry;
+      const nextMap = chaosMapKeyOfTier(step.tier);
+      if (nextMap === null || !this.tables.maps[nextMap]) {
+        active = false;
+        currentMap = HOME_MAP;
+        index = 0;
+        retry = 0;
+        break;
+      }
+      currentMap = nextMap;
+    }
+
+    return {
+      simulatedMs,
+      exp,
+      gold,
+      kills,
+      loots: [...loots.values()],
+      materials: [...materials].map(([key, count]) => ({ key, count })),
+      map: currentMap,
+      active,
+      index,
+      retry,
+    };
   }
 }
 

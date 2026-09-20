@@ -1,5 +1,5 @@
 /**
- * typed Action API —— 按后端 `cmd` 段组织的游戏接口层（15 个段）。
+ * typed Action API —— 按后端 `cmd` 段组织的游戏接口层（14 个段）。
  *
  * 设计约束：
  * - 路由 `(cmd, subCmd)` **只引用 `@idle-dark/protocol` 的 `*_CMD` 常量**，
@@ -14,6 +14,9 @@ import type {
   ActionResult,
   CareerPanelDto,
   CareerProgressDto,
+  ChaosFailModeInput,
+  ChaosSequenceInput,
+  ChaosStateDto,
   DecomposeResultDto,
   EnchantCostsDto,
   EnhanceDto,
@@ -42,6 +45,7 @@ import {
   BANK_CMD,
   BATTLE_CMD,
   CAREER_CMD,
+  CHAOS_CMD,
   IDLE_CMD,
   INVENTORY_CMD,
   LOOTRULE_CMD,
@@ -522,6 +526,41 @@ export class IdleApi extends SegmentApi {
   }
 }
 
+// ===== 混沌仪（无尽，W6） =====
+
+export class ChaosApi extends SegmentApi {
+  /** 混沌仪状态（解锁 / 16 阶 + 钥石持有 / 序列 / 失败选项 / 进度）。 */
+  state(options?: GameApiRequestOptions): Promise<ActionResult<ChaosStateDto>> {
+    return this.call<ChaosStateDto>(CHAOS_CMD.cmd, CHAOS_CMD.state, {}, options);
+  }
+
+  /** 保存钥石序列（≤16，可重复）。 */
+  setSequence(
+    params: ChaosSequenceInput,
+    options?: GameApiRequestOptions,
+  ): Promise<ActionResult<ChaosStateDto>> {
+    return this.call<ChaosStateDto>(CHAOS_CMD.cmd, CHAOS_CMD.setSequence, params, options);
+  }
+
+  /** 设置失败选项。 */
+  setFailMode(
+    params: ChaosFailModeInput,
+    options?: GameApiRequestOptions,
+  ): Promise<ActionResult<ChaosStateDto>> {
+    return this.call<ChaosStateDto>(CHAOS_CMD.cmd, CHAOS_CMD.setFailMode, params, options);
+  }
+
+  /** 开始运行（消耗首个钥石并进入对应 T 阶）。 */
+  start(options?: GameApiRequestOptions): Promise<ActionResult<ChaosStateDto>> {
+    return this.call<ChaosStateDto>(CHAOS_CMD.cmd, CHAOS_CMD.start, {}, options);
+  }
+
+  /** 停止运行（回到普通地图）。 */
+  stop(options?: GameApiRequestOptions): Promise<ActionResult<ChaosStateDto>> {
+    return this.call<ChaosStateDto>(CHAOS_CMD.cmd, CHAOS_CMD.stop, {}, options);
+  }
+}
+
 // ===== 聚合入口 =====
 
 /** 全部 14 个 cmd 段的 typed API 聚合。 */
@@ -539,6 +578,7 @@ export class GameApi {
   readonly produce: ProduceApi;
   readonly shop: ShopApi;
   readonly idle: IdleApi;
+  readonly chaos: ChaosApi;
 
   constructor(readonly transport: GameApiTransport) {
     this.system = new SystemApi(transport);
@@ -554,5 +594,6 @@ export class GameApi {
     this.produce = new ProduceApi(transport);
     this.shop = new ShopApi(transport);
     this.idle = new IdleApi(transport);
+    this.chaos = new ChaosApi(transport);
   }
 }

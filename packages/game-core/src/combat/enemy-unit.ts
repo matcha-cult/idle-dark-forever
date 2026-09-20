@@ -452,8 +452,13 @@ export class EnemyUnit extends Unit {
 
     // W4：一次性野外 BOSS —— 死亡即登记到角色（幂等），从而解锁下一段。
     // 放在 `kill()`（死亡唯一入口）而不是 `clean()`：清尸定时器可能因换图 / 离线而不再触发。
+    // W6：混沌图的守关 BOSS **可重复刷**，只登记本 run 的 `chaosOutcome`，**不写** `worldBossKilled`。
     if (this.worldBoss) {
-      this.world.player?.markWorldBossKilled?.(this.world.map);
+      if (this.world.isChaosMap) {
+        this.world.noteChaosBossKilled();
+      } else {
+        this.world.player?.markWorldBossKilled?.(this.world.map);
+      }
     }
   }
 

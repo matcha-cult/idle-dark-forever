@@ -44,6 +44,14 @@ export const CMD_SEGMENTS = {
    * 控制器决定"进哪张图"，battle 执行会话切换。
    */
   map: 130,
+  /**
+   * 混沌仪 / 无尽（W6；cmd 段 140）
+   *
+   * 旧氪金秘境的 `dungeon` 段（140）已在 W6a 物理删除，本段**重定义为混沌仪**。
+   * `state` / `setSequence` / `setFailMode` / `start` / `stop` 全部挂在 `idle` 逻辑服
+   * （离线结算与混沌推进同源）。
+   */
+  chaos: 140,
 } as const;
 
 export type CmdSegment = (typeof CMD_SEGMENTS)[keyof typeof CMD_SEGMENTS];
@@ -207,6 +215,25 @@ export const MAP_CMD = {
   enter: 3,
   /** 离开当前地图（关会话） */
   leave: 4,
+} as const;
+
+/**
+ * 混沌仪（无尽）段（W6）
+ *
+ * 玩家编排钥石序列 → 混沌仪按序逐个挑战；离线也按同一序列推进。
+ */
+export const CHAOS_CMD = {
+  cmd: CMD_SEGMENTS.chaos,
+  /** 混沌仪状态（解锁 / 16 阶 + 钥石持有 / 序列 / 失败选项 / 运行进度） */
+  state: 1,
+  /** 保存钥石序列（≤16，可重复） */
+  setSequence: 2,
+  /** 设置失败选项（回普通地图 / 继续挑战） */
+  setFailMode: 3,
+  /** 开始运行（消耗首个钥石并进入对应 T 阶） */
+  start: 4,
+  /** 停止运行（回到普通地图） */
+  stop: 5,
 } as const;
 
 /** `(cmd << 16) | subCmd` 路由键（与 ionet-ts CmdInfo.cmdMerge 一致）。 */

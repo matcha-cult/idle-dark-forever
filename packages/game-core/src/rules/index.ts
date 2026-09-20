@@ -18,6 +18,7 @@
  *   / `getMaterialLevel` / `getDecomposeMatrials`
  * - `checkRequirement`
  * - 混沌钥石阶位与掉落掷骰（`keystoneTierOfLevel` / `pickKeystoneTier` …）
+ * - 混沌仪纯规则（`chaosMapKeyOfTier` / `hasAllWorldBossesKilled` …）
  */
 
 export * from './player-meta.js';
@@ -29,4 +30,5 @@ export * from './damage.js';
 export * from './check.js';
 export * from './combat-area.js';
 export * from './keystone.js';
+export * from './chaos.js';
 export * from './player.js';

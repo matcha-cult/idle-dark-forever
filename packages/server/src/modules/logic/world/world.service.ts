@@ -15,9 +15,11 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import {
   RealClock,
+  EnemyUnit,
+  chaosTierOfMapKey,
+  isChaosMap,
   type Clock,
   type DataTables,
-  type EnemyUnit,
   type InventorySlot,
   type Player,
 } from '@idle-dark/game-core';
@@ -334,6 +336,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.emitTick(session, now);
+    this.publishChaosOutcome(session);
 
     if (now - session.lastPersistAt >= WORLD_CONFIG.persistIntervalMs) {
       session.lastPersistAt = now;
@@ -403,6 +406,35 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       }
     }
     return frame.events;
+  }
+
+  /**
+   * 混沌仪 run 结算上报（W6）：内核置位 `chaosOutcome` 后，本 tick 发一次
+   * `ChaosRunEnded`（进程内同步事件）并清位；非混沌图 / 无结果 → no-op。
+   *
+   * battle **只报告事实**，失败分支（重试 / 跳过 / 中断）由 `chaos` 域决定。
+   */
+  private publishChaosOutcome(session: WorldSession): void {
+    const outcome = session.world.chaosOutcome;
+    if (outcome === null) return;
+    // `clear` 时先等守关 BOSS 尸体清理（掉落 / 钥石结算在 `clean()`）：本 tick 立刻换图会
+    // `dispose()` 掉 clean 计时器，导致 BOSS 掉落被静默吞掉。最多延后一个清尸周期（3s）。
+    if (
+      outcome === 'clear' &&
+      session.world.units.some((unit) => unit instanceof EnemyUnit && unit.worldBoss)
+    ) {
+      return;
+    }
+    session.world.chaosOutcome = null;
+    const tier = chaosTierOfMapKey(session.world.map);
+    if (tier === null) return;
+    this.events.emit({
+      type: 'ChaosRunEnded',
+      userId: session.userId,
+      characterId: session.characterId,
+      tier,
+      outcome,
+    });
   }
 
   private schedulePersist(session: WorldSession): void {
@@ -741,11 +773,16 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     characterId: string,
     mapKey: string,
     opId?: string,
+    options?: { readonly allowChaos?: boolean },
   ): Promise<ActionResult<WorldSnapshotDto>> {
     const session = await this.start(userId, characterId);
     if (!session) return fail(BusinessErrorCode.PLAYER_NOT_FOUND);
     const map = this.tables.maps[mapKey];
     if (!map) return fail(BusinessErrorCode.MAP_LOCKED, '地图不存在');
+    // W6：混沌图只能由混沌仪（`allowChaos`）进入；普通进图入口一律拒绝。
+    if (isChaosMap(map) && options?.allowChaos !== true) {
+      return fail(BusinessErrorCode.MAP_LOCKED, '混沌图只能通过混沌仪进入');
+    }
     // 重复进入当前地图 = 「重置本图」（原版重新进入地图会重置刷怪与战斗），
     // 不报 ALREADY_IN_MAP —— 这样前端 select 后直接 enterMap 永远可用。
     if (session.world.map === mapKey) {

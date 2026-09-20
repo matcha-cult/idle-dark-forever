@@ -42,6 +42,7 @@ import {
   pickKeystoneTier,
 } from '../rules/keystone.js';
 import { Camps } from './camps.js';
+import { isChaosMap } from '../rules/chaos.js';
 import { EnemyBorn, type Born, type BornSavedState } from './spawner.js';
 import { EnemyUnit } from './enemy-unit.js';
 import { PlayerUnit, type PlayerLike } from './player-unit.js';
@@ -264,6 +265,36 @@ export class BattleWorld {
     return this.tables.maps[this._map];
   }
 
+  /**
+   * 混沌仪本次 run 的结算结果（W6）：`null` = 尚未结算。
+   *
+   * - `'clear'`：混沌图守关 BOSS 被击杀（**可重复刷**，不写 `worldBossKilled`）；
+   * - `'death'`：玩家在混沌图中阵亡。
+   *
+   * 由上层（WorldService）在 tick 里读取并通过 `ChaosRunEnded` 事件驱动混沌仪推进；
+   * 换图（`onMapChanged`）时重置。**非混沌图不会被置位。**
+   */
+  chaosOutcome: 'clear' | 'death' | null = null;
+
+  /** 当前地图是否混沌仪地图（`chaos.tNN`）。 */
+  get isChaosMap(): boolean {
+    return isChaosMap(this.mapData);
+  }
+
+  /** 记录混沌图守关 BOSS 击杀（仅混沌图有效；幂等，保留首个结果）。 */
+  noteChaosBossKilled(): void {
+    if (this.chaosOutcome === null && this.isChaosMap) {
+      this.chaosOutcome = 'clear';
+    }
+  }
+
+  /** 记录玩家在混沌图中阵亡（仅混沌图有效；`clear` 优先，避免清关后残留阵亡）。 */
+  noteChaosPlayerDeath(): void {
+    if (this.chaosOutcome === null && this.isChaosMap) {
+      this.chaosOutcome = 'death';
+    }
+  }
+
   getMedicineLevel(type: string): number {
     return this.medicineLevel(type);
   }
@@ -391,6 +422,8 @@ export class BattleWorld {
   }
 
   onMapChanged(mapState?: { enemyBorn?: unknown }): void {
+    // 换图 / 重进本图 = 新一轮 run：清空上一轮的混沌结算结果（W6）。
+    this.chaosOutcome = null;
     // 改变敌人生成器
     if (this.enemyBorn) {
       this.enemyBorn.dispose();

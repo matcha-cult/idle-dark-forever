@@ -27,6 +27,14 @@
 import type { DataTables, GoodData } from '../contracts/data.js';
 import { canEquipOffHand, isTwoHanded, type EquipCategory } from '@idle-dark/protocol';
 import { CareerInfo, type CareerInfoJson, type EquipSlot } from './career-info.js';
+import {
+  CHAOS_MAX_RETRY,
+  CHAOS_MAX_SEQUENCE,
+  hasAllWorldBossesKilled,
+  isChaosFailMode,
+  isChaosSequence,
+  type ChaosFailMode,
+} from './chaos.js';
 import { getGoodOrder } from './goods.js';
 import { InventorySlot, type InventorySlotJson } from './inventory-slot.js';
 import {
@@ -87,6 +95,14 @@ export interface PlayerJson extends PlayerMetaJson {
   wallet: Record<string, number>;
   /** 已击杀野外 BOSS 的地图 key（W4 一次性 BOSS；用于解锁下一段）。 */
   worldBossKilled: string[];
+  /** 混沌仪钥石序列（W6；规范 `keystone.tNN`，最多 16 条、可重复）。 */
+  chaosSequence: string[];
+  /** 挑战失败选项（W6）。 */
+  chaosFailMode: ChaosFailMode;
+  /** 当前序列下标 / 连续失败次数 / 是否运行中（W6）。 */
+  chaosIndex: number;
+  chaosRetry: number;
+  chaosActive: boolean;
 }
 
 /** 原版 `player.js:589-1367`。 */
@@ -127,6 +143,21 @@ export class Player extends PlayerMeta {
    * 随 `Player.toJSON()` 落入 `characters.state`；`Requirement.bossKilled` 的判定数据源。
    */
   worldBossKilled = new Set<string>();
+
+  /**
+   * 混沌仪钥石序列（W6）：玩家编排的挑战顺序，最多 16 条、允许重复。
+   *
+   * 每项都是规范 `keystone.tNN` key；非法项在载入时**丢弃**（见 `fromJSON`）。
+   */
+  chaosSequence: string[] = [];
+  /** 挑战失败选项（W6）：回普通地图 / 继续挑战。 */
+  chaosFailMode: ChaosFailMode = 'normal';
+  /** 当前正在挑战的序列下标（0 起；`chaosActive` 为假时无意义）。 */
+  chaosIndex = 0;
+  /** 当前钥石的连续失败次数（「继续挑战」达 3 次跳下一把）。 */
+  chaosRetry = 0;
+  /** 混沌仪是否正在运行（按序列自动推进）。 */
+  chaosActive = false;
 
   constructor(
     tables: DataTables,
@@ -342,6 +373,21 @@ export class Player extends PlayerMeta {
       }
     }
 
+    // 混沌仪状态（W6）：序列丢弃非法项并截断到 16；index / retry 收敛为非负整数并夹紧。
+    const sequence: string[] = [];
+    for (const item of asArray(raw.chaosSequence)) {
+      if (sequence.length >= CHAOS_MAX_SEQUENCE) break;
+      if (typeof item === 'string' && isChaosSequence([item])) {
+        sequence.push(item);
+      }
+    }
+    this.chaosSequence = sequence;
+    this.chaosFailMode = isChaosFailMode(raw.chaosFailMode) ? raw.chaosFailMode : 'normal';
+    // 下标允许等于长度（= 序列已走完，下一步必然 stop）；空序列固定为 0。
+    this.chaosIndex = clampInt(raw.chaosIndex, 0, sequence.length);
+    this.chaosRetry = clampInt(raw.chaosRetry, 0, CHAOS_MAX_RETRY);
+    this.chaosActive = sequence.length > 0 && asBoolean(raw.chaosActive, false);
+
     return this;
   }
 
@@ -384,6 +430,11 @@ export class Player extends PlayerMeta {
       minLootLevel: this.minLootLevel,
       wallet,
       worldBossKilled: Array.from(this.worldBossKilled),
+      chaosSequence: this.chaosSequence.slice(0, CHAOS_MAX_SEQUENCE),
+      chaosFailMode: this.chaosFailMode,
+      chaosIndex: this.chaosIndex,
+      chaosRetry: this.chaosRetry,
+      chaosActive: this.chaosActive,
     };
   }
 
@@ -610,6 +661,16 @@ export class Player extends PlayerMeta {
     if (typeof map === 'string' && map.length > 0) {
       this.worldBossKilled.add(map);
     }
+  }
+
+  /**
+   * 混沌仪解锁判据（W6）：**全部野外地图 BOSS** 已击杀。
+   *
+   * 数据驱动：扫描 `tables.maps` 里所有「有 `boss` 且非混沌」的图（含 85+ 多图），
+   * 全部命中 `worldBossKilled` 才为真；无要求集合（数据缺失）→ `false`（fail-closed）。
+   */
+  hasAllWorldBossesKilled(): boolean {
+    return hasAllWorldBossesKilled(this.tables.maps, this.worldBossKilled);
   }
 
   /**
@@ -852,4 +913,19 @@ export class Player extends PlayerMeta {
       this.loot(slot, target);
     }
   }
+}
+
+/**
+ * 把不可信数值收敛为 `[min, max]` 内的整数（`undefined` / `NaN` / 非有限数 → `min`）。
+ *
+ * 用于混沌仪存档字段的防御性解析（W6）：存档可能被手改，夹紧后不会让状态机越界。
+ */
+function clampInt(value: unknown, min: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return min;
+  }
+  const int = Math.trunc(value);
+  if (int < min) return min;
+  if (int > max) return max;
+  return int;
 }

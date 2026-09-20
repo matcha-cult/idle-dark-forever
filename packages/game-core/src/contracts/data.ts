@@ -242,6 +242,18 @@ export interface MapData {
    * 旧地图 / 秘境图不写该字段（缺省 = 无守关 BOSS）。
    */
   boss?: string;
+  /**
+   * 混沌仪 T 阶（W6 新增，可选）。
+   *
+   * 有该字段 = 本图是**混沌仪地图**（`chaos.t01..t16`）：
+   * - 地图等级 = `84 + chaos`（T1=85 … T16=100）；
+   * - **不出现在普通 `map.list`**（开图 UI 只显示 T 阶）；
+   * - 守关 BOSS **可重复刷**（每 20 波），且不写入 `Player.worldBossKilled`；
+   * - 只能由混沌仪（钥石序列）进入，不参与普通野外解锁链。
+   *
+   * 野外地图不写该字段（缺省 = 非混沌图）。
+   */
+  chaos?: number;
   loots?: LootEntry[];
 }
 

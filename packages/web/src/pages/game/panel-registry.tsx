@@ -13,6 +13,7 @@
  * 包裹域内含「背包 / 装备 / 储藏箱 / 拾取规则 / 神力商店」，生产域内含四个子页。
  */
 import {
+  DeploymentUnitOutlined,
   ExperimentOutlined,
   ShoppingOutlined,
   ThunderboltOutlined,
@@ -21,11 +22,12 @@ import {
 import { ErrorBoundary, type SideNavItem } from '@idle-dark/ui-kit';
 import type { ReactNode } from 'react';
 import { BattlePanel } from './panels/BattlePanel.js';
+import { ChaosPanel } from './panels/ChaosPanel.js';
 import { InventoryPanel } from './panels/InventoryPanel.js';
 import { ProducePanel } from './panels/ProducePanel.js';
 import { SkillsPanel } from './panels/SkillsPanel.js';
 
-export type PanelKey = 'battle' | 'inventory' | 'skills' | 'produce';
+export type PanelKey = 'battle' | 'inventory' | 'skills' | 'produce' | 'chaos';
 
 /** 导航分组（顺序即展示顺序）。 */
 export const PANEL_GROUPS: ReadonlyArray<{ key: string; label: string }> = [
@@ -50,6 +52,7 @@ const DOMAINS: readonly PanelDomainEntry[] = [
   { key: 'inventory', label: '包裹', icon: <ShoppingOutlined />, group: 'war', panel: <InventoryPanel /> },
   { key: 'skills', label: '技能', icon: <ToolOutlined />, group: 'growth', panel: <SkillsPanel /> },
   { key: 'produce', label: '生产', icon: <ExperimentOutlined />, group: 'growth', panel: <ProducePanel /> },
+  { key: 'chaos', label: '混沌仪', icon: <DeploymentUnitOutlined />, group: 'growth', panel: <ChaosPanel /> },
 ];
 
 /** 全部域（只读快照）。 */

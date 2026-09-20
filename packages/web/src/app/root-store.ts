@@ -15,6 +15,7 @@ import type { IonetClientOptions, SocketAdapterFactory } from '@idle-dark/ionet-
 import {
   BATTLE_CMD,
   CAREER_CMD,
+  CHAOS_CMD,
   IDLE_CMD,
   INVENTORY_CMD,
   WORLD_CMD,
@@ -24,6 +25,7 @@ import type { PushFrame } from '../services/notification-bus.js';
 import { resolveStorage, type StorageLike } from '../services/storage.js';
 import { BankStore } from '../stores/bank-store.js';
 import { CareerStore } from '../stores/career-store.js';
+import { ChaosStore } from '../stores/chaos-store.js';
 import { ConnectionStore } from '../stores/connection-store.js';
 import { IdleStore } from '../stores/idle-store.js';
 import { InventoryStore } from '../stores/inventory-store.js';
@@ -73,6 +75,7 @@ export class RootStore {
   readonly produce: ProduceStore;
   readonly shop: ShopStore;
   readonly idle: IdleStore;
+  readonly chaos: ChaosStore;
 
   /** 「已选角色期间掉过线」→ 重连时需要重新进入角色。 */
   private reenterPending = false;
@@ -142,6 +145,7 @@ export class RootStore {
     this.produce = new ProduceStore(ctx);
     this.shop = new ShopStore(ctx);
     this.idle = new IdleStore(ctx);
+    this.chaos = new ChaosStore(ctx);
 
     this.autoRefreshMetricsMs = options.autoRefreshMetricsMs ?? DEFAULT_METRICS_INTERVAL_MS;
     this.startMetricsPolling();
@@ -229,6 +233,7 @@ export class RootStore {
       this.produce.load().catch(() => undefined),
       this.shop.load().catch(() => undefined),
       this.idle.load().catch(() => undefined),
+      this.chaos.load().catch(() => undefined),
       this.inventory.loadLootRule().catch(() => undefined),
     ]);
   }
@@ -298,6 +303,9 @@ export class RootStore {
         return;
       case IDLE_CMD.cmd:
         this.idle.handleNotification(notification);
+        return;
+      case CHAOS_CMD.cmd:
+        this.chaos.handleNotification(notification);
         return;
       case BATTLE_CMD.cmd:
         this.world.handleNotification(notification);
