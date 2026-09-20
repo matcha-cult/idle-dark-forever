@@ -734,6 +734,15 @@ __IDLE_DARK__                   // 根 store（临时排查）
   `slime.queen` 既可能是某图 BOSS 又是另一图普通怪）。
 - **怪物等级**（`EnemyUnit.levelOverride`，`BattleWorld.addEnemy` 对非混沌图设置）：
   普通 = 地图等级 / 稀有（`quality>=1`）= +1 / 守关 BOSS = +2。地图无 `level` 时回落旧公式。
+- **经验衰减必须按怪物真实等级比较**（`EnemyUnit.kill` → `world.gotExp(this.exp, this.level)`）：
+  经验窗口 = `玩家等级 < 地图等级 + 10`，与段位一一对应（world.1 → <10、world.3 → <25、world.4 → <35 …）。
+  ⚠️ **不要再把怪物等级 `transformEquipLevel` 减半**：减半会让 `dis = 玩家 − 地图/2`，
+  world.4（L=25）起玩家一到进图门槛就 `dis≥10`、经验恒 0 → 进度死锁在 ~Lv.20。
+  `transformEquipLevel` 只用于装备等级口径（如 `stunResist`），不要用在经验判定。
+- **刷怪池必须按真实数值 + 阵营挑选**（不能只看 `level` 字段）：普通怪与守关 BOSS 必须是
+  `camp:'enemy'` 且非 `onPress` 机关 —— `neutral` 不会被自动索敌（挂机卡波次）、
+  `alien`（如 `chapter3.fishzilla.magician`）**玩家根本无法攻击**；且 BOSS 的 HP 不得低于本图普通怪。
+  `data/spawn-eligibility.test.ts` 是门禁。
 - 等级上限 **100**（`CareerInfo.maxLevel` 默认 100，`CareerData.maxLevel?` 可覆写）；
   **巅峰等级体系已全部删除**（`peakLevel`/`peakExp`/`maxPeakExp`/`levelUpPeak`、DB `peak_level`）。
   满级后经验溢出直接丢弃，不再有任何巅峰轨迹。

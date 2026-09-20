@@ -447,7 +447,12 @@ export class EnemyUnit extends Unit {
 
     this.world.sink.death({ unitId: this.id, name: this.displayName, camp: campBefore });
     if (this.exp) {
-      this.world.gotExp(this.exp, transformEquipLevel(this.level));
+      // ⚠️ 用**怪物真实等级**做经验衰减判定，不要再 `transformEquipLevel` 减半。
+      // W4 规则是「普通 = 地图等级」、段位 = 玩家等级带；若这里减半，
+      // `dis = 玩家等级 − 地图等级/2`，world.4（L=25）起玩家一到进图门槛就 `dis≥10` → 经验恒 0，
+      // 从而卡死在 Lv.20、永远够不到后续解锁门槛。改用真实等级后，经验窗口恰好等于段位。
+      // （`transformEquipLevel` 仍用于 `stunResist` 等装备等级口径，不要一起改。）
+      this.world.gotExp(this.exp, this.level);
     }
 
     // W4：一次性野外 BOSS —— 死亡即登记到角色（幂等），从而解锁下一段。
