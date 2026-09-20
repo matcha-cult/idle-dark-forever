@@ -55,7 +55,7 @@ export interface EquipmentSlotLike {
 
 export interface RoleLike {
   key?: string;
-  attrBase: Record<'str' | 'dex' | 'int' | 'sta', number>;
+  attrBase: Record<'str' | 'dex' | 'int', number>;
   atk?: number;
   atkSpeed?: number;
 }
@@ -64,7 +64,7 @@ export interface CareerLike {
   key: string;
   /** 被动 key → 生效所需等级。 */
   passives: Record<string, number>;
-  attrGrow: Record<'str' | 'dex' | 'int' | 'sta', number>;
+  attrGrow: Record<'str' | 'dex' | 'int', number>;
   availableClasses: Record<string, boolean>;
 }
 
@@ -328,9 +328,9 @@ export class PlayerUnit extends Unit {
     return this.runAttrHooks(this.name, 'displayName');
   }
 
-  // ────────────────────────────── 四维 ──────────────────────────────
+  // ────────────────────────────── 三维 ──────────────────────────────
 
-  private attrBase(key: 'str' | 'dex' | 'int' | 'sta'): number {
+  private attrBase(key: 'str' | 'dex' | 'int'): number {
     let ret = 0;
     if (this.player) {
       ret += this.player.roleData.attrBase[key];
@@ -349,22 +349,20 @@ export class PlayerUnit extends Unit {
   get int(): number {
     return this.attrBase('int');
   }
-  get sta(): number {
-    return this.attrBase('sta');
-  }
+  // P3：耐力 `sta` 已删除，且不引入替代属性（三维 = 力量 / 敏捷 / 智慧）。
 
   // ────────────────────────────── 生命 / 资源上限 ──────────────────────────────
 
   override get maxHp(): number {
+    // P3：基础生命 = `50 + 等级×10 + 装备加成`，随后走 hooks。
+    // 原版 `*(1 + sta/100)` 的耐力乘子**直接删除**，不换成 str/int/dex 驱动。
     let ret = 50 + this.level * 10;
-    // 耐力加成
     const ornament = this.player?.equipments.ornament;
     if (ornament && !ornament.empty) {
       ret += ornament.maxHp;
     }
     ret = this.runAttrHooks(ret, 'maxHp');
     ret = this.runAttrHooks(ret, 'maxHpMul');
-    ret *= this.sta / 100 + 1;
     ret *= this.runAttrHooks(1, 'maxHpAdd');
 
     return ret;

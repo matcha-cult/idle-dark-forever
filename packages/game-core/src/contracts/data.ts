@@ -307,7 +307,8 @@ export interface CareerData {
   equipments: Partial<Record<'weapon' | 'plastron' | 'gaiter' | 'ornament', string>>;
   /** 等级 → 升级所需经验的系数多项式，`expFormula.map((v, i) => v * level ** i)`。 */
   expFormula: number[];
-  attrGrow: Record<'str' | 'dex' | 'int' | 'sta', number>;
+  /** 三维成长（P3：耐力 `sta` 已删除，不引入替代属性）。 */
+  attrGrow: Record<'str' | 'dex' | 'int', number>;
   skills: Record<string, number>;
   passives: Record<string, number>;
   enhances: Record<string, number>;
@@ -321,7 +322,8 @@ export interface RoleData {
   defaultCareer: string;
   atk: number;
   atkSpeed: number;
-  attrBase: Record<'str' | 'dex' | 'int' | 'sta', number>;
+  /** 建卡三维基础值（P3：耐力 `sta` 已删除）。 */
+  attrBase: Record<'str' | 'dex' | 'int', number>;
   startup: Record<string, number | { quality: number; affixes: string[] }>;
 }
 

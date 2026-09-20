@@ -26,7 +26,6 @@ return  [
       str: (level, value) => value + level * 5,
       dex: (level, value) => value + level * 5,
       int: (level, value) => value + level * 5,
-      sta: (level, value) => value + level * 5,
     },
   },
   {

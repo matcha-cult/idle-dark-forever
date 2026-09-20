@@ -144,7 +144,6 @@ export interface UnitLike {
   str: number;
   dex: number;
   int: number;
-  sta: number;
   atk: number;
   def: number;
   dmgAdd: number;

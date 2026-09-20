@@ -32,7 +32,6 @@ return  {
     str: 1.5,
     dex: 1,
     int: 0,
-    sta: 1.5,
   },
   skills: {
     melee: 1,
@@ -135,7 +134,6 @@ return  {
     str: 0,
     dex: 1,
     int: 2.5,
-    sta: 0.5,
   },
 };
 
@@ -163,7 +161,6 @@ return  {
     str: 1,
     dex: 1.5,
     int: 0,
-    sta: 1.5,
   },
   skills: {
     'assassin.melee': 1, // 攻击
@@ -229,7 +226,6 @@ return  {
     str: 1.5,
     dex: 1,
     int: 0,
-    sta: 1.5,
   },
   skills: {
     'knight.melee': 1,
@@ -326,7 +322,6 @@ return  {
     str: 0,
     dex: 1,
     int: 2,
-    sta: 1,
   },
 };
 

@@ -229,20 +229,6 @@ return  [
       int: (effect, value) => value + effect,
     },
   },
-  {
-    key: 'sta',
-    display: effect => `耐力 +${Math.round(effect)}`,
-    generate(level, rng) {
-      // 1 + 每装备等级0.5-1.5属性
-      return (rng.next() * 1 + 0.5) * level + 1;
-    },
-    range(level) {
-      return `${Math.round(0.5*level + 1)}~${Math.round((1.5*level + 1))}`;
-    },
-    hooks: {
-      sta: (effect, value) => value + effect,
-    },
-  },
 ];
 
 })();

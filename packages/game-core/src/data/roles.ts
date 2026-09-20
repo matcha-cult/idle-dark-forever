@@ -29,7 +29,6 @@ return  {
     str: 10,
     dex: 8,
     int: 4,
-    sta: 10,
   },
 };
 
@@ -56,7 +55,6 @@ return  {
     str: 4,
     dex: 8,
     int: 12,
-    sta: 8,
   },
 };
 
