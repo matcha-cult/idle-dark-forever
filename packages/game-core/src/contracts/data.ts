@@ -78,6 +78,20 @@ export interface AffixData {
   validClasses?: string[];
   validPositions?: string[];
   /**
+   * 前后缀归属（P5 预分类骨架）。
+   *
+   * 缺省视为 `'prefix'`（历史数据未标注时的兜底）。词缀条数按「前缀池 / 后缀池」分开抽：
+   * 普通 1+1、优秀 3+3（传奇的特殊池下期，P5）。
+   */
+  affixType?: 'prefix' | 'suffix';
+  /**
+   * 词缀标签（P5 预分类骨架）。
+   *
+   * 不变式：**同一 tag 只归属前缀或后缀之一**（不会两边都出现）。
+   * 本期只做骨架，tag → 具体分布下期。
+   */
+  tag?: string;
+  /**
    * 数值生成：`(level, rng) => value`。
    * ⚠️ 原版内部直接调用 `Math.random()`；移植后**必须**改为注入 `Rng`，否则掉落不可重放。
    */
@@ -385,6 +399,14 @@ export interface DataTables {
   enhances: Record<string, HookAbilityData>;
   buffs: Record<string, BuffData>;
   affixes: Record<string, AffixData>;
+  /**
+   * 「词缀池分组」表（P5 挂点，可选）。
+   *
+   * key = `GoodData.affixGroup`；value = 该组可抽取的词缀 key 列表。
+   * 缺省 / 未命中该组时回落到**全池**（`Object.keys(affixes)`）——本期所有底材共用一个默认池，
+   * 具体分组分布下期（P5）。
+   */
+  affixGroups?: Record<string, readonly string[]>;
   enemyAffixes: Record<string, EnemyAffixData>;
   stories: Record<string, StoryData>;
   legends: Record<string, LegendData>;

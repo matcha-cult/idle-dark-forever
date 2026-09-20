@@ -20,6 +20,8 @@ const __affixes_0 = ((): AffixEntry[] => {
 return  [
   {
     key: 'maxHp',
+    affixType: 'prefix',
+    tag: 'life',
     display: effect => `生命值 +${Math.round(effect)}`,
     validPositions: ['plastron', 'gaiter'],
     generate(level, rng) {
@@ -35,6 +37,8 @@ return  [
   },
   {
     key: 'maxMp',
+    affixType: 'prefix',
+    tag: 'mana',
     display: effect => `法力值 +${Math.round(effect)}`,
     validClasses: ['cloth', 'ornament'],
     generate(level, rng) {
@@ -50,6 +54,8 @@ return  [
   },
   {
     key: 'hpRecovery',
+    affixType: 'prefix',
+    tag: 'life',
     display: effect => `5秒回血${Math.round(effect*5)}点`,
     validPositions: ['plastron', 'gaiter', 'ornament'],
     generate(level, rng) {
@@ -65,6 +71,8 @@ return  [
   },
   {
     key: 'mpRecovery',
+    affixType: 'prefix',
+    tag: 'mana',
     display: effect => `5秒回蓝${Math.round(effect*5)}点`,
     validClasses: ['cloth', 'wand', 'ornament'],
     generate(level, rng) {
@@ -80,6 +88,8 @@ return  [
   },
   {
     key: 'atk',
+    affixType: 'prefix',
+    tag: 'attack',
     display: effect => `攻击力 +${Math.round(effect)}`,
     weight: 2,
     validClasses: ['sword', 'dagger'],
@@ -96,6 +106,8 @@ return  [
   },
   {
     key: 'critRate',
+    affixType: 'suffix',
+    tag: 'crit',
     display: effect => `暴击几率 +${Math.round(effect*100)}%`,
     weight: 0.6,
     minLevel: 20,
@@ -112,6 +124,8 @@ return  [
   },
   {
     key: 'critBonus',
+    affixType: 'suffix',
+    tag: 'crit',
     display: effect => `暴击伤害 +${Math.round(effect*100)}%`,
     weight: 0.6,
     minLevel: 20,
@@ -128,6 +142,8 @@ return  [
   },
   {
     key: 'leech',
+    affixType: 'suffix',
+    tag: 'leech',
     display: effect => `吸血 +${Math.round(effect)}`,
     validClasses: ['sword', 'dagger', 'ornament'],
     generate(level, rng) {
@@ -143,6 +159,8 @@ return  [
   },
   {
     key: 'atkMul',
+    affixType: 'prefix',
+    tag: 'attack',
     display: effect => `攻击力 +${Math.round(effect*100)}%`,
     validClasses: ['sword', 'dagger'],
     weight: 0.4,
@@ -159,6 +177,8 @@ return  [
   },
   {
     key: 'atkSpeedAdd',
+    affixType: 'suffix',
+    tag: 'speed',
     display: effect => `攻击速度 +${Math.round(effect*100)}%`,
     validClasses: ['sword', 'dagger'],
     generate(level, rng) {
@@ -174,6 +194,8 @@ return  [
   },
   {
     key: 'def',
+    affixType: 'prefix',
+    tag: 'defense',
     display: effect => `护甲 +${Math.round(effect)}`,
     validPositions: ['plastron', 'gaiter'],
     generate(level, rng) {
@@ -189,6 +211,8 @@ return  [
   },
   {
     key: 'str',
+    affixType: 'prefix',
+    tag: 'attribute',
     display: effect => `力量 +${Math.round(effect)}`,
     generate(level, rng) {
       // 1 + 每装备等级0.5-1.5属性
@@ -203,6 +227,8 @@ return  [
   },
   {
     key: 'dex',
+    affixType: 'prefix',
+    tag: 'attribute',
     display: effect => `敏捷 +${Math.round(effect)}`,
     generate(level, rng) {
       // 1 + 每装备等级0.5-1.5属性
@@ -217,6 +243,8 @@ return  [
   },
   {
     key: 'int',
+    affixType: 'prefix',
+    tag: 'attribute',
     display: effect => `智力 +${Math.round(effect)}`,
     generate(level, rng) {
       // 1 + 每装备等级0.5-1.5属性
@@ -250,6 +278,8 @@ const __affixes_1 = ((): AffixEntry[] => {
 return  [
   {
     key: 'fireResist',
+    affixType: 'suffix',
+    tag: 'resist',
     display: effect => `火焰抗性 +${Math.round(effect)}`,
     minLevel: 40,
     maxLevel: 180,
@@ -267,6 +297,8 @@ return  [
   },
   {
     key: 'fireAbsorb',
+    affixType: 'suffix',
+    tag: 'absorb',
     display: effect => `火焰吸收 +${Math.round(effect*100)}%`,
     minLevel: 40,
     weight: 0.2,
@@ -284,6 +316,8 @@ return  [
   },
   {
     key: 'darkResist',
+    affixType: 'suffix',
+    tag: 'resist',
     display: effect => `暗影抗性 +${Math.round(effect)}`,
     minLevel: 40,
     maxLevel: 180,
@@ -301,6 +335,8 @@ return  [
   },
   {
     key: 'darkAbsorb',
+    affixType: 'suffix',
+    tag: 'absorb',
     display: effect => `暗影吸收 +${Math.round(effect*100)}%`,
     minLevel: 40,
     weight: 0.2,
@@ -318,6 +354,8 @@ return  [
   },
   {
     key: 'coldResist',
+    affixType: 'suffix',
+    tag: 'resist',
     display: effect => `寒冷抗性 +${Math.round(effect)}`,
     minLevel: 40,
     maxLevel: 180,
@@ -335,6 +373,8 @@ return  [
   },
   {
     key: 'coldAbsorb',
+    affixType: 'suffix',
+    tag: 'absorb',
     display: effect => `寒冷吸收 +${Math.round(effect*100)}%`,
     minLevel: 40,
     weight: 0.2,
@@ -352,6 +392,8 @@ return  [
   },
   {
     key: 'lightningResist',
+    affixType: 'suffix',
+    tag: 'resist',
     display: effect => `闪电抗性 +${Math.round(effect)}`,
     minLevel: 40,
     maxLevel: 180,
@@ -369,6 +411,8 @@ return  [
   },
   {
     key: 'lightningAbsorb',
+    affixType: 'suffix',
+    tag: 'absorb',
     display: effect => `闪电吸收 +${Math.round(effect*100)}%`,
     minLevel: 40,
     weight: 0.2,
@@ -387,6 +431,8 @@ return  [
 
   {
     key: 'allResist',
+    affixType: 'suffix',
+    tag: 'resist',
     display: effect => `所有抗性 +${Math.round(effect)}`,
     minLevel: 40,
     validPositions: ['plastron', 'gaiter'],
@@ -403,6 +449,8 @@ return  [
   },
   {
     key: 'hpFromKill',
+    affixType: 'suffix',
+    tag: 'lifeOnKill',
     display: effect => `击杀回血 ${Math.round(effect)}`,
     minLevel: 40,
     validPositions: ['weapon'],
@@ -418,6 +466,8 @@ return  [
   },
   {
     key: 'mpFromKill',
+    affixType: 'suffix',
+    tag: 'manaOnKill',
     display: effect => `击杀回蓝 ${Math.round(effect)}`,
     minLevel: 40,
     validClasses: ['wand'],
@@ -433,6 +483,8 @@ return  [
   },
   {
     key: 'lucky',
+    affixType: 'suffix',
+    tag: 'luck',
     display: effect => `运气 +${effect | 0}`,
     minLevel: 60,
     weight: 0.1,

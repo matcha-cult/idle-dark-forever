@@ -127,6 +127,26 @@ describe('createDefaultTables', () => {
     }
   });
 
+  it('每条装备词缀都标注 affixType + tag，且同一 tag 只归属前缀或后缀之一（P5 预分类）', () => {
+    const tagKind = new Map<string, string>();
+    const keys = Object.keys(tables.affixes);
+    expect(keys.length).toBeGreaterThan(0);
+    for (const key of keys) {
+      const affix = tables.affixes[key]!;
+      expect(affix.affixType, key).toMatch(/^(prefix|suffix)$/);
+      expect(typeof affix.tag, key).toBe('string');
+      expect((affix.tag ?? '').length, key).toBeGreaterThan(0);
+      const prev = tagKind.get(affix.tag!);
+      if (prev !== undefined) {
+        expect(prev, `tag ${affix.tag} 跨越前后缀`).toBe(affix.affixType);
+      }
+      tagKind.set(affix.tag!, affix.affixType!);
+    }
+    // 两侧都要有词缀，否则分池抽取永远抽不到某一侧。
+    expect(keys.some((key) => tables.affixes[key]!.affixType === 'prefix')).toBe(true);
+    expect(keys.some((key) => tables.affixes[key]!.affixType === 'suffix')).toBe(true);
+  });
+
   it('careers.expFormula 是数字数组', () => {
     for (const [key, career] of Object.entries(tables.careers)) {
       expect(Array.isArray(career.expFormula), key).toBe(true);

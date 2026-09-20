@@ -28,6 +28,51 @@ import { AffixInfo, InventorySlot } from './inventory-slot.js';
  */
 export const BASE_QUALITY_RATE: readonly number[] = [1, 0.5, 0.005, 0];
 
+/** 缺省词缀分组 key（`GoodData.affixGroup` 未标注时的归属）。 */
+export const DEFAULT_AFFIX_GROUP = 'default';
+
+/** 词缀前后缀归属。 */
+export type AffixKind = 'prefix' | 'suffix';
+
+/** 词缀归属；未标注 `affixType` 时按 `'prefix'`（历史数据兜底）。 */
+export function affixKindOf(affix: AffixData | undefined): AffixKind {
+  return affix?.affixType === 'suffix' ? 'suffix' : 'prefix';
+}
+
+/** `GoodData.affixGroup` → 分组 key；缺省落到 {@link DEFAULT_AFFIX_GROUP}。 */
+export function affixGroupOf(goodData: GoodData | undefined): string {
+  return goodData?.affixGroup ?? DEFAULT_AFFIX_GROUP;
+}
+
+/**
+ * 底材 → 候选词缀池（P5 挂点）。
+ *
+ * 优先取 `tables.affixGroups[group]`；没有分组表 / 未命中该组时回落到**全池**
+ * （本期所有底材共用一个默认池，具体分布下期）。
+ */
+export function affixPoolOf(tables: DataTables, goodData: GoodData | undefined): readonly string[] {
+  const grouped = tables.affixGroups?.[affixGroupOf(goodData)];
+  return grouped ?? Object.keys(tables.affixes);
+}
+
+/**
+ * 品质 → 目标词缀条数（前缀 / 后缀分开，P4 + P5）。
+ *
+ * - 普通（0）：1 前缀 + 1 后缀；
+ * - 优秀（1）：3 前缀 + 3 后缀；
+ * - 传奇（2）：本期同 3+3，**特殊性由末尾追加的传奇词缀承载**（特殊词缀池下期，P5）。
+ * - 负数 / 非有限数：0 条（防御性）。
+ */
+export function affixCountsOfQuality(quality: number): { prefix: number; suffix: number } {
+  if (!Number.isFinite(quality) || quality < 0) {
+    return { prefix: 0, suffix: 0 };
+  }
+  if (quality <= 0) {
+    return { prefix: 1, suffix: 1 };
+  }
+  return { prefix: 3, suffix: 3 };
+}
+
 /** 原版 `materialKey`：下标 1 = 尘（dust），2 = 碎片（piece）。 */
 export const MATERIAL_KEY: readonly (readonly string[])[] = [
   [],
@@ -131,9 +176,32 @@ export function specialLegendRate(tables: DataTables): number {
 }
 
 /**
+ * 从 `pool` 里按 `need` 抽词缀写入 `out`（同侧去重由 `blacklist` 保证）。
+ *
+ * 候选不足时**按可用数抽取**而不是抛错：低等级的某侧池可能为空（例如 1 级装备没有合法后缀），
+ * 这属于正常的等级门槛，不是数据缺失。整池为空由 `generateEquip` 显式报错。
+ */
+function drawAffixes(
+  tables: DataTables,
+  pool: readonly string[],
+  need: number,
+  level: number,
+  blacklist: Record<string, boolean>,
+  rng: Rng,
+  out: AffixInfo[],
+): void {
+  const target = Math.min(Math.max(0, Math.trunc(need)), pool.length);
+  for (let i = 0; i < target; i++) {
+    out.push(randomAffixes(tables, pool, level, blacklist, rng));
+  }
+}
+
+/**
  * 原版 `generateEquip(key, level, quality, legendType)`。
  *
- * 普通词缀条数 = `legendType ? quality - 1 : quality`（传奇占一格）。
+ * P5：词缀按**前缀 / 后缀分池**抽取（普通 1+1、优秀 3+3；传奇本期同 3+3，
+ * 特殊性由末尾追加的传奇词缀承载 —— 传奇词缀**豁免**前后缀规则）。
+ * 候选池来自 `GoodData.affixGroup` 解析出的底材词缀池（本期为全池默认组）。
  */
 export function generateEquip(
   tables: DataTables,
@@ -143,15 +211,23 @@ export function generateEquip(
   legendType: string | null,
   rng: Rng,
 ): InventorySlot {
-  const validAffixes = Object.keys(tables.affixes).filter((affix) =>
+  const validAffixes = affixPoolOf(tables, tables.goods[key]).filter((affix) =>
     isValidAffix(tables, key, affix, level),
   );
 
+  const needs = affixCountsOfQuality(quality);
   const generatedAffixes: AffixInfo[] = [];
   const blacklist: Record<string, boolean> = {};
-  const count = legendType ? quality - 1 : quality;
-  for (let i = 0; i < count; i++) {
-    generatedAffixes.push(randomAffixes(tables, validAffixes, level || 0, blacklist, rng));
+
+  if (needs.prefix + needs.suffix > 0) {
+    if (validAffixes.length === 0) {
+      // 原版会拿 undefined 去 `isValidAffix` 然后 TypeError；这里显式失败便于定位数据问题。
+      throw new Error('generateEquip: no affix selected (empty pool for this equip/level)');
+    }
+    const prefixes = validAffixes.filter((affix) => affixKindOf(tables.affixes[affix]) === 'prefix');
+    const suffixes = validAffixes.filter((affix) => affixKindOf(tables.affixes[affix]) === 'suffix');
+    drawAffixes(tables, prefixes, needs.prefix, level || 0, blacklist, rng, generatedAffixes);
+    drawAffixes(tables, suffixes, needs.suffix, level || 0, blacklist, rng, generatedAffixes);
   }
 
   if (legendType) {

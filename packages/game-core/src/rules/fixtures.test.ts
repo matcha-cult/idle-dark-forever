@@ -198,6 +198,8 @@ export function createTestTables(): DataTables {
     affixes: {
       atk: {
         key: 'atk',
+        affixType: 'prefix',
+        tag: 'attack',
         display: (value) => `攻击+${value}`,
         weight: 10,
         generate: (level, rng) => Math.floor(rng.range(1, 5)) + level,
@@ -205,6 +207,8 @@ export function createTestTables(): DataTables {
       },
       str: {
         key: 'str',
+        affixType: 'prefix',
+        tag: 'attribute',
         display: (value) => `力量+${value}`,
         weight: 5,
         minLevel: 5,
@@ -214,6 +218,8 @@ export function createTestTables(): DataTables {
       },
       gaiterOnly: {
         key: 'gaiterOnly',
+        affixType: 'prefix',
+        tag: 'defense',
         display: (value) => `护腿+${value}`,
         weight: 1,
         validPositions: ['gaiter'],
@@ -222,6 +228,8 @@ export function createTestTables(): DataTables {
       },
       cap: {
         key: 'cap',
+        affixType: 'prefix',
+        tag: 'defense',
         display: (value) => `上限+${value}`,
         weight: 1,
         maxLevel: 10,
@@ -230,6 +238,8 @@ export function createTestTables(): DataTables {
       },
       def: {
         key: 'def',
+        affixType: 'prefix',
+        tag: 'defense',
         display: (value) => `防御+${value}`,
         weight: 8,
         generate: (level, rng) => level + rng.int(4),
@@ -237,6 +247,8 @@ export function createTestTables(): DataTables {
       },
       crit: {
         key: 'crit',
+        affixType: 'suffix',
+        tag: 'crit',
         display: (value) => `暴击+${value}`,
         weight: 4,
         generate: (_level, rng) => rng.int(5) + 1,
@@ -244,13 +256,35 @@ export function createTestTables(): DataTables {
       },
       luck: {
         key: 'luck',
+        affixType: 'suffix',
+        tag: 'luck',
         display: (value) => `幸运+${value}`,
         weight: 2,
         generate: (_level, rng) => rng.int(9) + 1,
         range: () => [1, 9],
       },
+      fireResist: {
+        key: 'fireResist',
+        affixType: 'suffix',
+        tag: 'resist',
+        display: (value) => `火抗+${value}`,
+        weight: 3,
+        generate: (_level, rng) => rng.int(4) + 1,
+        range: () => [1, 4],
+      },
+      atkSpeedAdd: {
+        key: 'atkSpeedAdd',
+        affixType: 'suffix',
+        tag: 'speed',
+        display: (value) => `攻速+${value}`,
+        weight: 3,
+        generate: (_level, rng) => rng.int(3) + 1,
+        range: () => [1, 3],
+      },
       noWeight: {
         key: 'noWeight',
+        affixType: 'prefix',
+        tag: 'attack',
         display: (value) => `无权重+${value}`,
         weight: 0,
         generate: (_level, rng) => rng.int(2) + 1,

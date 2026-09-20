@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { makeRng, createTestTables } from './fixtures.test.js';
 import {
   BASE_QUALITY_RATE,
+  DEFAULT_AFFIX_GROUP,
   MATERIAL_KEY,
+  affixCountsOfQuality,
+  affixGroupOf,
+  affixKindOf,
+  affixPoolOf,
   generateEquip,
   getDecomposeMatrials,
   getGoodOrder,
@@ -126,40 +131,70 @@ describe('randomAffixes', () => {
   });
 });
 
-describe('generateEquip', () => {
-  it('普通装备词缀条数 = quality', () => {
-    for (const quality of [0, 1, 2, 3]) {
-      const item = generateEquip(tables, 'stickSword', 50, quality, null, makeRng(10));
-      expect(item.quality).toBe(quality);
-      expect(item.affixes).toHaveLength(quality);
-      expect(item.key).toBe('stickSword');
-      expect(item.count).toBe(1);
-      expect(item.position).toBe('loot');
-      expect(item.legendType).toBeNull();
-      const keys = item.affixes.map((affix) => affix.key);
-      expect(new Set(keys).size).toBe(keys.length);
-    }
+describe('generateEquip（P5：前后缀分池）', () => {
+  const kindCount = (item: ReturnType<typeof generateEquip>, kind: 'prefix' | 'suffix') =>
+    item.affixes.filter(
+      // 传奇词缀不在普通词缀表里、豁免前后缀规则，不计入某一侧。
+      (affix) => !affix.isLegend && affixKindOf(tables.affixes[affix.key ?? '']) === kind,
+    ).length;
+
+  it('普通（quality 0）= 1 前缀 + 1 后缀', () => {
+    const item = generateEquip(tables, 'stickSword', 50, 0, null, makeRng(10));
+    expect(item.quality).toBe(0);
+    expect(item.affixes).toHaveLength(2);
+    expect(kindCount(item, 'prefix')).toBe(1);
+    expect(kindCount(item, 'suffix')).toBe(1);
+    expect(item.key).toBe('stickSword');
+    expect(item.count).toBe(1);
+    expect(item.position).toBe('loot');
+    expect(item.legendType).toBeNull();
   });
 
-  it('传奇装备词缀条数 = quality - 1 普通 + 1 传奇，且传奇在最后', () => {
-    const item = generateEquip(tables, 'stickSword', 50, 4, 'flame', makeRng(11));
-    expect(item.affixes).toHaveLength(4);
+  it('优秀（quality 1）= 3 前缀 + 3 后缀，且同侧不重复', () => {
+    const item = generateEquip(tables, 'stickSword', 50, 1, null, makeRng(10));
+    expect(item.affixes).toHaveLength(6);
+    expect(kindCount(item, 'prefix')).toBe(3);
+    expect(kindCount(item, 'suffix')).toBe(3);
+    const keys = item.affixes.map((affix) => affix.key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('传奇（quality 2）= 3 前缀 + 3 后缀 + 末尾 1 条传奇；传奇豁免前后缀规则', () => {
+    const item = generateEquip(tables, 'stickSword', 50, 2, 'flame', makeRng(11));
+    expect(item.affixes).toHaveLength(7);
     expect(item.legendType).toBe('flame');
-    expect(item.affixes[3]!.key).toBe('flame');
-    expect(item.affixes[3]!.isLegend).toBe(true);
+    const last = item.affixes[6]!;
+    expect(last.key).toBe('flame');
+    expect(last.isLegend).toBe(true);
+    // 传奇 key 不在普通词缀表里（不参与前后缀归属）
+    expect(tables.affixes['flame']).toBeUndefined();
+    expect(kindCount(item, 'prefix')).toBe(3);
+    expect(kindCount(item, 'suffix')).toBe(3);
     expect(item.originName).toBe('木剑');
   });
 
-  it('只抽合法词缀（高等级时 str/cap 才可用）', () => {
-    const low = generateEquip(tables, 'stickWand', 1, 3, null, makeRng(5));
-    for (const affix of low.affixes) {
+  it('某侧候选不足时按可用数抽取（低等级不抛错）', () => {
+    // 1 级 stickWand：cap（maxLevel 10）仍合法、str 因 validClasses 不合法 —— 允许总数 < 6。
+    const item = generateEquip(tables, 'stickWand', 1, 1, null, makeRng(5));
+    expect(item.affixes.length).toBeGreaterThan(0);
+    expect(item.affixes.length).toBeLessThanOrEqual(6);
+    for (const affix of item.affixes) {
       expect(isValidAffix(tables, 'stickWand', affix.key!, 1)).toBe(true);
     }
   });
 
+  it('affixGroup 限定底材词缀池（P5 挂点）', () => {
+    const custom = createTestTables();
+    custom.goods.stickSword!.affixGroup = 'blade';
+    custom.affixGroups = { blade: ['atk', 'crit'] };
+    const item = generateEquip(custom, 'stickSword', 50, 1, null, makeRng(3));
+    expect(item.affixes.length).toBe(2);
+    expect(item.affixes.map((affix) => affix.key).sort()).toEqual(['atk', 'crit']);
+  });
+
   it('同种子产出同一件装备', () => {
-    const a = generateEquip(tables, 'dress', 30, 3, null, makeRng(99));
-    const b = generateEquip(tables, 'dress', 30, 3, null, makeRng(99));
+    const a = generateEquip(tables, 'dress', 30, 1, null, makeRng(99));
+    const b = generateEquip(tables, 'dress', 30, 1, null, makeRng(99));
     expect(a.toJSON()).toEqual(b.toJSON());
   });
 
@@ -171,9 +206,43 @@ describe('generateEquip', () => {
     );
   });
 
-  it('quality 为负数时不产出词缀', () => {
-    const item = generateEquip(tables, 'stickSword', 10, -1, null, makeRng(1));
-    expect(item.affixes).toEqual([]);
+  it('quality 为负数 / NaN 时不产出词缀（也不抛错）', () => {
+    expect(generateEquip(tables, 'stickSword', 10, -1, null, makeRng(1)).affixes).toEqual([]);
+    expect(generateEquip(tables, 'stickSword', 10, Number.NaN, null, makeRng(1)).affixes).toEqual([]);
+  });
+});
+
+describe('词缀前后缀 / 分组纯函数（P5）', () => {
+  it('affixKindOf：显式归属优先，缺省按 prefix', () => {
+    expect(affixKindOf({ key: 'x', display: () => '', weight: 1, generate: () => 0, affixType: 'suffix' })).toBe('suffix');
+    expect(affixKindOf({ key: 'x', display: () => '', weight: 1, generate: () => 0, affixType: 'prefix' })).toBe('prefix');
+    expect(affixKindOf({ key: 'x', display: () => '', weight: 1, generate: () => 0 })).toBe('prefix');
+    expect(affixKindOf(undefined)).toBe('prefix');
+  });
+
+  it('affixGroupOf / affixPoolOf：缺省分组回落全池', () => {
+    const good = tables.goods.stickSword!;
+    expect(affixGroupOf(good)).toBe(DEFAULT_AFFIX_GROUP);
+    expect(affixGroupOf(undefined)).toBe(DEFAULT_AFFIX_GROUP);
+    expect(affixPoolOf(tables, good)).toEqual(Object.keys(tables.affixes));
+
+    const custom = createTestTables();
+    custom.affixGroups = { blade: ['atk'] };
+    expect(affixPoolOf(custom, { ...good, affixGroup: 'blade' })).toEqual(['atk']);
+    // 未命中的分组 → 全池（不抛错）
+    expect(affixPoolOf(custom, { ...good, affixGroup: 'ghost' })).toEqual(Object.keys(custom.affixes));
+    // 分组表存在但池为空 → 返回空数组（由 generateEquip 决定是否报错）
+    custom.affixGroups = { empty: [] };
+    expect(affixPoolOf(custom, { ...good, affixGroup: 'empty' })).toEqual([]);
+  });
+
+  it('affixCountsOfQuality：普通 1+1 / 优秀 3+3 / 传奇 3+3；负数与 NaN 为 0', () => {
+    expect(affixCountsOfQuality(0)).toEqual({ prefix: 1, suffix: 1 });
+    expect(affixCountsOfQuality(1)).toEqual({ prefix: 3, suffix: 3 });
+    expect(affixCountsOfQuality(2)).toEqual({ prefix: 3, suffix: 3 });
+    expect(affixCountsOfQuality(-1)).toEqual({ prefix: 0, suffix: 0 });
+    expect(affixCountsOfQuality(Number.NaN)).toEqual({ prefix: 0, suffix: 0 });
+    expect(affixCountsOfQuality(Number.POSITIVE_INFINITY)).toEqual({ prefix: 0, suffix: 0 });
   });
 });
 
