@@ -89,8 +89,8 @@ describe('maps-world 新地图种子', () => {
         const types = spawn.types ?? {};
         expect(Object.keys(types).length, key).toBeGreaterThan(0);
         for (const [enemyKey, weight] of Object.entries(types)) {
-          // ⚠️ 不在这里断言「必有 loots」：`chapter3.murloc.army` 在代码里 `loots` 缺省
-          //（与任务书「全部有掉落」的口径不符，已在报告里登记为文档-代码冲突）。
+          // 掉落表不在此断言「必有 loots」：个别敌人（如旧稿选中的 `chapter3.murloc.army`）
+          // 在代码里 `loots` 缺省。真正必须成立的是「可战性」——见 `spawn-eligibility.test.ts`。
           expect(tables.enemies[enemyKey], `${key} → ${enemyKey}`).toBeDefined();
           expect(weight, `${key} → ${enemyKey} 权重`).toBeGreaterThan(0);
         }
