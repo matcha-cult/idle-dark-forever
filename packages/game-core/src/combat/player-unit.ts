@@ -97,7 +97,13 @@ export interface PlayerLike {
    */
   lootRule?: ReadonlyMap<string, number>;
   minLootLevel?: number;
-  loot?(slot: unknown): void;
+  /**
+   * 落地一件掉落。
+   *
+   * @returns **实际入包数量**（0 = 包裹放不下、被丢弃）。`BattleWorld.lootGood` 据此
+   *          决定上报 `handled` 还是 `'lost'`。旧实现返回 `void`，导致「提示已发但没入包」。
+   */
+  loot?(slot: unknown): number | void;
   countTicket?(type: string): number;
   costTicket?(type: string): void;
 }

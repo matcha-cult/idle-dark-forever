@@ -134,8 +134,13 @@ export interface LootEvent {
   key: string;
   count: number;
   quality: number;
-  /** 拾取规则处理结果。 */
-  handled: 'pickup' | 'sell' | 'decompose';
+  /**
+   * 拾取规则处理结果。
+   *
+   * - `'pickup' | 'sell' | 'decompose'`：**实际落地**的数量（= `Player.loot` 的返回值）；
+   * - `'lost'`：包裹放不下而**被丢弃**的数量 —— 消费方不得把它计入「获得」。
+   */
+  handled: 'pickup' | 'sell' | 'decompose' | 'lost';
   gold?: number;
   materials?: Array<{ key: string; count: number }>;
   /**

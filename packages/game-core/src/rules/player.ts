@@ -49,8 +49,14 @@ export const MAX_TICKET_STACK = 50;
 /** 技能等级上限（原版 `fromJS` 里的 `Math.min(tmp.level, 70)`）。 */
 export const MAX_SKILL_LEVEL = 70;
 
-/** 玩家死亡/背包未满时的默认背包格数（原版 `postCreate` / `postLoad` 的 `while (< 4)`）。 */
-export const DEFAULT_INVENTORY_SIZE = 4;
+/**
+ * 默认背包格数。
+ *
+ * 原版 `postCreate` / `postLoad` 是 `while (< 4)`；本工程按用户要求**扩到 50 格**
+ * （通货 / 精华有 18+ 种，4 格会立刻塞满并把后续掉落静默丢弃）。
+ * 神力扩容在此基础上继续叠加（`upgrades.inventoryByDiamonds`）。
+ */
+export const DEFAULT_INVENTORY_SIZE = 50;
 
 /** 原版 `game` / `world` 单例里被 `Player` 直接读写的那部分账号级状态。 */
 export interface PlayerAccountState {
@@ -531,23 +537,29 @@ export class Player extends PlayerMeta {
     return ret;
   }
 
-  /** 原版 `loot(good, _target)`：入包（金币/神力直接结算，其余按堆叠规则）。 */
-  loot(good: InventorySlot, target?: InventorySlot[]): void {
+  /**
+   * 原版 `loot(good, _target)`：入包（金币/神力直接结算，其余按堆叠规则）。
+   *
+   * @returns **实际落地**的数量（0 = 包裹放不下、整份被丢弃）。调用方据此决定是否上报
+   *          「获得战利品」—— 否则会出现「弹了提示但背包里没有」。
+   */
+  loot(good: InventorySlot, target?: InventorySlot[]): number {
     const bag = target ?? this.inventory;
     const { key } = good;
 
     if (good.empty || key === null) {
-      return;
+      return 0;
     }
+    const before = good.count ?? 0;
     if (key === 'gold') {
-      this.gold += good.count ?? 0;
+      this.gold += before;
       good.clear();
-      return;
+      return before;
     }
     if (key === 'diamonds') {
-      this.account.diamonds += good.count ?? 0;
+      this.account.diamonds += before;
       good.clear();
-      return;
+      return before;
     }
     // 原版 `goods[key].stack`（未知 key 会 TypeError）；这里未知 key 视为不可堆叠
     const limit = key === 'ticket' ? MAX_TICKET_STACK : this.tables.goods[key]?.stack;
@@ -555,32 +567,37 @@ export class Player extends PlayerMeta {
       // 不可堆叠物品
       const index = this.emptySlot(bag);
       if (index < 0) {
-        return;
+        return 0;
       }
       bag[index]!.fromJSON(good.toJSON());
       good.clear();
-      return;
+      return before;
     }
 
     // 可以堆叠物品
     while ((good.count ?? 0) > 0) {
       const index = this.notFullSlot(bag, key, limit, good.dungeonKey);
       if (index < 0) {
-        // 没有获取完毕。
-        return;
+        // 没有获取完毕：剩余部分被丢弃。
+        break;
       }
       const canPlace = Math.min(good.count ?? 0, limit - (bag[index]!.count ?? 0));
       bag[index]!.count = (bag[index]!.count ?? 0) + canPlace;
       good.count = (good.count ?? 0) - canPlace;
     }
 
-    if (key === 'ticket') {
+    const remaining = good.count ?? 0;
+    if (key === 'ticket' && remaining === 0) {
       const endlessLevel = getEndlessLevel(good.dungeonKey);
       if (endlessLevel && endlessLevel > this.account.highestEndlessLevel) {
         this.account.highestEndlessLevel = endlessLevel;
       }
     }
-    good.clear();
+    if (remaining === 0) {
+      good.clear();
+    }
+    // 实际入包数量（剩余部分 = 包裹放不下，已被丢弃）。
+    return before - remaining;
   }
 
   /** 原版 `sellItem(slot, count)`。 */

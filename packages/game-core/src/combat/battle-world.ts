@@ -612,18 +612,43 @@ export class BattleWorld {
     return lootRuleActionOf(this.player, clazz, quality, level);
   }
 
+  /**
+   * 落地一件掉落，并**按实际入包数量**上报。
+   *
+   * ⚠️ 必须**先落地再上报**：`Player.loot` 在包裹放不下时会丢弃剩余部分，
+   * 旧实现先发事件后落地 ⇒ 玩家「看到获得提示但背包里没有」。现在
+   * `PlayerLike.loot` 返回实际入包数量：0 → `handled:'lost'`，部分丢失则补发一条 `'lost'`。
+   */
   lootGood(slot: LootSlot): void {
-    this.sink.loot({
-      key: slot.key ?? '',
-      count: slot.count,
-      quality: slot.quality ?? 0,
-      handled: slot.handled ?? 'pickup',
-      gold: slot.handled === 'sell' ? slot.count : undefined,
-    });
-    this.player?.loot?.(slot);
-    if (slot.count === 0) {
+    const key = slot.key ?? '';
+    const before = slot.count ?? 0;
+    const handled = slot.handled ?? 'pickup';
+    const placed = this.player?.loot?.(slot);
+    // 防御：入包数量不可能超过原数量（异常实现 / 负数一律夹取）。
+    const reported = typeof placed === 'number' ? placed : before;
+    const placedCount = Math.max(0, Math.min(before, reported));
+    if (placedCount <= 0) {
+      // 整份被丢弃：不报「获得战利品」，只报 lost（前端提示「包裹已满」）。
+      this.sink.loot({ key, count: before, quality: slot.quality ?? 0, handled: 'lost' });
       slot.key = null;
+      return;
     }
+    this.sink.loot({
+      key,
+      count: placedCount,
+      quality: slot.quality ?? 0,
+      handled,
+      gold: handled === 'sell' ? placedCount : undefined,
+    });
+    if (placedCount < before) {
+      this.sink.loot({
+        key,
+        count: before - placedCount,
+        quality: slot.quality ?? 0,
+        handled: 'lost',
+      });
+    }
+    slot.key = null;
   }
 
   lootGoods(slots: LootSlot[]): LootSlot[] {

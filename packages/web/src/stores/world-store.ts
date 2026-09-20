@@ -244,7 +244,12 @@ export class WorldStore {
       if (loot?.slot === undefined) return;
       if (loot.handled === 'pickup') this.ctx.toast.info('获得战利品', loot.slot.name);
       else if (loot.handled === 'sell') this.ctx.toast.info('自动出售', `${loot.slot.name} +${loot.gold ?? 0} 金币`);
-      else this.ctx.toast.info('自动分解', loot.slot.name);
+      else if (loot.handled === 'lost') {
+        // 包裹已满：服务端已丢弃，这里如实提示（不再谎报「获得战利品」）。
+        const count = loot.slot.count > 1 ? ` ×${loot.slot.count}` : '';
+        this.ctx.toast.error('包裹已满', `丢弃了 ${loot.slot.name}${count}`);
+        return;
+      } else this.ctx.toast.info('自动分解', loot.slot.name);
       void this.ctx.root().inventory.load();
     }
   }

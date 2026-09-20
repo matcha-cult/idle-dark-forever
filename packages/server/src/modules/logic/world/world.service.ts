@@ -1031,7 +1031,7 @@ export function mergeLoot(prev: unknown, next: unknown): LootDto[] {
 
 function toLootDto(slot: InventorySlot, handled: string): LootDto {
   const action: LootDto['handled'] =
-    handled === 'sell' || handled === 'decompose' ? handled : 'pickup';
+    handled === 'sell' || handled === 'decompose' || handled === 'lost' ? handled : 'pickup';
   const dto: LootDto = { slot: slotDtoOf(slot, 0), handled: action };
   if (action === 'sell' && slot.key === 'gold') dto.gold = slot.count ?? 0;
   return dto;

@@ -691,4 +691,11 @@ __IDLE_DARK__                   // 根 store（临时排查）
   `exalt`（崇高石）起 **60**、`fracture`（破溃宝珠）起 **100**。
 - 0 级地图 `town` 与 `baseCatalogOf(tables)`（数据驱动底材目录）是商店入口骨架；
   底材目录与购买 Action 下期（P8）。`lootRule` 域因装备不再掉落而**休眠**（未删除）。
+- **默认背包 50 格**（`DEFAULT_INVENTORY_SIZE`，原版 4 格；用户要求扩位）。`postCreate` / `postLoad`
+  都按它补格；神力扩容（`upgrades.inventoryByDiamonds`，32 级）在此基础上继续叠加。
+- **掉落必须如实上报**：`Player.loot(good)` 返回**实际入包数量**（0 = 放不下），
+  `BattleWorld.lootGood` 先落地再上报 —— `0` → `LootEvent.handled: 'lost'`（`LootDto` 同步），
+  部分入包则补发一条 `'lost'`。前端对 `'lost'` 弹「包裹已满」错误提示；
+  `BattleCollector` **跳过 `'lost'`**（不计入战利品 / 金币 / 离线报告）。
+  ⚠️ 旧实现先发事件后落地，会出现「弹了获得提示但背包里没有」——不要改回。
 

@@ -45,7 +45,7 @@ export function toPlayerLike(
   recorder?: LootRecorder,
 ): PlayerLike {
   const like = Object.create(player) as PlayerLike;
-  const loot = (input: unknown): void => {
+  const loot = (input: unknown): number => {
     const slot = isSlotLike(input)
       ? input
       : new InventorySlot(tables, 'loot').fromJSON({
@@ -55,13 +55,22 @@ export function toPlayerLike(
           dungeonKey: (input as { dungeonKey?: unknown })?.dungeonKey ?? null,
         });
     const handled = (input as { handled?: unknown })?.handled;
-    // ⚠️ `player.loot()` 会 `clear()` 掉传入的 slot（key/count 归零）。
+    // ⚠️ `player.loot()` 会 `clear()` / 递减传入的 slot（放不下的部分保留）。
     // 必须**先快照再落地**，否则 recorder 拿到的是空槽 —— 掉落推送会变成
     // `{slot:{key:null,count:0}, handled:'sell'}`（`dto.gold` 也会因为
     // `slot.key !== 'gold'` 而丢失），玩家什么也看不到。
     const snapshot = recorder ? InventorySlot.fromJSON(tables, slot.position, slot.toJSON()) : null;
-    player.loot(slot);
-    if (snapshot) recorder!.record(snapshot, typeof handled === 'string' ? handled : 'pickup');
+    const placed = player.loot(slot);
+    if (snapshot) {
+      if (placed <= 0) {
+        // 包裹放不下：如实上报 lost，前端提示「包裹已满」，不再谎报「获得战利品」。
+        recorder!.record(snapshot, 'lost');
+      } else {
+        snapshot.count = placed;
+        recorder!.record(snapshot, typeof handled === 'string' ? handled : 'pickup');
+      }
+    }
+    return placed;
   };
   Object.defineProperty(like, 'loot', { value: loot, writable: true, enumerable: true });
   return like;

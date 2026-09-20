@@ -667,6 +667,60 @@ describe('Player 装备（P2：9 槽 + 副手判定表）', () => {
   });
 });
 
+describe('Player.loot 返回值（掉落如实上报）', () => {
+  /** 用不可堆叠的 `trash` 把背包每一格占满。 */
+  function fillBag(player: Player): void {
+    for (const slot of player.inventory) {
+      slot.fromJSON({ key: 'trash', count: 1 });
+    }
+  }
+
+  it('默认背包 50 格', () => {
+    const player = makePlayer();
+    player.postCreate();
+    expect(DEFAULT_INVENTORY_SIZE).toBe(50);
+    expect(player.inventory).toHaveLength(50);
+  });
+
+  it('正常入包返回实际数量', () => {
+    const player = makePlayer();
+    player.postCreate();
+    const item = new InventorySlot(tables, 'loot').fromJSON({ key: 'currency.chaos', count: 3 });
+    expect(player.loot(item)).toBe(3);
+    expect(player.inventory.some((slot) => slot.key === 'currency.chaos' && slot.count === 3)).toBe(true);
+  });
+
+  it('背包满：返回 0，且剩余数量原样保留（不静默吞掉）', () => {
+    const player = makePlayer();
+    player.postCreate();
+    fillBag(player);
+    const item = new InventorySlot(tables, 'loot').fromJSON({ key: 'currency.chaos', count: 3 });
+    expect(player.loot(item)).toBe(0);
+    expect(item.count).toBe(3);
+  });
+
+  it('可堆叠但装不下一部分：返回已入包数量，剩余保留', () => {
+    const player = makePlayer();
+    player.postCreate();
+    fillBag(player);
+    // 夹具里的 `potion` 可堆叠（stack 20）：把它放到只剩 1 容量。
+    player.inventory[0]!.fromJSON({ key: 'potion', count: 19 });
+    const item = new InventorySlot(tables, 'loot').fromJSON({ key: 'potion', count: 5 });
+    expect(player.loot(item)).toBe(1);
+    expect(player.inventory[0]!.count).toBe(20);
+    expect(item.count).toBe(4);
+  });
+
+  it('金币 / 神力直接结算，返回原数量', () => {
+    const player = makePlayer();
+    player.postCreate();
+    fillBag(player);
+    const gold = new InventorySlot(tables, 'loot').fromJSON({ key: 'gold', count: 7 });
+    expect(player.loot(gold)).toBe(7);
+    expect(player.gold).toBe(7);
+  });
+});
+
 describe('Player.sortInventory', () => {
   it('按 类型 → 品质 → 部位/等级 → goodOrder 排序，并清空后重新入包', () => {
     const player = withBag(makePlayer(), 6);

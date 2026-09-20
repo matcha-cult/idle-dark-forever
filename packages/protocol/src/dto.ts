@@ -321,8 +321,11 @@ export interface WorldTickDto {
 /** (battle, loot) 推送载荷。 */
 export interface LootDto {
   slot: InventorySlotDto;
-  /** 'pickup' | 'sell' | 'decompose' —— 按拾取规则处理的结果。 */
-  handled: 'pickup' | 'sell' | 'decompose';
+  /**
+   * `'pickup' | 'sell' | 'decompose'` = **实际入包**的处理结果；
+   * `'lost'` = **包裹已满被丢弃**（数量在 `slot.count`）—— 前端不得提示「获得」。
+   */
+  handled: 'pickup' | 'sell' | 'decompose' | 'lost';
   gold?: number;
   materials?: Array<{ key: string; count: number }>;
 }

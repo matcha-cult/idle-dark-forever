@@ -100,6 +100,10 @@ export class BattleCollector implements BattleSink {
   }
 
   loot(e: LootEvent): void {
+    // 包裹已满被丢弃的部分**不算获得**：不进战利品清单、不算金币/材料，也不进离线报告。
+    if (e.handled === 'lost') {
+      return;
+    }
     const count = finite(e.count);
     const gold = finite(e.gold ?? (e.handled === 'sell' && e.key === 'gold' ? count : 0));
     this.gainedGold += gold;
