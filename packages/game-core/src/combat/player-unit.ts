@@ -103,6 +103,14 @@ export interface PlayerLike {
   loot?(slot: unknown): number | void;
   countTicket?(type: string): number;
   costTicket?(type: string): void;
+  /**
+   * 野外 BOSS 的一次性击杀记录（W4）。
+   *
+   * `Player` 通过原型链天然满足；测试替身可不实现（可选）。`EnemyUnit` 击杀守关 BOSS 时调用
+   * `markWorldBossKilled`，`EnemyBorn` 出 BOSS 前用 `hasWorldBossKilled` 判重。
+   */
+  hasWorldBossKilled?(map: string): boolean;
+  markWorldBossKilled?(map: string): void;
 }
 
 export interface PlayerSavedState extends UnitSavedState {

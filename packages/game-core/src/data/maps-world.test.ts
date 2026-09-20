@@ -4,7 +4,8 @@
  * 覆盖：
  *  - 9 个等级段（0/5/15/25/35/45/55/65/75）各恰好 1 张图，85+ 恰好 4 张；
  *  - `home` 精确保留（安全区：无怪、无进入条件）；
- *  - 每张战斗图：`requirement` 只有 `level`、有 `boss`、刷怪条目合法且**不写 `total`**；
+ *  - 每张战斗图：`requirement` = `{level}`（world.1）或 `{level, bossKilled: 上一段}`（W4 解锁链）、
+ *    有 `boss`、刷怪条目合法且带一波的 `total`；
  *  - 不残留旧秘境字段（`isDungeon` / `phases` / `group` / `isEndless`）；
  *  - 所有普通怪与 BOSS 的 enemy key 都真实存在且有掉落表。
  */
@@ -46,12 +47,17 @@ describe('maps-world 新地图种子', () => {
     expect(high).toHaveLength(HIGH_SEGMENT_COUNT);
   });
 
-  it('每张战斗图：等级 = 段下界，requirement 只含 level 且值等于地图等级', () => {
+  it('每张战斗图：等级 = 段下界；requirement = level + W4 解锁链 bossKilled', () => {
     for (const [key, map] of worldMaps) {
       expect(typeof map.level, key).toBe('number');
       expect(map.requirement, key).toBeDefined();
-      expect(Object.keys(map.requirement ?? {}), key).toEqual(['level']);
-      expect(map.requirement?.level, key).toBe(map.level);
+      const segment = Number(key.slice(WORLD_PREFIX.length));
+      // world.1 无前置；world.N 需先击杀 world.(N-1) 的野外 BOSS（85+ 多图统一接 world.9）。
+      const expected =
+        segment <= 1
+          ? { level: map.level }
+          : { level: map.level, bossKilled: segment >= 10 ? 'world.9' : `world.${segment - 1}` };
+      expect(map.requirement, key).toEqual(expected);
       expect(typeof map.name, key).toBe('string');
       expect((map.hint ?? '').length, key).toBeGreaterThan(0);
       expect(Number.isFinite(map.exp), key).toBe(true);
@@ -65,13 +71,15 @@ describe('maps-world 新地图种子', () => {
     }
   });
 
-  it('每张战斗图：1~2 条刷怪条目，加权 types 全部是已知敌人；不写 total', () => {
+  it('每张战斗图：1~2 条刷怪条目，加权 types 全部是已知敌人；带一波的 total', () => {
     for (const [key, map] of worldMaps) {
       const monsters = map.monsters ?? [];
       expect(monsters.length, key).toBeGreaterThanOrEqual(1);
       expect(monsters.length, key).toBeLessThanOrEqual(2);
       for (const spawn of monsters) {
-        expect(spawn.total, `${key} 不得默认写 total（W4 负责波次）`).toBeUndefined();
+        // W4：一波 = `total` 刷满且全部清空；必须是正的有限整数。
+        expect(Number.isInteger(spawn.total), `${key} total 应为整数`).toBe(true);
+        expect(spawn.total, `${key} total 应为正数`).toBeGreaterThan(0);
         expect(spawn.randomPosition, key).toBe(true);
         expect(spawn.quality, key).toEqual([90, 9, 1]);
         expect(Number.isFinite(spawn.delay), key).toBe(true);

@@ -76,6 +76,21 @@ describe('evaluateMapUnlock', () => {
     expect(() => evaluateMapUnlock(cyclic as never, f.player, 'home')).not.toThrow();
     expect(evaluateMapUnlock(cyclic as never, f.player, 'home')).toBe(false);
   });
+
+  it('W4 解锁链：world.2 需 level 5 且已击杀 world.1 的野外 BOSS', () => {
+    const f = makeFixture();
+    const requirement = tables.maps['world.2']!.requirement;
+    expect(evaluateMapUnlock(requirement, f.player, 'home')).toBe(false);
+    f.player.level = 5;
+    expect(evaluateMapUnlock(requirement, f.player, 'home')).toBe(false); // 等级够但未击杀
+    f.player.markWorldBossKilled('world.1');
+    expect(evaluateMapUnlock(requirement, f.player, 'home')).toBe(true);
+    // 85+ 多图统一接 world.9
+    f.player.level = 85;
+    expect(evaluateMapUnlock(tables.maps['world.10']!.requirement, f.player, 'home')).toBe(false);
+    f.player.markWorldBossKilled('world.9');
+    expect(evaluateMapUnlock(tables.maps['world.10']!.requirement, f.player, 'home')).toBe(true);
+  });
 });
 
 describe('pickOpenWorldMap（RD4）', () => {
@@ -161,6 +176,25 @@ describe('MapLogicService', () => {
     expect(result.success).toBe(false);
     if (!result.success) expect(result.data.code).toBe('MAP_LOCKED');
     expect(calls.enterMap).toHaveLength(0);
+  });
+
+  it('enter：W4 解锁链 —— 5 级但未击杀 world.1 BOSS 仍 MAP_LOCKED；击杀后放行', async () => {
+    const calls: WorldCalls = { enterMap: [], leave: [], snapshot: [] };
+    const fixture = makeFixture();
+    const service = makeService(calls, makeFakeContexts(fixture));
+    fixture.player.level = 5;
+
+    const locked = await service.enter(1, 'char-1', 'world.2');
+    expect(locked.success).toBe(false);
+    if (!locked.success) expect(locked.data.code).toBe('MAP_LOCKED');
+    expect(calls.enterMap).toHaveLength(0);
+
+    fixture.player.markWorldBossKilled('world.1');
+    const unlocked = await service.enter(1, 'char-1', 'world.2');
+    expect(unlocked.success).toBe(true);
+    expect(calls.enterMap).toEqual([
+      { userId: 1, characterId: 'char-1', mapKey: 'world.2' },
+    ]);
   });
 
   it('enter：角色不存在 → PLAYER_NOT_FOUND（不转发）', async () => {

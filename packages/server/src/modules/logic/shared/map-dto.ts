@@ -16,6 +16,7 @@ export function requirementContextOf(player: Player, map: string): RequirementCo
       maxLevel: player.maxLevel,
     },
     map,
+    bossKilled: player.worldBossKilled,
   };
 }
 

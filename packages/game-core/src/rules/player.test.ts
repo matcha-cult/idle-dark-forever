@@ -783,3 +783,49 @@ describe('Player.getInventory（注入 lootGoods）', () => {
     expect(target).toEqual([]);
   });
 });
+
+describe('Player.worldBossKilled（W4 一次性野外 BOSS）', () => {
+  it('默认空集合；has / mark 幂等；非法 key 忽略', () => {
+    const player = makePlayer();
+    expect(player.worldBossKilled.size).toBe(0);
+    expect(player.hasWorldBossKilled('world.1')).toBe(false);
+
+    player.markWorldBossKilled('world.1');
+    player.markWorldBossKilled('world.1');
+    expect(player.hasWorldBossKilled('world.1')).toBe(true);
+    expect(player.worldBossKilled.size).toBe(1);
+
+    // 非法 key：空串 / 非字符串 / null / undefined 都不写入，也不抛错
+    for (const bad of ['', null, undefined, 123, {}, []]) {
+      expect(() => player.markWorldBossKilled(bad as unknown as string)).not.toThrow();
+      expect(player.hasWorldBossKilled(bad as unknown as string)).toBe(false);
+    }
+    expect(player.worldBossKilled.size).toBe(1);
+  });
+
+  it('toJSON 写入数组；fromJSON 丢弃非数组 / 非字符串 / 空串 / 重复项', () => {
+    const player = makePlayer();
+    player.markWorldBossKilled('world.1');
+    player.markWorldBossKilled('world.2');
+    const json = player.toJSON();
+    expect(json.worldBossKilled).toEqual(['world.1', 'world.2']);
+
+    // 畸形存档：非数组 → 空集合
+    expect(Player.fromJSON(tables, 'p1', now, { worldBossKilled: 'world.1' }).worldBossKilled.size).toBe(0);
+    expect(Player.fromJSON(tables, 'p1', now, { worldBossKilled: null }).worldBossKilled.size).toBe(0);
+
+    const dirty = Player.fromJSON(tables, 'p1', now, {
+      worldBossKilled: ['world.1', 42, null, '', 'world.2', 'world.1', {}, ['world.3']],
+    });
+    expect([...dirty.worldBossKilled].sort()).toEqual(['world.1', 'world.2']);
+  });
+
+  it('toJSON → fromJSON 往返保持集合（深等价）', () => {
+    const original = Player.fromJSON(tables, 'p1', now, {});
+    original.markWorldBossKilled('world.1');
+    original.markWorldBossKilled('world.9');
+    const restored = Player.fromJSON(tables, 'p1', now, original.toJSON());
+    expect([...restored.worldBossKilled].sort()).toEqual(['world.1', 'world.9']);
+    expect(restored.toJSON()).toEqual(original.toJSON());
+  });
+});

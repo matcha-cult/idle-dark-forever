@@ -9,7 +9,8 @@
  *  - 每张图带一个 `boss`（守关 BOSS 的敌人 key，W4 消费）。
  *
  * ⚠️ 本文件是**纯数据模块，无模块级副作用**：只有对象字面量，不注册、不 mock、不读写全局。
- * ⚠️ 不写 `total`：波次计数与「每 20 波出 BOSS」由 W4 负责。
+ * ⚠️ `total` = 一波的刷怪总量（W4 消费，`spawner` 用它判定「刷满 + 全部清空 = 完成一波」）。
+ * ⚠️ `requirement.bossKilled` = 解锁链（W4）：进入本图需先击杀上一段图的野外 BOSS。
  * ⚠️ 不写 `isDungeon` / `phases` / `group` / `isEndless`：旧秘境体系在 W6 删除。
  */
 
@@ -21,10 +22,22 @@ const QUALITY: number[] = [90, 9, 1];
 const WARMUP = 1000;
 const DELAY = 5000;
 const MAX = 3;
+/** 一波的刷怪总量（W4）：`total` 刷满且全部清空 = 完成一波，每 20 波出守关 BOSS。 */
+const TOTAL = 8;
 
 /** 造一条加权刷怪条目（仅数据，无副作用）。 */
 function spawn(types: Record<string, number>): MapEntry['monsters'] {
-  return [{ types, warmup: WARMUP, delay: DELAY, max: MAX, quality: [...QUALITY], randomPosition: true }];
+  return [
+    {
+      types,
+      warmup: WARMUP,
+      delay: DELAY,
+      max: MAX,
+      total: TOTAL,
+      quality: [...QUALITY],
+      randomPosition: true,
+    },
+  ];
 }
 
 const __home: MapEntry = {
@@ -53,7 +66,7 @@ const __world2: MapEntry = {
   level: 5,
   name: '迷雾林间',
   hint: '终年浓雾不散的林间小径，巨史莱姆潜伏在雾中。',
-  requirement: { level: 5 },
+  requirement: { level: 5, bossKilled: 'world.1' },
   exp: 20000,
   boss: 'slime.giant.enemy',
   monsters: spawn({
@@ -67,7 +80,7 @@ const __world3: MapEntry = {
   level: 15,
   name: '腐骨沼泽',
   hint: '腐水与白骨交错的沼泽，史莱姆之王在此盘踞。',
-  requirement: { level: 15 },
+  requirement: { level: 15, bossKilled: 'world.2' },
   exp: 80000,
   boss: 'slime.queen',
   monsters: spawn({
@@ -82,7 +95,7 @@ const __world4: MapEntry = {
   level: 25,
   name: '狼嚎雪原',
   hint: '风雪呼啸的冻原，狼群在夜里格外凶暴。',
-  requirement: { level: 25 },
+  requirement: { level: 25, bossKilled: 'world.3' },
   exp: 150000,
   boss: 'wolf.king',
   monsters: spawn({
@@ -96,7 +109,7 @@ const __world5: MapEntry = {
   level: 35,
   name: '废弃矿坑',
   hint: '被狗头人占据的旧矿坑，矿工与萨满盘踞其中。',
-  requirement: { level: 35 },
+  requirement: { level: 35, bossKilled: 'world.4' },
   exp: 250000,
   boss: 'zombies.hammersmith',
   monsters: spawn({
@@ -111,7 +124,7 @@ const __world6: MapEntry = {
   level: 45,
   name: '亡者墓园',
   hint: '常年不散的尸气让死者重新站起。',
-  requirement: { level: 45 },
+  requirement: { level: 45, bossKilled: 'world.5' },
   exp: 400000,
   boss: 'zombie.necromancer',
   monsters: spawn({
@@ -126,7 +139,7 @@ const __world7: MapEntry = {
   level: 55,
   name: '骑士哨站',
   hint: '堕落骑士扼守的哨站，祈祷声从不停歇。',
-  requirement: { level: 55 },
+  requirement: { level: 55, bossKilled: 'world.6' },
   exp: 600000,
   boss: 'knight.leader',
   monsters: spawn({
@@ -142,7 +155,7 @@ const __world8: MapEntry = {
   level: 65,
   name: '幽魂回廊',
   hint: '幽魂与亡者在长长的回廊里往复徘徊。',
-  requirement: { level: 65 },
+  requirement: { level: 65, bossKilled: 'world.7' },
   exp: 900000,
   boss: 'chapter3.necromancer',
   monsters: spawn({
@@ -157,7 +170,7 @@ const __world9: MapEntry = {
   level: 75,
   name: '猛兽巢穴',
   hint: '野兽的巢穴，越靠近深处吼声越沉。',
-  requirement: { level: 75 },
+  requirement: { level: 75, bossKilled: 'world.8' },
   exp: 1300000,
   boss: 'chapter3.beast.simba',
   monsters: spawn({
@@ -173,7 +186,7 @@ const __world10: MapEntry = {
   level: 85,
   name: '鱼人海湾',
   hint: '咸腥的海湾里，鱼人部落正在集结。',
-  requirement: { level: 85 },
+  requirement: { level: 85, bossKilled: 'world.9' },
   exp: 1800000,
   boss: 'chapter3.murloc.warlord',
   monsters: spawn({
@@ -188,7 +201,7 @@ const __world11: MapEntry = {
   level: 85,
   name: '元素祭坛',
   hint: '火、水、土三种元素在此地交锋。',
-  requirement: { level: 85 },
+  requirement: { level: 85, bossKilled: 'world.9' },
   exp: 2000000,
   boss: 'chapter3.element.azathoth.fire',
   monsters: spawn({
@@ -203,7 +216,7 @@ const __world12: MapEntry = {
   level: 85,
   name: '深海遗迹',
   hint: '沉入海底的古老遗迹，巨型水元素仍在游弋。',
-  requirement: { level: 85 },
+  requirement: { level: 85, bossKilled: 'world.9' },
   exp: 2200000,
   boss: 'chapter3.fishzilla',
   monsters: spawn({
@@ -218,7 +231,7 @@ const __world13: MapEntry = {
   level: 85,
   name: '混沌前沿',
   hint: '混沌大军的前哨，兽人与元素混杂行进。',
-  requirement: { level: 85 },
+  requirement: { level: 85, bossKilled: 'world.9' },
   exp: 2400000,
   boss: 'chapter3.waterElement.Nynnroth',
   monsters: spawn({

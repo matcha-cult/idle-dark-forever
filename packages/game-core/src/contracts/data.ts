@@ -290,6 +290,13 @@ export interface Requirement {
   map?: string;
   atMostMaxLevel?: number;
   atLeastMaxLevel?: number;
+  /**
+   * 需要**已击杀**的地图 key 的野外 BOSS（W4 解锁链）。
+   *
+   * 判定数据由 `RequirementContext.bossKilled`（= 角色的 `Player.worldBossKilled`）提供；
+   * 上下文缺失时该条件**不成立**（fail-closed）。
+   */
+  bossKilled?: string;
   $or?: Requirement[];
   $and?: Requirement[];
 }

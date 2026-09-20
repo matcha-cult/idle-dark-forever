@@ -18,6 +18,12 @@ export interface RequirementContext {
   } | null;
   /** 当前所在地图 key（原版 `world.map`）。 */
   map: string | null;
+  /**
+   * 角色已击杀野外 BOSS 的地图 key 集合（W4 解锁链），通常传 `player.worldBossKilled`。
+   *
+   * 缺省 / `undefined` 时，任何 `requirement.bossKilled` 都判定为**不成立**（fail-closed）。
+   */
+  bossKilled?: ReadonlySet<string>;
 }
 
 /**
@@ -74,6 +80,11 @@ function checkRequirementAtDepth(
   }
   const map = asStringOrNull(req.map);
   if (map && context.map !== map) {
+    return false;
+  }
+  const bossKilled = asStringOrNull(req.bossKilled);
+  if (bossKilled && (!context.bossKilled || !context.bossKilled.has(bossKilled))) {
+    // 上下文缺失（含未提供 bossKilled）→ fail-closed：绝不放行未验证的解锁条件。
     return false;
   }
   if (Array.isArray(req.$or)) {

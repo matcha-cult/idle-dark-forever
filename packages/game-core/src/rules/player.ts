@@ -101,6 +101,8 @@ export interface PlayerJson extends PlayerMetaJson {
   dungeonTickets: Record<string, number>;
   /** 钱包（R1）：通货 / 精华 / 一般等价物，key → 数量；**不占背包格**。 */
   wallet: Record<string, number>;
+  /** 已击杀野外 BOSS 的地图 key（W4 一次性 BOSS；用于解锁下一段）。 */
+  worldBossKilled: string[];
 }
 
 /** 原版 `player.js:589-1367`。 */
@@ -135,6 +137,13 @@ export class Player extends PlayerMeta {
    * 只承载 `GoodData.wallet === true` 的物品；混沌钥石（PoE 式地图物品）**不走钱包**。
    */
   wallet = new Map<string, number>();
+  /**
+   * 已击杀野外 BOSS 的地图 key 集合（W4）。
+   *
+   * 一次性语义：命中集合后不再刷新该图的守关 BOSS，但该图**普通怪仍可刷**。
+   * 随 `Player.toJSON()` 落入 `characters.state`；`Requirement.bossKilled` 的判定数据源。
+   */
+  worldBossKilled = new Set<string>();
 
   constructor(
     tables: DataTables,
@@ -348,6 +357,14 @@ export class Player extends PlayerMeta {
       }
     }
 
+    // 野外 BOSS 击杀记录（W4）：只采信非空字符串，非数组 / 脏元素一律丢弃（fail-safe）。
+    this.worldBossKilled = new Set();
+    for (const item of asArray(raw.worldBossKilled)) {
+      if (typeof item === 'string' && item.length > 0 && !this.worldBossKilled.has(item)) {
+        this.worldBossKilled.add(item);
+      }
+    }
+
     // dungeonTickets：缺失时按地图配置补齐（原版语义）
     this.dungeonTickets = new Map();
     for (const key of Object.keys(this.tables.maps)) {
@@ -407,6 +424,7 @@ export class Player extends PlayerMeta {
       minLootLevel: this.minLootLevel,
       dungeonTickets,
       wallet,
+      worldBossKilled: Array.from(this.worldBossKilled),
     };
   }
 
@@ -674,6 +692,18 @@ export class Player extends PlayerMeta {
   walletCount(key: string): number {
     const count = this.wallet.get(key);
     return typeof count === 'number' && Number.isFinite(count) && count > 0 ? count : 0;
+  }
+
+  /** 该地图的野外 BOSS 是否已被本角色击杀（W4）。非法 key → false。 */
+  hasWorldBossKilled(map: string): boolean {
+    return typeof map === 'string' && map.length > 0 && this.worldBossKilled.has(map);
+  }
+
+  /** 登记「该地图野外 BOSS 已击杀」（W4）。幂等；非法 key 忽略。 */
+  markWorldBossKilled(map: string): void {
+    if (typeof map === 'string' && map.length > 0) {
+      this.worldBossKilled.add(map);
+    }
   }
 
   /**

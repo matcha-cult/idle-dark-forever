@@ -16,8 +16,8 @@ import { hashString, makePlayer, makeTestWorld, type RecordingSink } from './tes
 /** 金样参数：改动战斗逻辑时这里必须显式更新并解释原因。 */
 const GOLDEN_SEED = 20240919;
 const GOLDEN_MS = 30000;
-const GOLDEN_EVENT_HASH = 0x6f3847b3; // = 1865959347，W3 重录：exp 事件删除 `peak` 字段（Q8 删巅峰）
-const GOLDEN_STATE_HASH = 0xdf24a429; // = 3743720489，首次运行记录（见交付报告）
+const GOLDEN_EVENT_HASH = 0x6f3847b3; // = 1865959347，W3 重录：exp 事件删除 `peak` 字段（Q8 删巅峰）；W4 不变
+const GOLDEN_STATE_HASH = 0xac397814; // = 2889447444，W4 重录：enemyBorn 快照新增 `wave` 字段（事件流不变）
 const GOLDEN_EVENT_COUNT = 27; // 首次运行记录，见交付报告
 
 interface GoldenRun {

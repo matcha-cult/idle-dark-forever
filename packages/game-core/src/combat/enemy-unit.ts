@@ -39,6 +39,10 @@ interface EnemySavedState extends UnitSavedState {
   phaseBorn?: number;
   summoner?: number;
   summonSkill?: number;
+  /** 野外守关 BOSS 标记（W4）：恢复后仍需可辨识（用于一次性击杀登记）。 */
+  worldBoss?: boolean;
+  /** 怪物等级覆写（W4）：野外普通/稀有/BOSS 按地图等级生成，恢复后保持同一等级。 */
+  levelOverride?: number;
 }
 
 export class EnemyUnit extends Unit {
@@ -47,6 +51,20 @@ export class EnemyUnit extends Unit {
   affixes: string[] = [];
   /** 刷怪器，用于判断刷怪上限。 */
   borner: Born | null = null;
+
+  /**
+   * 野外守关 BOSS 标记（W4，由 `EnemyBorn` 显式置位）。
+   *
+   * 不用「敌人 key 等于地图 boss」来判定：同一 key（如 `slime.queen`）可能既是某图 BOSS
+   * 又是另一图的普通刷怪，key 比较会把普通怪误判成 BOSS。
+   */
+  worldBoss = false;
+
+  /**
+   * 等级覆写（W4）。置为有限数时 `level` 直接返回它（野外：普通 = 地图等级 /
+   * 稀有 +1 / BOSS +2）；未置位时回落到原版公式 `enemyData.level + quality * 4`（秘境沿用）。
+   */
+  levelOverride?: number;
 
   cleanTimer: TimerHandle | null = null;
   hookRecords: Array<() => void> = [];
@@ -107,6 +125,12 @@ export class EnemyUnit extends Unit {
 
     if (savedState) {
       this.camp = (savedState.camp as typeof this.camp) ?? this.camp;
+
+      // W4：恢复野外 BOSS 标记与等级覆写（否则读档后 BOSS 击杀不再登记 / 等级回落到旧公式）。
+      this.worldBoss = savedState.worldBoss === true;
+      if (typeof savedState.levelOverride === 'number' && Number.isFinite(savedState.levelOverride)) {
+        this.levelOverride = savedState.levelOverride;
+      }
 
       if (savedState.cleanTimer) {
         this.logicClock.setTimeout(this.clean, savedState.cleanTimer);
@@ -386,6 +410,10 @@ export class EnemyUnit extends Unit {
   }
 
   override get level(): number {
+    // W4 野外：普通 = 地图等级 / 稀有 +1 / BOSS +2（由 BattleWorld.addEnemy 置位覆写）。
+    if (typeof this.levelOverride === 'number' && Number.isFinite(this.levelOverride)) {
+      return this.levelOverride;
+    }
     // 每个词缀视作提升了 4 怪物等级
     let ret = (this.enemyData.level || 0) + this.quality * 4;
     return ret;
@@ -434,6 +462,12 @@ export class EnemyUnit extends Unit {
     if (this.exp) {
       this.world.gotExp(this.exp, transformEquipLevel(this.level));
     }
+
+    // W4：一次性野外 BOSS —— 死亡即登记到角色（幂等），从而解锁下一段。
+    // 放在 `kill()`（死亡唯一入口）而不是 `clean()`：清尸定时器可能因换图 / 离线而不再触发。
+    if (this.worldBoss) {
+      this.world.player?.markWorldBossKilled?.(this.world.map);
+    }
   }
 
   clean = (): void => {
@@ -476,6 +510,12 @@ export class EnemyUnit extends Unit {
     ret.type = this.type;
     ret.quality = this.quality;
     ret.affixes = this.affixes.slice();
+    if (this.worldBoss) {
+      ret.worldBoss = true;
+    }
+    if (typeof this.levelOverride === 'number' && Number.isFinite(this.levelOverride)) {
+      ret.levelOverride = this.levelOverride;
+    }
     if (this.cleanTimer) {
       ret.cleanTimer = this.cleanTimerStart !== null ? this.cleanTimerStart - this.logicClock.getTime() : undefined;
     }

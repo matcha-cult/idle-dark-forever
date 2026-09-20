@@ -75,7 +75,8 @@ export function careerPanelOf(tables: DataTables, player: Player): CareerPanelDt
 }
 
 function requirementContext(player: Player): RequirementContext {
-  return { player, map: null };
+  // 职业解锁目前不消费野外 BOSS 击杀；照样带上角色集合，保持与地图解锁同源。
+  return { player, map: null, bossKilled: player.worldBossKilled };
 }
 
 /** 切换职业（需通过职业解锁条件）。 */

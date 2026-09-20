@@ -24,7 +24,18 @@
 import type { Clock, Rng, TimerHandle } from '../contracts/ports.js';
 import type { MapData, MonsterSpawnConfig } from '../contracts/data.js';
 import type { BattleWorld } from './battle-world.js';
+import { EnemyUnit } from './enemy-unit.js';
 import { transformEquipLevel } from './util.js';
+
+/**
+ * 野外守关 BOSS 的刷新间隔：每完成这么多波出一次（W4）。
+ *
+ * `wave % 20 === 0` 时尝试刷新（第 20 / 40 / 60 … 波）。
+ */
+export const WORLD_BOSS_WAVE_INTERVAL = 20;
+
+/** BOSS 相对地图等级的加成（W4：普通 +0 / 稀有 +1 / BOSS +2）。 */
+export const WORLD_BOSS_LEVEL_OFFSET = 2;
 
 /** 原版 `randomType(types)`：按权重抽取（`Math.random()` → `rng.next()`）。 */
 export function randomType(types: Record<string, number>, rng: Rng): string {
@@ -131,6 +142,24 @@ export class Born {
     }
   }
 
+  /**
+   * 波次完成后重置（W4）：清空计数与 `over`，并按**与构造时相同**的方式重新武装定时器。
+   *
+   * 构造（无存档）走 `setTimer(true)` —— 以 `warmup` 起第一波；这里保持一致，
+   * 因此下一波同样从 `warmup` 开始。清掉在飞的定时器，避免重复调度。
+   */
+  reset(): void {
+    this.count = 0;
+    this.total = 0;
+    this.over = false;
+    this.disposed = false;
+    if (this.timer) {
+      this.clock.clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.setTimer(true);
+  }
+
   onTimer = (): void => {
     this.timer = null;
     if (
@@ -200,7 +229,20 @@ export class EnemyBorn {
   /** 地城阶段的刷怪器（`EnemyUnit.dumpState` 需要按它反查索引）。 */
   phaseBorn: Array<Born | null> | null = null;
 
-  constructor(world: BattleWorld, clock: Clock, map: string, savedState?: { borns?: BornSavedState[] } | null) {
+  /**
+   * 已完成的波数（open-world，W4）。
+   *
+   * 一波 = 该图 `monsters` 的全部条目都刷满 `config.total` 且已刷出的敌人全部清空。
+   * 地城（`DungeonState`）不用它，沿用 `over` / `phases` 语义。
+   */
+  wave = 0;
+
+  constructor(
+    world: BattleWorld,
+    clock: Clock,
+    map: string,
+    savedState?: { borns?: BornSavedState[]; wave?: number } | null,
+  ) {
     this.world = world;
     this.clock = clock;
     this.map = map;
@@ -213,6 +255,14 @@ export class EnemyBorn {
           );
         })
       : null;
+    const savedWave = savedState?.wave;
+    this.wave = typeof savedWave === 'number' && Number.isFinite(savedWave) && savedWave > 0 ? Math.trunc(savedWave) : 0;
+    // 显式接线：任一 Born 刷满清空 → 检查整波是否完成（open-world；地城覆写为空实现）。
+    this.borns?.forEach((born) => {
+      if (born) {
+        born.onOver = () => this.onBornOver();
+      }
+    });
   }
 
   get mapData(): MapData | undefined {
@@ -229,7 +279,72 @@ export class EnemyBorn {
   dumpState(): Record<string, unknown> {
     return {
       borns: this.borns && this.borns.map((v) => v && v.dumpState()),
+      wave: this.wave,
     };
+  }
+
+  /**
+   * 单个 `Born` 刷满并清空后的回调（由 `Born.onOver` 触发）。
+   *
+   * open-world：所有 `borns` 都刷满且清空 → 完成一波。
+   * `DungeonState` **覆写为空实现**，保留它自己的 `over` / 阶段推进语义。
+   */
+  onBornOver(): void {
+    if (this.isWaveComplete()) {
+      this.completeWave();
+    }
+  }
+
+  /** 一波完成的判据：所有 `Born` 均满足 `total >= config.total && count <= 0`。 */
+  isWaveComplete(): boolean {
+    const borns = this.borns;
+    if (!borns || !borns.some((b) => b)) {
+      return false;
+    }
+    return borns.every(
+      (b) => !b || (typeof b.config.total === 'number' && b.total >= b.config.total && b.count <= 0),
+    );
+  }
+
+  /**
+   * 完成一波：波数 +1，重置全部刷怪器，并在每 {@link WORLD_BOSS_WAVE_INTERVAL} 波尝试刷新守关 BOSS。
+   *
+   * 全程由注入的 `Clock` 驱动（重置只重新武装定时器），不使用 `Date.now()`。
+   */
+  completeWave(): void {
+    this.wave += 1;
+    for (const born of this.borns ?? []) {
+      born?.reset();
+    }
+    if (this.wave % WORLD_BOSS_WAVE_INTERVAL === 0) {
+      this.trySpawnWorldBoss();
+    }
+  }
+
+  /**
+   * 尝试刷新该图守关 BOSS（每 20 波）。
+   *
+   * - 一次性：角色已击杀该图 BOSS → 不再刷新（普通怪照旧，图仍可 farm）；
+   * - 同一时刻只允许一只 BOSS 存活（上一只未死则本次跳过）；
+   * - 等级 = 地图等级 + {@link WORLD_BOSS_LEVEL_OFFSET}；显式 `worldBoss` 标记该单位。
+   */
+  trySpawnWorldBoss(): void {
+    const mapData = this.mapData;
+    const bossKey = mapData?.boss;
+    if (!bossKey || !this.world.tables.enemies[bossKey]) {
+      return;
+    }
+    if (this.world.player?.hasWorldBossKilled?.(this.map)) {
+      return;
+    }
+    if (this.world.units.some((u) => u instanceof EnemyUnit && u.worldBoss)) {
+      return;
+    }
+    const unit = this.world.addEnemy(bossKey, null, 0);
+    unit.worldBoss = true;
+    const mapLevel =
+      typeof mapData?.level === 'number' && Number.isFinite(mapData.level) ? mapData.level : 0;
+    unit.levelOverride = mapLevel + WORLD_BOSS_LEVEL_OFFSET;
   }
 
   onPlayerDeath(): void {
@@ -270,6 +385,16 @@ export class DungeonState extends EnemyBorn {
 
   get phaseData(): NonNullable<MapData['phases']>[number] | undefined {
     return this.mapData?.phases?.[this.currentPhase ?? 0];
+  }
+
+  /**
+   * 地城**不参与 open-world 波次**（W4）：覆写为 no-op。
+   *
+   * `Born` 的 `over` 语义与 `checkPhaseAdvance` 的接线不变 —— 阶段推进仍由 `phaseBorn`
+   * 的 `onOver` 触发（见 `switchToPhase`），因此秘境行为与改造前完全一致。
+   */
+  override onBornOver(): void {
+    // open-world 波次不适用于秘境阶段。
   }
 
   /** 替代原版 `autorun`：阶段内全部刷怪器结束（或无 total）时推进到下一阶段。 */

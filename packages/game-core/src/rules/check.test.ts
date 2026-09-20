@@ -58,6 +58,49 @@ describe('checkRequirement', () => {
     expect(checkRequirement({ map: 'home' }, makeContext({ map: null }))).toBe(false);
   });
 
+  it('bossKilled：命中集合成立；未命中 / 空集 / 上下文缺失一律 fail-closed', () => {
+    expect(
+      checkRequirement({ bossKilled: 'world.1' }, makeContext({ bossKilled: new Set(['world.1']) })),
+    ).toBe(true);
+    expect(
+      checkRequirement({ bossKilled: 'world.2' }, makeContext({ bossKilled: new Set(['world.1']) })),
+    ).toBe(false);
+    expect(checkRequirement({ bossKilled: 'world.1' }, makeContext({ bossKilled: new Set() }))).toBe(false);
+    // 上下文没有 bossKilled（undefined / 未提供）→ 不成立
+    expect(checkRequirement({ bossKilled: 'world.1' }, makeContext())).toBe(false);
+    expect(
+      checkRequirement({ bossKilled: 'world.1' }, makeContext({ bossKilled: undefined })),
+    ).toBe(false);
+  });
+
+  it('bossKilled：undefined / 空串 / 非字符串视为「无此条件」', () => {
+    const context = makeContext({ bossKilled: new Set(['world.1']) });
+    expect(checkRequirement({ bossKilled: undefined }, context)).toBe(true);
+    expect(checkRequirement({ bossKilled: '' }, context)).toBe(true);
+    expect(checkRequirement({ bossKilled: 123 as unknown as string }, context)).toBe(true);
+  });
+
+  it('bossKilled 与 level 是 AND 关系（解锁链语义）', () => {
+    expect(
+      checkRequirement(
+        { level: 5, bossKilled: 'world.1' },
+        makeContext({ player: { role: 'Eyer', currentCareer: 'warrior', level: 5, maxLevel: 100 }, bossKilled: new Set(['world.1']) }),
+      ),
+    ).toBe(true);
+    expect(
+      checkRequirement(
+        { level: 5, bossKilled: 'world.1' },
+        makeContext({ player: { role: 'Eyer', currentCareer: 'warrior', level: 4, maxLevel: 100 }, bossKilled: new Set(['world.1']) }),
+      ),
+    ).toBe(false);
+    expect(
+      checkRequirement(
+        { level: 5, bossKilled: 'world.1' },
+        makeContext({ player: { role: 'Eyer', currentCareer: 'warrior', level: 5, maxLevel: 100 }, bossKilled: new Set() }),
+      ),
+    ).toBe(false);
+  });
+
   it('$or：任一成立；空数组为不成立（原版 `.some` 语义）', () => {
     const context = makeContext();
     expect(checkRequirement({ $or: [{ level: 1 }, { level: 999 }] }, context)).toBe(true);

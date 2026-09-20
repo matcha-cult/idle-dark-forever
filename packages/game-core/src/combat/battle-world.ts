@@ -333,6 +333,7 @@ export class BattleWorld {
   ): EnemyUnit {
     const unit = new EnemyUnit(this, type, quality);
     unit.initKeepAlives();
+    this.applyOpenWorldLevelOverride(unit, quality);
     unit.borner = borner;
     unit.summoner = summoner ?? null;
     unit.summonSkill = skillState ?? null;
@@ -353,9 +354,33 @@ export class BattleWorld {
     return unit;
   }
 
+  /**
+   * 野外（非秘境）怪物等级覆写（W4）。
+   *
+   * 普通 = 地图等级 / 稀有（`quality >= 1`）+1；守关 BOSS 由 `EnemyBorn.trySpawnWorldBoss`
+   * 在生成后覆写为地图等级 +2。秘境图仍走 `enemyData.level + quality * 4` 的旧公式（W6 再改）。
+   */
+  private applyOpenWorldLevelOverride(unit: EnemyUnit, quality: number): void {
+    const mapData = this.mapData;
+    if (!mapData || mapData.isDungeon === true) {
+      return;
+    }
+    const mapLevel = mapData.level;
+    // 无 `level` 的图（如安全区 / 测试 fixture）不覆写，回落原版 `enemyData.level` 公式。
+    if (typeof mapLevel !== 'number' || !Number.isFinite(mapLevel)) {
+      return;
+    }
+    unit.levelOverride = mapLevel + (quality >= 1 ? 1 : 0);
+  }
+
   addEnemySaved(saved: Record<string, unknown> & { type?: string; quality?: number }): EnemyUnit {
-    const unit = new EnemyUnit(this, saved.type ?? '', saved.quality ?? 0, saved as never);
+    const quality = saved.quality ?? 0;
+    const unit = new EnemyUnit(this, saved.type ?? '', quality, saved as never);
     unit.initKeepAlives();
+    // 旧存档没有 `levelOverride` 时按当前地图补算；已有覆写（含 BOSS 的 +2）保持原样。
+    if (unit.levelOverride === undefined) {
+      this.applyOpenWorldLevelOverride(unit, quality);
+    }
     this.addUnit(unit);
     return unit;
   }
@@ -431,7 +456,7 @@ export class BattleWorld {
         this,
         this.logicClock,
         this._map,
-        (mapState?.enemyBorn ?? null) as { borns?: BornSavedState[] } | null,
+        (mapState?.enemyBorn ?? null) as { borns?: BornSavedState[]; wave?: number } | null,
       );
     }
   }
