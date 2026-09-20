@@ -231,6 +231,11 @@ export class PlayerUnit extends Unit {
       return;
     }
     EQUIP_POSITIONS.forEach((position) => {
+      // P12：武器 / 副手词缀是**区域词缀** —— 只在该武器出手时按手读取（`weaponAffixAttr`），
+      // 不挂到 Unit 上（否则副手武器的词缀会在主手出手时也生效，违背交替攻击模型）。
+      if (position === 'weapon' || position === 'offHand') {
+        return;
+      }
       const slot = player.equipments[position];
       if (!slot || slot.empty) {
         return;
@@ -405,9 +410,10 @@ export class PlayerUnit extends Unit {
     if (this.world.map === 'home') {
       ret += this.maxMp / 20;
     }
-    const weapon = this.player?.equipments.weapon;
-    if (weapon && !weapon.empty) {
-      ret += weapon.mpRecovery || 0;
+    const weapon = this.handSlot('main');
+    if (weapon) {
+      // 武器词缀（区域）只在该手出手时生效。
+      ret += this.weaponAffixAttr(weapon, 'mpRecovery', weapon.mpRecovery || 0);
     }
     ret = this.runAttrHooks(ret, 'mpRecovery');
     return ret;
@@ -415,18 +421,16 @@ export class PlayerUnit extends Unit {
 
   override get mpFromKill(): number {
     let ret = 0;
-    const weapon = this.player?.equipments.weapon;
-    if (weapon && !weapon.empty) {
-      ret += weapon.mpFromKill || 0;
+    const weapon = this.handSlot('main');
+    if (weapon) {
+      ret += this.weaponAffixAttr(weapon, 'mpFromKill', weapon.mpFromKill || 0);
     }
     ret = this.runAttrHooks(ret, 'mpFromKill');
     return ret;
   }
 
   override get hpFromKill(): number {
-    let ret = 0;
-    ret = this.runAttrHooks(ret, 'hpFromKill');
-    return ret;
+    return this.hpFromKillOf('main');
   }
 
   override get maxRp(): number {
@@ -494,14 +498,54 @@ export class PlayerUnit extends Unit {
 
   // ────────────────────────────── 战斗数值 ──────────────────────────────
 
-  override get atk(): number {
+  /** 某只手的武器槽（空槽 → undefined）。 */
+  private handSlot(hand: 'main' | 'off'): EquipmentSlotLike | undefined {
+    const player = this.player;
+    if (!player) {
+      return undefined;
+    }
+    const slot = hand === 'off' ? player.equipments.offHand : player.equipments.weapon;
+    return slot && !slot.empty ? slot : undefined;
+  }
+
+  /**
+   * 运行**区域词缀**的 hook（P12 / §2.4）。
+   *
+   * 武器 / 副手词缀不挂 Unit，只在该手出手时通过这里叠到该手武器的底材值上。
+   * hook 签名与数据层一致：`(effect, value)`。
+   */
+  private weaponAffixAttr(slot: EquipmentSlotLike | undefined, key: string, value: number): number {
+    if (!slot) {
+      return value;
+    }
+    let ret = value;
+    for (const affix of slot.affixes) {
+      const hook = affix.affixData?.hooks?.[key];
+      if (!hook) {
+        continue;
+      }
+      ret = (hook as unknown as (effect: number, value: number) => number)(affix.value, ret);
+    }
+    return ret;
+  }
+
+  /**
+   * 按手取攻击力（P12）：武器自身词缀（区域）+ 角色全局 hooks。
+   *
+   * ⚠️ E5.5 的双持交替攻击会按「本次是哪只手」调用；E5 先让主手作为默认。
+   */
+  atkOf(hand: 'main' | 'off' = 'main'): number {
     if (!this.player) {
       return 0;
     }
+    const slot = this.handSlot(hand);
     let ret: number;
-    const weapon = this.player.equipments.weapon;
-    if (weapon && !weapon.empty) {
-      ret = weapon.atk;
+    if (slot) {
+      ret = slot.atk;
+      ret = this.weaponAffixAttr(slot, 'atk', ret);
+      ret *= this.weaponAffixAttr(slot, 'atkAdd', 1);
+      ret *= this.weaponAffixAttr(slot, 'atkMulAttr', 1);
+      ret = this.weaponAffixAttr(slot, 'atkMul', ret);
     } else {
       ret = this.player.roleData.atk || 0;
     }
@@ -512,22 +556,66 @@ export class PlayerUnit extends Unit {
     return ret;
   }
 
-  override get critRate(): number {
-    let ret = 0.05;
+  /** 按手取攻速（P12）：基准取自该手武器底材，再叠该武器区域词缀与全局 hooks。 */
+  atkSpeedOf(hand: 'main' | 'off' = 'main'): number {
+    if (!this.player) {
+      return 0.01;
+    }
+    const slot = this.handSlot(hand);
+    let ret = slot ? slot.atkSpeed || 0.01 : this.player.roleData.atkSpeed || 0.01;
+    ret = this.weaponAffixAttr(slot, 'atkSpeed', ret);
+    ret *= this.weaponAffixAttr(slot, 'atkSpeedAdd', 1);
+    ret = this.runAttrHooks(ret, 'atkSpeed');
+    ret *= this.runAttrHooks(1, 'atkSpeedAdd');
+    return ret;
+  }
+
+  /** 按手取暴击几率（武器上的暴击词缀只在该手出手时生效）。 */
+  critRateOf(hand: 'main' | 'off' = 'main'): number {
+    const slot = this.handSlot(hand);
+    let ret = 0.05 + this.weaponAffixAttr(slot, 'critRate', 0);
     ret = this.runAttrHooks(ret, 'critRate');
     return ret;
   }
 
-  override get critBonus(): number {
-    let ret = 1.5;
+  /** 按手取暴击伤害。 */
+  critBonusOf(hand: 'main' | 'off' = 'main'): number {
+    const slot = this.handSlot(hand);
+    let ret = 1.5 + this.weaponAffixAttr(slot, 'critBonus', 0);
     ret = this.runAttrHooks(ret, 'critBonus');
     return ret;
   }
 
-  override get leech(): number {
-    let ret = 0;
+  /** 按手取吸血。 */
+  leechOf(hand: 'main' | 'off' = 'main'): number {
+    const slot = this.handSlot(hand);
+    let ret = this.weaponAffixAttr(slot, 'leech', 0);
     ret = this.runAttrHooks(ret, 'leech');
     return ret;
+  }
+
+  /** 按手取击杀回血（武器词缀区域生效）。 */
+  hpFromKillOf(hand: 'main' | 'off' = 'main'): number {
+    const slot = this.handSlot(hand);
+    let ret = this.weaponAffixAttr(slot, 'hpFromKill', 0);
+    ret = this.runAttrHooks(ret, 'hpFromKill');
+    return ret;
+  }
+
+  override get atk(): number {
+    return this.atkOf('main');
+  }
+
+  override get critRate(): number {
+    return this.critRateOf('main');
+  }
+
+  override get critBonus(): number {
+    return this.critBonusOf('main');
+  }
+
+  override get leech(): number {
+    return this.leechOf('main');
   }
 
   override get def(): number {
@@ -577,15 +665,16 @@ export class PlayerUnit extends Unit {
     return ret;
   }
 
-  override get darkAbsorb(): number {
+  override get chaosAbsorb(): number {
     let ret = 0;
-    ret = this.runAttrHooks(ret, 'darkAbsorb');
+    ret = this.runAttrHooks(ret, 'chaosAbsorb');
     return ret;
   }
 
-  override get darkResist(): number {
-    let ret = this.allResist;
-    ret = this.runAttrHooks(ret, 'darkResist');
+  override get chaosResist(): number {
+    // P7：混沌**非元素** —— `allResist`（智力全抗）不作用于混沌，只有专属词缀/hook 生效。
+    let ret = 0;
+    ret = this.runAttrHooks(ret, 'chaosResist');
     return ret;
   }
 
@@ -614,20 +703,7 @@ export class PlayerUnit extends Unit {
   }
 
   override get atkSpeed(): number {
-    if (!this.player) {
-      return 0.01;
-    }
-    let ret: number;
-    const weapon = this.player.equipments.weapon;
-    if (weapon && !weapon.empty) {
-      ret = weapon.atkSpeed || 0.01;
-    } else {
-      ret = this.player.roleData.atkSpeed || 0.01;
-    }
-    ret = this.runAttrHooks(ret, 'atkSpeed');
-    ret *= this.runAttrHooks(1, 'atkSpeedAdd');
-
-    return ret;
+    return this.atkSpeedOf('main');
   }
 
   override damage(type: string, from: Unit | null, v: number): boolean {

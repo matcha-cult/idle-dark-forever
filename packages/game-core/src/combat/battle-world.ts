@@ -13,7 +13,7 @@
  * ① to.shieldReflect（有值 → 对 from 递归结算；递归里 from === to，天然终止）
  * ② from.willDamage → to.willDamaged
  * ③ absorbed = value * to[`${type}Absorb`]
- * ④ melee → (value-absorbed)/(1+to.def/200)；其它系 → /(1+to[`${type}Resist`]/200)
+ * ④ 分类（`rules/damage.ts`）：物理 → /(1+def/200)；元素/混沌 → /(1+`${type}Resist`/200)；其余无减免
  * ⑤ to.absorbed（护盾）→ to.damaged → sink.damage → to.damage()
  * ```
  *
@@ -33,6 +33,7 @@ import type { BattleSink, Clock, Logger, Rng, TimerHandle } from '../contracts/p
 import type { DataTables, LootEntry, MapData } from '../contracts/data.js';
 import { Timeline } from '../sim/index.js';
 import { lootRuleActionOf } from '../rules/loot-rule.js';
+import { absorbAttrKey, mitigationKindOf, resistAttrKey } from '../rules/damage.js';
 import { Camps } from './camps.js';
 import { EnemyBorn, DungeonState, type Born, type BornSavedState, type DungeonSavedState } from './spawner.js';
 import { EnemyUnit } from './enemy-unit.js';
@@ -40,7 +41,7 @@ import { PlayerUnit, type PlayerLike } from './player-unit.js';
 import { SkillState } from './skill-state.js';
 import { BuffState } from './buff-state.js';
 import { Unit } from './unit.js';
-import { camelCase, normalizePositive, readAttr, toNumber, untransformEquipLevel } from './util.js';
+import { normalizePositive, readAttr, toNumber, untransformEquipLevel } from './util.js';
 
 /** 各用途独立的随机子序列（标签稳定，便于审计/复算）。 */
 export interface CombatRngStreams {
@@ -541,20 +542,21 @@ export class BattleWorld {
     value = from ? from.runAttrHooks(value, 'willDamage', to, damageType) : value;
     value = to.runAttrHooks(value, 'willDamaged', from, damageType);
 
-    // ③ 吸收百分比
-    absorbed = value * (readAttr(to, camelCase(damageType + '-absorb')) || 0);
+    // ③ 吸收百分比（显式 key：`fire` → `fireAbsorb`）
+    absorbed = value * (readAttr(to, absorbAttrKey(damageType)) || 0);
 
-    // ④ 护甲 / 抗性
-    switch (damageType) {
-      case 'melee':
+    // ④ 护甲 / 抗性 —— 分类口径收口到 `rules/damage.ts`（物理走 def，元素/混沌走 {type}Resist，
+    //    其余无减免）。`chaos` 非元素：它的 `chaosResist` 不含 `allResist`（见 PlayerUnit getter）。
+    switch (mitigationKindOf(damageType)) {
+      case 'physical':
         value = (value - absorbed) / (1 + to.def / 200);
         break;
-      default: {
-        value =
-          (value - absorbed) /
-          (1 + (readAttr(to, camelCase(damageType + '-resist')) || 0) / 200);
+      case 'resisted':
+        value = (value - absorbed) / (1 + (readAttr(to, resistAttrKey(damageType)) || 0) / 200);
         break;
-      }
+      default:
+        value = value - absorbed;
+        break;
     }
     // ⑤ 护盾吸收量
     const realValue = to.runAttrHooks<number>(value, 'absorbed', damageType);

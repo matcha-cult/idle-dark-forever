@@ -127,7 +127,7 @@ define(tables, 'legends', 'year2018.yearBeastPlastron-1', {
   },
   hooks: {
     fireAbsorb: (_, v) => v + 0.3,
-    darkAbsorb: (_, v) => v + 0.3,
+    chaosAbsorb: (_, v) => v + 0.3,
     coldAbsorb: (_, v) => v + 0.3,
     lightningAbsorb: (_, v) => v + 0.3,
   },
@@ -148,7 +148,7 @@ define(tables, 'legends', 'year2018.yearBeastTrousers-1', {
   },
   hooks: {
     fireAbsorb: (_, v) => v + 0.2,
-    darkAbsorb: (_, v) => v + 0.2,
+    chaosAbsorb: (_, v) => v + 0.2,
     coldAbsorb: (_, v) => v + 0.2,
     lightningAbsorb: (_, v) => v + 0.2,
   },

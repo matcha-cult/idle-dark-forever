@@ -315,10 +315,10 @@ return  [
     },
   },
   {
-    key: 'darkResist',
+    key: 'chaosResist',
     affixType: 'suffix',
     tag: 'resist',
-    display: effect => `暗影抗性 +${Math.round(effect)}`,
+    display: effect => `混沌抗性 +${Math.round(effect)}`,
     minLevel: 40,
     maxLevel: 180,
     validPositions: ['plastron', 'boots', 'gloves', 'belt'],
@@ -330,14 +330,14 @@ return  [
       return `${Math.round(1*level + 1)}~${Math.round((2*level + 1))}`;
     },
     hooks: {
-      darkResist: (effect, value) => value + effect,
+      chaosResist: (effect, value) => value + effect,
     },
   },
   {
-    key: 'darkAbsorb',
+    key: 'chaosAbsorb',
     affixType: 'suffix',
     tag: 'absorb',
-    display: effect => `暗影吸收 +${Math.round(effect*100)}%`,
+    display: effect => `混沌吸收 +${Math.round(effect*100)}%`,
     minLevel: 40,
     weight: 0.2,
     validPositions: ['plastron', 'boots', 'gloves', 'belt', 'amulet', 'ring1', 'ring2'],
@@ -349,7 +349,7 @@ return  [
       return `${Math.round(0.1*level + 0.5)}%~${Math.round(0.2*level + 0.5)}%`;
     },
     hooks: {
-      darkAbsorb: (effect, value) => value + effect,
+      chaosAbsorb: (effect, value) => value + effect,
     },
   },
   {

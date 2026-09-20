@@ -158,7 +158,7 @@ export interface UnitLike {
   coldAbsorb: number;
   fireAbsorb: number;
   lightningAbsorb: number;
-  darkAbsorb: number;
+  chaosAbsorb: number;
   allResist: number;
   // 施法 / 读条状态
   reading: CastingLike | null;

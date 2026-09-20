@@ -3178,7 +3178,7 @@ return  [
           if (world.testDodge(self, target, this)) {
             return;
           }
-          world.sendDamage('dark', self, target, this, dmg, false);
+          world.sendDamage('chaos', self, target, this, dmg, false);
         }
       }
     },
@@ -3340,7 +3340,7 @@ return  [
       if (world.testDodge(self, target, this)) {
         return;
       }
-      world.sendDamage('dark', self, target, this, atk * 2.5, false);
+      world.sendDamage('chaos', self, target, this, atk * 2.5, false);
     },
   },
   {
@@ -3359,7 +3359,7 @@ return  [
       if (world.testDodge(self, target, this)) {
         return;
       }
-      world.sendDamage('dark', self, target, this, atk, false);
+      world.sendDamage('chaos', self, target, this, atk, false);
     },
   },
   {
@@ -3963,7 +3963,7 @@ return  [
       }
       const dmg = atk * 2;
       world.sendHeal(self, self, this, self.maxHp * (0.1 + level * 0.01));
-      world.sendDamage('dark', self, target, this, dmg);
+      world.sendDamage('chaos', self, target, this, dmg);
     },
   },
   {

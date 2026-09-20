@@ -329,10 +329,10 @@ export class Unit {
   get fireResist(): number {
     return 0;
   }
-  get darkAbsorb(): number {
+  get chaosAbsorb(): number {
     return 0;
   }
-  get darkResist(): number {
+  get chaosResist(): number {
     return 0;
   }
   get coldAbsorb(): number {

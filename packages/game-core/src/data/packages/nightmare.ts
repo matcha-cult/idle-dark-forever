@@ -983,7 +983,7 @@ define(tables, 'skills', 'nightmare.undead.1', {
     const val = minimal.hp / 100;
     minimal.kill();
     for (const target of world.units.filter((v) => self.willAttack(v))) {
-      world.sendDamage('dark', self, target, this, val, false);
+      world.sendDamage('chaos', self, target, this, val, false);
     }
   },
 });

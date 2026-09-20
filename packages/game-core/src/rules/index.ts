@@ -24,6 +24,7 @@ export * from './inventory-slot.js';
 export * from './career-info.js';
 export * from './goods.js';
 export * from './loot-rule.js';
+export * from './damage.js';
 export * from './check.js';
 export * from './combat-area.js';
 export * from './dungeon.js';

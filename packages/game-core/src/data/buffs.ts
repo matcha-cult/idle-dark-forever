@@ -217,7 +217,7 @@ return  [
         self.removeBuff(this);
         return;
       }
-      world.sendDamage('dark', self, target, this.skill, self.atk * 0.2, false);
+      world.sendDamage('chaos', self, target, this.skill, self.atk * 0.2, false);
     },
   },
 

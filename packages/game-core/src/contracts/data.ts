@@ -177,12 +177,12 @@ export interface EnemyData {
   coldResist?: number;
   lightningResist?: number;
   iceResist?: number;
-  darkResist?: number;
+  chaosResist?: number;
   fireAbsorb?: number;
   coldAbsorb?: number;
   lightningAbsorb?: number;
   iceAbsorb?: number;
-  darkAbsorb?: number;
+  chaosAbsorb?: number;
   critRate?: number;
   critBonus?: number;
   /** 吸血比例。 */

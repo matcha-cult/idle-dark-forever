@@ -341,16 +341,16 @@ export class EnemyUnit extends Unit {
     return ret;
   }
 
-  override get darkAbsorb(): number {
-    let ret = readNumField(this.enemyData, 'darkAbsorb', 0);
-    ret = this.runAttrHooks(ret, 'darkAbsorb');
+  override get chaosAbsorb(): number {
+    let ret = readNumField(this.enemyData, 'chaosAbsorb', 0);
+    ret = this.runAttrHooks(ret, 'chaosAbsorb');
     return ret;
   }
 
-  override get darkResist(): number {
-    let ret = readNumField(this.enemyData, 'darkResist', 0);
+  override get chaosResist(): number {
+    let ret = readNumField(this.enemyData, 'chaosResist', 0);
     ret += readNumField(this.enemyData, 'allResist', 0);
-    ret = this.runAttrHooks(ret, 'darkResist');
+    ret = this.runAttrHooks(ret, 'chaosResist');
     return ret;
   }
 

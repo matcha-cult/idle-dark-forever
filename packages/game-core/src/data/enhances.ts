@@ -252,7 +252,7 @@ return  [
       fireAbsorb(world, value) {
         return value + 0.15;
       },
-      darkAbsorb(world, value) {
+      chaosAbsorb(world, value) {
         return value + 0.15;
       },
       coldAbsorb(world, value) {
@@ -394,7 +394,7 @@ return  [
     hooks: {
       fireAbsorb: (world, value) => value + 0.4,
       coldAbsorb: (world, value) => value + 0.4,
-      darkAbsorb: (world, value) => value + 0.4,
+      chaosAbsorb: (world, value) => value + 0.4,
       lightningAbsorb: (world, value) => value + 0.4,
     },
   },
