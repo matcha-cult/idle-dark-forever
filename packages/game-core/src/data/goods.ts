@@ -1120,10 +1120,41 @@ return  [
 
 })();
 
+// ── 占位物品：12 通货 + 12 精华（P10/P8；真实名称与能力下期开工） ──
+// 只登记 `{ key, type: 'material', name, price, stack }`，不写任何能力函数（§3.4）。
+// 复用既有 `type: 'material'`（不动冻结契约 GoodType，前端零改动）。
+const __goods_placeholder = ((): GoodEntry[] => {
+  const out: GoodEntry[] = [];
+  for (let i = 1; i <= 12; i += 1) {
+    const n = String(i).padStart(2, '0');
+    out.push({
+      key: `currency.${n}`,
+      type: 'material',
+      name: `通货·占位 ${n}`,
+      description: `占位通货 ${n}（能力与正式名称下期开工）。`,
+      price: 10,
+      stack: 9999,
+    });
+  }
+  for (let i = 1; i <= 12; i += 1) {
+    const n = String(i).padStart(2, '0');
+    out.push({
+      key: `essence.${n}`,
+      type: 'material',
+      name: `精华·占位 ${n}`,
+      description: `占位精华 ${n}（能力与正式名称下期开工）。`,
+      price: 20,
+      stack: 9999,
+    });
+  }
+  return out;
+})();
+
 export const goods: Record<string, GoodEntry> = arrayToMap([
   ...__goods_0,
   ...__goods_1,
   ...__goods_2,
   ...__goods_3,
   ...__goods_4,
+  ...__goods_placeholder,
 ]);

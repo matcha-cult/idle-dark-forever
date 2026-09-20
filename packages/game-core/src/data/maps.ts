@@ -175,23 +175,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [1000, 2000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -299,23 +283,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [25, 5000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -423,23 +391,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [4000, 7000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -504,23 +456,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [5000, 10000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -628,23 +564,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [4000, 7000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -709,23 +629,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [5000, 10000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -840,23 +744,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [10000, 20000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -965,23 +853,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [15000, 25000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -1096,23 +968,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [18000, 30000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -1163,23 +1019,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [20000, 40000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -1294,23 +1134,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [25000, 50000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -1429,23 +1253,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [40000, 60000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -1583,23 +1391,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [50000, 100000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -1687,23 +1479,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [75000, 100000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -1898,38 +1674,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [75000, 150000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -2069,38 +1814,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [100000, 150000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -2797,23 +2511,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [50000, 100000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -2940,23 +2638,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [75000, 120000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 };
 
 })();
@@ -3105,23 +2787,7 @@ return  {
       key: 'gold',
       rate: 1,
       count: [95000, 150000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-    {
+    },    {
       type: 'ticket',
       rate: 1,
       dungeons: {
@@ -3133,7 +2799,17 @@ return  {
 
 })();
 
+// ── P8：0 级城镇（出售底材的入口骨架；底材目录下期开工） ──
+const __maps_town = ((): MapEntry => ({
+  key: 'town',
+  name: '边境之村',
+  hint: '0 级城镇。可以在这里兑换装备底材（底材目录下期开工）。',
+  level: 0,
+  monsters: [],
+}))();
+
 export const maps: Record<string, MapEntry> = arrayToMap([
+  __maps_town,
   __maps_0,
   __maps_1,
   __maps_2,

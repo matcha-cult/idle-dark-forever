@@ -296,13 +296,7 @@ define(tables, 'enemies', 'nightmare.slime.queen', {
       key: 'gold',
       count: [1, 100],
       rate: 0.25,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 2,
-    },
-  ],
+    },  ],
 });
 
 define(tables, 'maps', 'nightmare.slime', {
@@ -335,26 +329,7 @@ define(tables, 'maps', 'nightmare.slime', {
       key: 'gold',
       rate: 1,
       count: [150000, 250000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-      position: 'plastron',
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 750,
-      position: 'plastron',
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 1250,
-      position: 'plastron',
-    },
-    {
+    },    {
       key: 'year2018.redbag',
       count: [1, 1],
       rate: 0.1,
@@ -555,13 +530,7 @@ define(tables, 'enemies', 'nightmare.wolf.king', {
       key: 'gold',
       count: [1, 100],
       rate: 0.25,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 2,
-    },
-  ],
+    },  ],
 });
 
 define(tables, 'maps', 'nightmare.wolf', {
@@ -599,26 +568,7 @@ define(tables, 'maps', 'nightmare.wolf', {
       key: 'gold',
       rate: 1,
       count: [150000, 250000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-      position: 'weapon',
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 750,
-      position: 'weapon',
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 1250,
-      position: 'weapon',
-    },
-    {
+    },    {
       key: 'year2018.redbag',
       count: [1, 1],
       rate: 0.1,
@@ -864,13 +814,7 @@ define(tables, 'enemies', 'nightmare.kobold.king', {
       key: 'gold',
       count: [1, 100],
       rate: 0.25,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 2,
-    },
-  ],
+    },  ],
 });
 
 define(tables, 'maps', 'nightmare.kobold', {
@@ -908,26 +852,7 @@ define(tables, 'maps', 'nightmare.kobold', {
       key: 'gold',
       rate: 1,
       count: [150000, 250000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-      position: 'ornament',
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 750,
-      position: 'ornament',
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 1250,
-      position: 'ornament',
-    },
-    {
+    },    {
       key: 'year2018.redbag',
       count: [1, 1],
       rate: 0.1,
@@ -1086,13 +1011,7 @@ define(tables, 'enemies', 'nightmare.undead.king', {
       key: 'gold',
       count: [1, 100],
       rate: 0.25,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 2,
-    },
-  ],
+    },  ],
 });
 
 define(tables, 'maps', 'nightmare.undead', {
@@ -1130,26 +1049,7 @@ define(tables, 'maps', 'nightmare.undead', {
       key: 'gold',
       rate: 1,
       count: [150000, 250000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-      position: 'gaiter',
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 750,
-      position: 'gaiter',
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 1250,
-      position: 'gaiter',
-    },
-    {
+    },    {
       key: 'year2018.redbag',
       count: [1, 1],
       rate: 0.1,
@@ -1368,13 +1268,7 @@ define(tables, 'enemies', 'nightmare.fire.kakarif', {
       key: 'gold',
       count: [1, 100],
       rate: 0.25,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 2,
-    },
-  ],
+    },  ],
 });
 
 define(tables, 'maps', 'nightmare.fire', {
@@ -1407,26 +1301,7 @@ define(tables, 'maps', 'nightmare.fire', {
       key: 'gold',
       rate: 1,
       count: [250000, 500000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-      position: 'plastron',
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 750,
-      position: 'plastron',
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 1250,
-      position: 'plastron',
-    },
-    {
+    },    {
       key: 'year2018.redbag',
       count: [1, 1],
       rate: 0.1,
@@ -1640,13 +1515,7 @@ define(tables, 'enemies', 'nightmare.knight.boss', {
       key: 'gold',
       count: [1, 100],
       rate: 0.25,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 2,
-    },
-  ],
+    },  ],
 });
 
 define(tables, 'maps', 'nightmare.knight', {
@@ -1679,26 +1548,7 @@ define(tables, 'maps', 'nightmare.knight', {
       key: 'gold',
       rate: 1,
       count: [250000, 500000],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-      position: 'weapon',
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 750,
-      position: 'weapon',
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 1250,
-      position: 'weapon',
-    },
-    {
+    },    {
       key: 'year2018.redbag',
       count: [1, 1],
       rate: 0.1,

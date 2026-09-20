@@ -46,13 +46,7 @@ return  [
         key: 'gold',
         count: [1, 5],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'slime.giant',
@@ -82,13 +76,7 @@ return  [
         key: 'gold',
         count: [1, 20],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1.5,
-      },
-    ],
+      },    ],
   },
   {
     key: 'slime.giant.enemy',
@@ -118,13 +106,7 @@ return  [
         key: 'gold',
         count: [1, 20],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1.5,
-      },
-      {
+      },      {
         type: 'ticket',
         rate: 0.005,
         dungeons: {
@@ -161,13 +143,7 @@ return  [
         key: 'gold',
         count: [1, 100],
         rate: 0.25,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -208,13 +184,7 @@ return  [
         key: 'gold',
         count: [1, 10],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'wolf.giant',
@@ -247,13 +217,7 @@ return  [
         key: 'gold',
         count: [1, 20],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1.5,
-      },
-      {
+      },      {
         type: 'ticket',
         rate: 0.005,
         dungeons: {
@@ -291,13 +255,7 @@ return  [
         key: 'gold',
         count: [1, 200],
         rate: 0.25,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -338,13 +296,7 @@ return  [
         key: 'gold',
         count: [1, 10],
         rate: 0.2,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'kobold.shaman',
@@ -378,13 +330,7 @@ return  [
         key: 'gold',
         count: [5, 10],
         rate: 0.2,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1.5,
-      },
-      {
+      },      {
         type: 'ticket',
         rate: 0.005,
         dungeons: {
@@ -456,13 +402,7 @@ return  [
         key: 'gold',
         count: [5, 100],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -503,13 +443,7 @@ return  [
         key: 'gold',
         count: [5, 25],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'kakarif.servants',
@@ -544,13 +478,7 @@ return  [
         key: 'gold',
         count: [5, 35],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1.5,
-      },
-    ],
+      },    ],
   },
   {
     key: 'kakarif.illusion',
@@ -586,13 +514,7 @@ return  [
         key: 'gold',
         count: [50, 150],
         rate: 0.25,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -633,13 +555,7 @@ return  [
         key: 'gold',
         count: [1, 10],
         rate: 0.2,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'zombies.hammersmith',
@@ -673,13 +589,7 @@ return  [
         key: 'gold',
         count: [5, 10],
         rate: 0.2,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1.5,
-      },
-      {
+      },      {
         type: 'ticket',
         rate: 0.005,
         dungeons: {
@@ -723,23 +633,7 @@ return  [
         key: 'gold',
         count: [5, 100],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-      {
-        type: 'equip',
-        rate: 0.5,
-        mfRate: 3,
-      },
-      {
-        type: 'equip',
-        rate: 0.25,
-        mfRate: 5,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -784,13 +678,7 @@ return  [
         key: 'gold',
         count: [5, 25],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'knight.prayer',
@@ -825,13 +713,7 @@ return  [
         key: 'gold',
         count: [5, 35],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1.5,
-      },
-    ],
+      },    ],
   },
   {
     key: 'knight.leader',
@@ -870,23 +752,7 @@ return  [
         key: 'gold',
         count: [50, 150],
         rate: 0.25,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-      {
-        type: 'equip',
-        rate: 0.5,
-        mfRate: 3,
-      },
-      {
-        type: 'equip',
-        rate: 0.25,
-        mfRate: 5,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -931,13 +797,7 @@ return  [
         key: 'gold',
         count: [1, 15],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter3.undead.zombie',
@@ -967,13 +827,7 @@ return  [
         key: 'gold',
         count: [5, 20],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1.5,
-      },
-      {
+      },      {
         type: 'ticket',
         rate: 0.00125,
         dungeons: {
@@ -1047,13 +901,7 @@ return  [
         key: 'gold',
         count: [100, 200],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -1094,13 +942,7 @@ return  [
         key: 'gold',
         count: [5, 35],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      }
-    ],
+      },    ],
   },
   {
     key: 'chapter3.beast.lion',
@@ -1130,13 +972,7 @@ return  [
         key: 'gold',
         count: [5, 35],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1.5,
-      },
-      {
+      },      {
         type: 'ticket',
         rate: 0.00125,
         dungeons: {
@@ -1181,13 +1017,7 @@ return  [
       faster: 1,
       recover: 1,
     },
-    loots: [
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+    loots: [    ],
   },
   {
     key: 'chapter3.beast.simba',
@@ -1303,13 +1133,7 @@ return  [
         key: 'gold',
         count: [10, 40],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      }
-    ],
+      },    ],
   },
   {
     key: 'chapter3.murloc.shaman',
@@ -1343,13 +1167,7 @@ return  [
         key: 'gold',
         count: [20, 40],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1,
-      },
-      {
+      },      {
         type: 'ticket',
         rate: 0.00125,
         dungeons: {
@@ -1420,13 +1238,7 @@ return  [
         key: 'gold',
         count: [180, 300],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -1488,13 +1300,7 @@ return  [
         key: 'gold',
         count: [10, 40],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      }
-    ],
+      },    ],
   },
   {
     key: 'chapter3.fishzilla',
@@ -1534,13 +1340,7 @@ return  [
         key: 'gold',
         count: [200, 400],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 })();
@@ -1582,13 +1382,7 @@ return  [
         key: 'gold',
         count: [20, 50],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter3.element.water',
@@ -1624,13 +1418,7 @@ return  [
         key: 'gold',
         count: [20, 50],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter3.element.earth',
@@ -1661,13 +1449,7 @@ return  [
         key: 'gold',
         count: [20, 50],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1,
-      },
-      {
+      },      {
         type: 'ticket',
         rate: 0.0025,
         dungeons: {
@@ -1708,13 +1490,7 @@ return  [
         key: 'gold',
         count: [250, 500],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter3.element.azathoth.ice',
@@ -1750,13 +1526,7 @@ return  [
         key: 'gold',
         count: [250, 500],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter3.element.azathoth.earth',
@@ -1787,13 +1557,7 @@ return  [
         key: 'gold',
         count: [250, 500],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter3.element.azathoth.dark',
@@ -1821,13 +1585,7 @@ return  [
         key: 'gold',
         count: [250, 500],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter3.element.azathoth.none',
@@ -1850,13 +1608,7 @@ return  [
         key: 'gold',
         count: [250, 500],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 0.5,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -1898,13 +1650,7 @@ return  [
         key: 'gold',
         count: [20, 50],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter3.waterElement',
@@ -1940,13 +1686,7 @@ return  [
         key: 'gold',
         count: [20, 50],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter3.waterElement.giants',
@@ -1977,13 +1717,7 @@ return  [
         key: 'gold',
         count: [20, 50],
         rate: 0.1,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1,
-      },
-      {
+      },      {
         type: 'ticket',
         rate: 0.005,
         dungeons: {
@@ -2027,13 +1761,7 @@ return  [
         key: 'gold',
         count: [400, 600],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 
   {
@@ -2093,13 +1821,7 @@ return  [
         key: 'gold',
         count: [30, 80],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter4.orcs.hunter',
@@ -2135,13 +1857,7 @@ return  [
         key: 'gold',
         count: [30, 80],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1.5,
-      },
-      {
+      },      {
         type: 'ticket',
         rate: 0.002,
         dungeons: {
@@ -2248,13 +1964,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -2295,13 +2005,7 @@ return  [
         key: 'gold',
         count: [50, 100],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter4.humans.rogue',
@@ -2335,13 +2039,7 @@ return  [
         key: 'gold',
         count: [50, 100],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1.5,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter4.humans.monster',
@@ -2415,13 +2113,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter4.humans.women',
@@ -2499,13 +2191,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -2546,13 +2232,7 @@ return  [
         key: 'gold',
         count: [50, 100],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter4.humans.musketeer',
@@ -2584,13 +2264,7 @@ return  [
         key: 'gold',
         count: [50, 100],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter4.humans.mortar',
@@ -2620,13 +2294,7 @@ return  [
         key: 'gold',
         count: [50, 100],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1.5,
-      },
-      {
+      },      {
         type: 'ticket',
         rate: 0.005,
         dungeons: {
@@ -2682,13 +2350,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter4.humans.knights.light',
@@ -2732,13 +2394,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter4.humans.knights.blood',
@@ -2782,13 +2438,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter4.humans.knights.sanction',
@@ -2831,13 +2481,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter4.humans.knights.rage',
@@ -2888,13 +2532,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -3052,13 +2690,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter4.humans.trigger.5.1',
@@ -3216,13 +2848,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
     onPress(world) {
       const buff = this.buffs.find(v=>v.type === 'enemy.evil.control');
       if (buff) {
@@ -3273,13 +2899,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 
 ];
@@ -3823,13 +3443,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'silver.warrior.trigger.2',
@@ -3876,13 +3490,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'silver.warrior.trigger.3',
@@ -3930,13 +3538,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -3986,13 +3588,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'silver.assassin.boss.1.summon',
@@ -4021,13 +3617,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'silver.assassin.trigger.2',
@@ -4097,13 +3687,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -4161,13 +3745,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'silver.sorceress.trigger.2',
@@ -4211,13 +3789,7 @@ return  [
         key: 'gold',
         count: [50, 100],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'silver.sorceress.trigger.3',
@@ -4265,13 +3837,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -4330,13 +3896,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'silver.summoner.trigger.2',
@@ -4388,13 +3948,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'silver.summoner.trigger.3',
@@ -4442,13 +3996,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -4510,13 +4058,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'silver.knight.trigger.2',
@@ -4563,13 +4105,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'silver.knight.trigger.3',
@@ -4617,13 +4153,7 @@ return  [
         key: 'gold',
         count: [500, 1000],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'silver.knight.trigger.4',
@@ -4683,13 +4213,7 @@ return  [
         key: 'gold',
         count: [75, 200],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter5.undead.zombie',
@@ -4720,13 +4244,7 @@ return  [
         key: 'gold',
         count: [5, 20],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1.5,
-      },
-      {
+      },      {
         type: 'ticket',
         rate: 0.0025,
         dungeons: {
@@ -4784,13 +4302,7 @@ return  [
         key: 'gold',
         count: [700, 1500],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -4836,13 +4348,7 @@ return  [
         key: 'gold',
         count: [150, 200],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 0.1,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter5.woodElf.sad',
@@ -4873,13 +4379,7 @@ return  [
         key: 'gold',
         count: [150, 300],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1.5,
-      },
-      {
+      },      {
         type: 'ticket',
         rate: 0.005,
         dungeons: {
@@ -4928,13 +4428,7 @@ return  [
         key: 'gold',
         count: [700, 1500],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter5.woodElf.arms',
@@ -4992,13 +4486,7 @@ return  [
         key: 'gold',
         count: [700, 1500],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 
@@ -5045,13 +4533,7 @@ return  [
         key: 'gold',
         count: [180, 250],
         rate: 0.5,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1,
-      },
-      {
+      },      {
         type: 'ticket',
         rate: 0.005,
         dungeons: {
@@ -5095,13 +4577,7 @@ return  [
         key: 'gold',
         count: [180, 250],
         rate: 0.5,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter5.daughter.monster3',
@@ -5137,13 +4613,7 @@ return  [
         key: 'gold',
         count: [180, 250],
         rate: 0.5,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter5.daughter.monster4',
@@ -5179,13 +4649,7 @@ return  [
         key: 'gold',
         count: [180, 250],
         rate: 0.5,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter5.daughter.monster5',
@@ -5221,13 +4685,7 @@ return  [
         key: 'gold',
         count: [180, 250],
         rate: 0.5,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter5.daughter.monster6',
@@ -5263,13 +4721,7 @@ return  [
         key: 'gold',
         count: [180, 250],
         rate: 0.5,
-      },
-      {
-        type: 'equip',
-        rate: 0.15,
-        mfRate: 1,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter5.daughter.badGiant',
@@ -5310,13 +4762,7 @@ return  [
         key: 'gold',
         count: [850, 1800],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
   {
     key: 'chapter5.daughter.amira',
@@ -5374,13 +4820,7 @@ return  [
         key: 'gold',
         count: [850, 1800],
         rate: 1,
-      },
-      {
-        type: 'equip',
-        rate: 1,
-        mfRate: 2,
-      },
-    ],
+      },    ],
   },
 ];
 

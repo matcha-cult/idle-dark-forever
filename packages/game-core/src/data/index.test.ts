@@ -426,3 +426,52 @@ describe('边界与异常输入', () => {
     expect(tables.goods['no.such.good']).toBeUndefined();
   });
 });
+
+describe('E6/P11：掉落门禁与占位物品', () => {
+  it('任何掉落表都不再产装备（无 `type:equip` 条目）', () => {
+    const offenders: string[] = [];
+    const check = (owner: string, loots: unknown): void => {
+      if (!Array.isArray(loots)) return;
+      loots.forEach((entry, index) => {
+        if (entry && typeof entry === 'object' && (entry as { type?: string }).type === 'equip') {
+          offenders.push(`${owner}[${index}]`);
+        }
+      });
+    };
+    for (const [key, enemy] of Object.entries(tables.enemies)) check(`enemy:${key}`, enemy.loots);
+    for (const [key, map] of Object.entries(tables.maps)) check(`map:${key}`, map.loots);
+    for (const [key, good] of Object.entries(tables.goods)) check(`good:${key}`, good.loots);
+    expect(offenders).toEqual([]);
+  });
+
+  it('12 通货 + 12 精华占位物品已登记，且为可堆叠 material', () => {
+    for (let i = 1; i <= 12; i += 1) {
+      const n = String(i).padStart(2, '0');
+      for (const key of [`currency.${n}`, `essence.${n}`]) {
+        const good = tables.goods[key];
+        expect(good, key).toBeDefined();
+        expect(good?.type, key).toBe('material');
+        expect(good?.stack, key).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('占位物品已接入掉落池，且 count 是数组（标量会算出 0）', () => {
+    const allLoots = [
+      ...Object.values(tables.enemies).flatMap((enemy) => enemy.loots ?? []),
+      ...Object.values(tables.maps).flatMap((map) => map.loots ?? []),
+    ];
+    const currencyEntry = allLoots.find(
+      (entry) => typeof (entry as { key?: string }).key === 'string' &&
+        (entry as { key: string }).key.startsWith('currency.'),
+    );
+    expect(currencyEntry).toBeDefined();
+    expect(Array.isArray((currencyEntry as { count?: unknown }).count)).toBe(true);
+  });
+
+  it('0 级城镇地图存在（P8 底材商店入口骨架）', () => {
+    const town = tables.maps['town'];
+    expect(town).toBeDefined();
+    expect(town?.level).toBe(0);
+  });
+});

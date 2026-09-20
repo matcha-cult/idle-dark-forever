@@ -548,23 +548,7 @@ define(tables, 'maps', 'year2018.dungeon', {
         'year2018.yearBeastTrousers-2',
         'year2018.yearBeastHeart',
       ],
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 200,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 300,
-    },
-    {
-      type: 'equip',
-      rate: 1,
-      mfRate: 500,
-    },
-  ],
+    },  ],
 });
 
 }

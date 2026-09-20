@@ -36,6 +36,20 @@ export function exchangeOptions(): ExchangeOption[] {
   ];
 }
 
+/**
+ * 底材兑换目录（**P8 骨架**，数据驱动）。
+ *
+ * 从 `tables.goods` 里筛出全部 `type:'equip'` 底材（0 级城镇商店要卖的「底子」），
+ * 价格取底材自身的 `price`。真正的购买 Action（扣金币 → 入包）与底材目录细化**下期开工** ——
+ * 本期只保证「商店能开 + 商品表可数据驱动」，故本函数不改 `exchangeOptions` 的既有语义。
+ */
+export function baseCatalogOf(tables: DataTables): ExchangeOption[] {
+  return Object.keys(tables.goods)
+    .filter((key) => tables.goods[key]?.type === 'equip')
+    .sort()
+    .map((key) => ({ from: 'gold', to: key, cost: tables.goods[key]?.price ?? 0 }));
+}
+
 /** 下一个角色栏位价格。 */
 export function playerSlotPrice(count: number): number {
   const n = Number.isFinite(count) && count > 0 ? Math.trunc(count) : 1;

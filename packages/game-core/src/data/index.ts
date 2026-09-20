@@ -36,7 +36,6 @@ import { registerNightmare } from './packages/nightmare.js';
 import { registerYear2018 } from './packages/year2018.js';
 
 export { registerNightmare, registerYear2018 };
-
 /**
  * 基础表（未叠加 `data/packages/*`）。
  *
@@ -76,5 +75,27 @@ export function createDefaultTables(): DataTables {
   const tables: MutableDataTables = cloneTables(baseTables);
   registerNightmare(tables);
   registerYear2018(tables);
+  registerPlaceholders(tables);
   return tables;
+}
+
+/**
+ * E6/P8：把 **12 通货 + 12 精华**占位物品接入掉落池（`{ key, count:[n,n], rate }` 形态）。
+ *
+ * ⚠️ `battle-world.loots` 对 `count` **只认数组**：写标量会算出 0（§3.2 陷阱），故一律 `[n,n]`。
+ * 本期只保证「可掉落 + 可堆叠」，具体分布下期（P5/P8）。
+ */
+export function registerPlaceholders(tables: MutableDataTables): void {
+  const currencies = Object.keys(tables.goods).filter((key) => key.startsWith('currency.'));
+  const essences = Object.keys(tables.goods).filter((key) => key.startsWith('essence.'));
+  for (const enemy of Object.values(tables.enemies)) {
+    if (!enemy.loots) continue;
+    for (const key of currencies) enemy.loots.push({ key, count: [1, 1], rate: 0.05 });
+    for (const key of essences) enemy.loots.push({ key, count: [1, 1], rate: 0.01 });
+  }
+  for (const map of Object.values(tables.maps)) {
+    if (!map.loots) continue;
+    for (const key of currencies) map.loots.push({ key, count: [1, 2], rate: 0.2 });
+    for (const key of essences) map.loots.push({ key, count: [1, 1], rate: 0.05 });
+  }
 }
