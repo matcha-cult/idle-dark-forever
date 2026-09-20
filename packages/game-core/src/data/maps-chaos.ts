@@ -22,9 +22,10 @@ import { chaosLevelOfTier, chaosMapKeyOfTier } from '../rules/chaos.js';
 const QUALITY: number[] = [90, 9, 1];
 const WARMUP = 1000;
 const DELAY = 5000;
-const MAX = 3;
+/** 同屏最多 4 只怪物（含守关 BOSS 与召唤物；达到上限即暂停自然刷新）。 */
+const MAX = 4;
 /** 一波的刷怪总量（W4）：每 20 波出一次守关 BOSS。 */
-const TOTAL = 8;
+const TOTAL = 4;
 
 /** 造一条加权刷怪条目（仅数据，无副作用）。 */
 function spawn(types: Record<string, number>): MapEntry['monsters'] {

@@ -728,6 +728,12 @@ __IDLE_DARK__                   // 根 store（临时排查）
   `world.10..13` 都接 `world.9`。`checkRequirement` 中 `bossKilled` 缺失即 fail-closed。
 - **波次**（`combat/spawner.ts`）：1 波 = 该图 `monsters` 全部条目刷满 `config.total` 且清空；
   `Born.reset()` 单调推进，`EnemyBorn.wave` 随 `dumpState` 往返（离线/读档不丢波数）。
+  新地图统一 **`total = 4`（每波 4 只）、`max = 4`（同屏上限 4 只）**。
+- **同屏上限口径（W12）**：`Born` 的自然刷新闸门是 **`Born.aliveMonsterCount()`（全图存活敌对怪总数，
+  含守关 BOSS 与 BOSS 召唤物；`camp` = `enemy`/`neutral`）**，**不是** `this.count`。
+  达到 `max` 即暂停自然刷新，但**保持定时轮询**，有怪死亡后自动恢复（绝不永久停刷）。
+  **BOSS 召唤物可以把总数推过 4**（设计允许）；玩家/联军召唤物（`player`/`alien`）**不计入**，
+  否则玩家召唤会把刷怪卡死。波次完成判据仍只看 `total`/`count`（召唤物不参与计数）。
 - **波次下发 + 持久化**：`WorldTickDto` / `WorldSnapshotDto` 带可选 `wave` / `bossEvery`
   （`WorldService.emitTick` / `snapshotOf`；`mergeWorldTick` 取**最新**帧，不得回退波数），
   前端 `world-store` 暴露 `wave` / `bossEvery` / `wavesToBoss` / `bossWave` 并显示在 `BattlePanel`。

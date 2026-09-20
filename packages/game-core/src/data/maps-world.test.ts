@@ -78,12 +78,13 @@ describe('maps-world 新地图种子', () => {
       expect(monsters.length, key).toBeLessThanOrEqual(2);
       for (const spawn of monsters) {
         // W4：一波 = `total` 刷满且全部清空；必须是正的有限整数。
+        // W12：每波 4 只、同屏上限 4 只（含 BOSS 与召唤物）。
         expect(Number.isInteger(spawn.total), `${key} total 应为整数`).toBe(true);
-        expect(spawn.total, `${key} total 应为正数`).toBeGreaterThan(0);
+        expect(spawn.total, `${key} total`).toBe(4);
+        expect(spawn.max, `${key} max`).toBe(4);
         expect(spawn.randomPosition, key).toBe(true);
         expect(spawn.quality, key).toEqual([90, 9, 1]);
         expect(Number.isFinite(spawn.delay), key).toBe(true);
-        expect(Number.isFinite(spawn.max), key).toBe(true);
         expect(Number.isFinite(spawn.warmup), key).toBe(true);
         expect(spawn.type, `${key} 应使用加权 types 而不是单 type`).toBeUndefined();
         const types = spawn.types ?? {};

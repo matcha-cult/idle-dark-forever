@@ -17,7 +17,7 @@ import { hashString, makePlayer, makeTestWorld, type RecordingSink } from './tes
 const GOLDEN_SEED = 20240919;
 const GOLDEN_MS = 30000;
 const GOLDEN_EVENT_HASH = 0x6f3847b3; // = 1865959347，W3 重录：exp 事件删除 `peak` 字段（Q8 删巅峰）；W4 不变
-const GOLDEN_STATE_HASH = 0xbe52b60e; // = 3193091598，W6 重录：world.dumpState 删除 pendingMaps/endlessLevel（事件流不变）
+const GOLDEN_STATE_HASH = 0xf7d493b3; // = 4157903795，W12 重录：同屏上限改「全图存活敌对怪总数」（Born 被挡住时保持轮询，dumpState 的 timer 剩余时间随之变化）；事件流不变
 const GOLDEN_EVENT_COUNT = 27; // 首次运行记录，见交付报告
 
 interface GoldenRun {

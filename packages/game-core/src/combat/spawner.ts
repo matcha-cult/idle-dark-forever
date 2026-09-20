@@ -87,19 +87,34 @@ export class Born {
     }
   }
 
-  testTimer(): void {
-    // 看看 count 是否已经达到，是否要取消 timer。
-    if (this.config.max && this.count >= this.config.max && this.timer) {
-      this.clock.clearTimeout(this.timer);
-      this.timer = null;
+  /**
+   * 本图当前存活的**敌对怪物**数量（W12）。
+   *
+   * 计入：野怪、守关 BOSS、BOSS 的召唤物（`camp` 为 `enemy` / `neutral`）。
+   * 不计入：玩家 / 联军召唤物（`player` / `alien`）、`ghost`（尸体）、`shrine` / `story`。
+   *
+   * ⚠️ 自然刷新的闸门用它而**不是** `this.count`：`count` 只统计本刷怪器刷出的单位，
+   * 无法感知「BOSS 召唤物把总量推过上限」的情况；上限口径是**全图怪物总数（含 BOSS）**。
+   */
+  aliveMonsterCount(): number {
+    let count = 0;
+    for (const unit of this.world.units) {
+      if (!(unit instanceof EnemyUnit)) continue;
+      if (unit.camp === 'enemy' || unit.camp === 'neutral') count += 1;
     }
+    return count;
+  }
+
+  /** 是否已达到本图同时存活上限（达到后**暂停自然刷新**，等有怪死亡再恢复）。 */
+  atMonsterCap(): boolean {
+    const max = this.config.max;
+    return typeof max === 'number' && max > 0 && this.aliveMonsterCount() >= max;
   }
 
   setTimer(startup: boolean | number = false): void {
-    if (
-      (this.config.max && this.count >= this.config.max) ||
-      (this.config.total && this.total >= this.config.total)
-    ) {
+    // 只按「本波是否刷满」判定是否还要继续：是否达到存活上限由 `onTimer` 再判
+    //（这样被上限挡住时仍会周期复查，怪死后自动恢复刷新，不会永久停刷）。
+    if (this.config.total && this.total >= this.config.total) {
       return;
     }
     if (typeof startup === 'number') {
@@ -152,10 +167,13 @@ export class Born {
 
   onTimer = (): void => {
     this.timer = null;
-    if (
-      (this.config.max && this.count >= this.config.max) ||
-      (this.config.total && this.total >= this.config.total)
-    ) {
+    if (this.config.total && this.total >= this.config.total) {
+      return;
+    }
+    // W12：全图怪物总数（含 BOSS 与召唤物）达到上限 → 暂停自然刷新。
+    // 保持定时轮询，因此召唤物 / 杂兵死亡后会自动恢复刷新，不会永久停刷。
+    if (this.atMonsterCap()) {
+      this.setTimer();
       return;
     }
 

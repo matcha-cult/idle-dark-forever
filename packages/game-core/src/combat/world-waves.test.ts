@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { enemyData, makePlayer, makeTables, makeTestWorld, mapData } from './test-support.js';
 import { EnemyUnit } from './enemy-unit.js';
 import { EnemyBorn, WORLD_BOSS_WAVE_INTERVAL } from './spawner.js';
+import { createDefaultTables } from '../data/index.js';
 
 const WORLD_MAP = 'world.5';
 const WORLD_MAP_LEVEL = 35;
@@ -241,5 +242,88 @@ describe('W4 怪物等级规则', () => {
     expect(unit.level).toBe(1 + 2 * 4); // dummy 数据等级 1 + quality 2 ×4
     unit.levelOverride = Number.POSITIVE_INFINITY;
     expect(unit.level).toBe(9);
+  });
+});
+
+describe('W12 同屏上限（含守关 BOSS 与召唤物）', () => {
+  /** 自定义波次配置（`total` > `max`，用来观察「被上限挡住」的行为）。 */
+  function capSetup(total: number, max: number) {
+    const tables = makeTables();
+    tables.maps = {
+      home: mapData({ key: 'home', name: 'Home' }),
+      [WORLD_MAP]: mapData({
+        key: WORLD_MAP,
+        name: 'Cap',
+        level: WORLD_MAP_LEVEL,
+        monsters: [{ type: 'dummy', delay: 10, max, warmup: 0, total, quality: [100] }],
+      }),
+    };
+    const player = makePlayer();
+    const t = makeTestWorld({ map: WORLD_MAP, tables, seed: 3, player });
+    t.world.addPlayer(player);
+    t.world.onMapChanged();
+    const born = (t.world.enemyBorn as EnemyBorn).borns![0]!;
+    return { t, born };
+  }
+
+  const hostileCount = (t: { world: { units: unknown[] } }): number =>
+    t.world.units.filter(
+      (u): u is EnemyUnit =>
+        u instanceof EnemyUnit && (u.camp === 'enemy' || u.camp === 'neutral'),
+    ).length;
+
+  it('自然刷新封顶：同屏敌对怪不超过 max', () => {
+    const { t, born } = capSetup(10, 4);
+    t.clock.advanceBy(5000);
+    expect(born.total).toBe(4);
+    expect(hostileCount(t)).toBe(4);
+    // 再快进也不会超过上限。
+    t.clock.advanceBy(20000);
+    expect(hostileCount(t)).toBe(4);
+    expect(born.total).toBe(4);
+  });
+
+  it('召唤物把总数推过上限 → 暂停自然刷新；降到上限以下后恢复', () => {
+    const { t, born } = capSetup(10, 4);
+    t.clock.advanceBy(5000);
+    expect(born.total).toBe(4);
+
+    // 模拟守关 BOSS 的召唤物（`borner=null`，camp 仍是 enemy）。
+    t.world.addEnemy('dummy', null, 0);
+    expect(hostileCount(t)).toBe(5);
+
+    // 被上限挡住：不再自然刷新。
+    t.clock.advanceBy(20000);
+    expect(born.total, '超过上限时不得继续自然刷新').toBe(4);
+    expect(hostileCount(t)).toBe(5);
+
+    // 死掉两只 → 总数 3 < 4 → 恢复刷新。
+    const all = t.world.units.filter((u): u is EnemyUnit => u instanceof EnemyUnit);
+    all[0]!.kill(false);
+    all[1]!.kill(false);
+    t.clock.advanceBy(2000);
+    expect(born.total, '低于上限后恢复自然刷新').toBeGreaterThan(4);
+  });
+
+  it('玩家 / 联军召唤物不占敌对名额（否则会卡死刷怪）', () => {
+    const { t } = capSetup(10, 4);
+    const ally = t.world.addEnemy('dummy', null, 0);
+    ally.camp = 'player';
+    t.clock.advanceBy(5000);
+    expect(hostileCount(t), '敌对仍能刷满 4 只').toBe(4);
+  });
+
+  it('默认数据（world/chaos 图）每波 4 只、同屏上限 4 只', () => {
+    const real = createDefaultTables();
+    const combat = Object.entries(real.maps).filter(
+      ([key, map]) => (key.startsWith('world.') || key.startsWith('chaos.')) && (map.monsters ?? []).length > 0,
+    );
+    expect(combat.length).toBeGreaterThanOrEqual(29);
+    for (const [key, map] of combat) {
+      for (const spawn of map.monsters ?? []) {
+        expect(spawn.total, `${key} total`).toBe(4);
+        expect(spawn.max, `${key} max`).toBe(4);
+      }
+    }
   });
 });

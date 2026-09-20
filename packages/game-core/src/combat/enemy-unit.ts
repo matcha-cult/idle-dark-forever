@@ -141,7 +141,8 @@ export class EnemyUnit extends Unit {
 
       if (this.borner) {
         this.borner.count++;
-        this.borner.testTimer();
+        // W12：不再在这里 `testTimer()` 取消定时器 —— 上限改由 `Born.onTimer` 按
+        // 「全图存活敌对怪总数」判定，且被挡住时需**保持轮询**（召唤物死亡后自动恢复）。
       }
       if (savedState.buffs) {
         for (const buff of savedState.buffs) {
