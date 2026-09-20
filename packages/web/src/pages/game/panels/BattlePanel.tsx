@@ -49,7 +49,7 @@ export function formatBattleEvent(
     case 'buff':
       return { text: `${nameOf(event.unitId)} ${event.on ? '获得' : '失去'} ${event.name}`, level: 'system' };
     case 'exp':
-      return { text: `经验 +${formatAmount(event.amount)}${event.peak ? '（巅峰）' : ''} → Lv.${event.level}`, level: 'loot' };
+      return { text: `经验 +${formatAmount(event.amount)} → Lv.${event.level}`, level: 'loot' };
     default:
       return { text: event.text, level: 'info' };
   }

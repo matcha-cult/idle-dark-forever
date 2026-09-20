@@ -44,7 +44,6 @@ const PLAYER_META: PlayerMetaDto = {
   currentCareer: 'warrior',
   currentCareerName: '战士',
   level: 5,
-  peakLevel: 0,
   createdAt: 1,
   inBattle: false,
 };
@@ -55,7 +54,6 @@ const PLAYER_STATE: PlayerStateDto = {
   role: 'Eyer',
   roleName: '艾尔',
   level: 5,
-  peakLevel: 0,
   exp: 10,
   maxExp: 100,
   gold: 1234,

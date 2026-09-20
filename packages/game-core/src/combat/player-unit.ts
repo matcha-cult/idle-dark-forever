@@ -74,11 +74,8 @@ export interface PlayerLike {
   key?: number | null;
   name: string;
   level: number;
-  peakLevel: number;
   exp: number;
   maxExp: number;
-  peakExp: number;
-  maxPeakExp: number;
   maxLevel: number;
   roleData: RoleLike;
   careerData: CareerLike;
@@ -350,7 +347,7 @@ export class PlayerUnit extends Unit {
     let ret = 0;
     if (this.player) {
       ret += this.player.roleData.attrBase[key];
-      ret += this.player.careerData.attrGrow[key] * (this.player.level + this.player.peakLevel);
+      ret += this.player.careerData.attrGrow[key] * this.player.level;
     }
     ret = this.runAttrHooks(ret, key);
     return ret;
@@ -486,23 +483,11 @@ export class PlayerUnit extends Unit {
   }
 
   get exp(): number {
-    if (!this.player) {
-      return 0;
-    }
-    if (this.player.level >= this.player.maxLevel) {
-      return this.player.peakExp;
-    }
-    return this.player.exp;
+    return this.player?.exp ?? 0;
   }
 
   get maxExp(): number {
-    if (!this.player) {
-      return 0;
-    }
-    if (this.player.level >= this.player.maxLevel) {
-      return this.player.maxPeakExp;
-    }
-    return this.player.maxExp;
+    return this.player?.maxExp ?? 0;
   }
 
   // ────────────────────────────── 战斗数值 ──────────────────────────────
@@ -792,13 +777,13 @@ export class PlayerUnit extends Unit {
   }
 
   override get mf(): number {
-    let ret = 1 + (this.player?.peakLevel ?? 0) * 0.03;
+    let ret = 1;
     ret = this.runAttrHooks(ret, 'mf');
     return ret;
   }
 
   override get gf(): number {
-    let ret = 1 + (this.player?.peakLevel ?? 0) * 0.03;
+    let ret = 1;
     ret = this.runAttrHooks(ret, 'gf');
     return ret;
   }
@@ -840,22 +825,18 @@ export class PlayerUnit extends Unit {
     }
     value *= this.runAttrHooks(1, 'expInc');
     value *= this.runAttrHooks(1, 'expMul');
-    this.world.sink.exp({ amount: value, level: player.level, peak: false });
+    this.world.sink.exp({ amount: value, level: player.level });
 
+    // 满级后经验溢出直接丢弃（Q8：等级上限 100，无巅峰）。
     if (player.level >= player.maxLevel) {
-      player.peakExp += value;
-      if (player.peakExp >= player.maxPeakExp) {
-        this.levelUpPeak();
-      }
-    } else {
-      player.exp += value;
-      if (player.exp >= player.maxExp) {
-        this.levelUp();
-        if (player.level >= player.maxLevel) {
-          // 经验累加到巅峰等级上
-          player.peakExp += player.exp;
-          player.exp = 0;
-        }
+      return;
+    }
+    player.exp += value;
+    if (player.exp >= player.maxExp) {
+      this.levelUp();
+      if (player.level >= player.maxLevel) {
+        // 升级到满级时把溢出清空，避免存档里留下无意义的经验条。
+        player.exp = 0;
       }
     }
   }
@@ -865,19 +846,13 @@ export class PlayerUnit extends Unit {
     if (!player) {
       return;
     }
+    if (player.level >= player.maxLevel) {
+      return;
+    }
     player.exp -= player.maxExp;
     player.level += 1;
     // 被动是否生效取决于等级 → 显式重绑（替代 autorun）。
     this.rebindPassiveHooks();
-  }
-
-  levelUpPeak(): void {
-    const player = this.player;
-    if (!player) {
-      return;
-    }
-    player.peakExp -= player.maxPeakExp;
-    player.peakLevel += 1;
   }
 
   reborn = (): void => {

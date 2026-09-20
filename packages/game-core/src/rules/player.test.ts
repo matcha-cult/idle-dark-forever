@@ -54,10 +54,7 @@ describe('Player 构造与访问器', () => {
     expect(player.level).toBe(0);
     expect(player.maxLevel).toBe(0);
     expect(player.exp).toBe(0);
-    expect(player.peakLevel).toBe(0);
-    expect(player.peakExp).toBe(0);
     expect(player.maxExp).toBe(0);
-    expect(player.maxPeakExp).toBe(0);
     expect(player.equipments).toBeUndefined();
 
     // setter 不应抛错（原版会 TypeError）
@@ -65,8 +62,6 @@ describe('Player 构造与访问器', () => {
       player.level = 5;
       player.maxLevel = 70;
       player.exp = 3;
-      player.peakLevel = 1;
-      player.peakExp = 2;
     }).not.toThrow();
     expect(player.level).toBe(0);
   });

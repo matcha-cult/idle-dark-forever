@@ -138,8 +138,8 @@ const first = await action(ws, 130, 3, { map: 'home', opId });
 const second = await action(ws, 130, 3, { map: 'home', opId });
 check('map.enter 同 opId 重放仍成功（幂等）', first?.success === true && second?.success === true);
 
-// ---- 前置未满足 → MAP_LOCKED（silver.warrior 需要 level 60） ----
-const locked = await action(ws, 130, 3, { map: 'silver.warrior' });
+// ---- 前置未满足 → MAP_LOCKED（world.9 需要 level 75） ----
+const locked = await action(ws, 130, 3, { map: 'world.9' });
 check('map.enter 条件未满足 → MAP_LOCKED', locked?.success === false && locked?.data?.code === 'MAP_LOCKED', JSON.stringify(locked?.data ?? locked));
 
 // ---- 未知地图 → MAP_LOCKED ----

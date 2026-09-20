@@ -17,9 +17,12 @@ import { PlayerContextService } from '../../../src/modules/logic/shared/player-c
 import { InProcessEventBus } from '../../../src/modules/logic/shared/event-bus.js';
 import { WorldService } from '../../../src/modules/logic/world/world.service.js';
 import { FakeDatabase } from '../../helpers/fake-database.js';
+import { addTestDungeons } from '../../helpers/test-dungeons.js';
 
 const tables: DataTables = createDefaultTables();
-const DUNGEON = 'town.cave2'; // 票键 = 'town.cave2'
+// W3：旧 town.* 秘境图已删除；单测自备等价秘境图（W6 一并移除）。
+addTestDungeons(tables);
+const DUNGEON = 'test.cave'; // 票键 = 'test.cave'
 
 describe('秘境 run 生命周期（M5/M7）', () => {
   let db: FakeDatabase;
@@ -55,7 +58,7 @@ describe('秘境 run 生命周期（M5/M7）', () => {
   async function giveAccess(): Promise<void> {
     const player = await context.load(1, 'c1');
     if (!player) throw new Error('player missing');
-    player.dungeonTickets.set('town.cave2', 2);
+    player.dungeonTickets.set('test.cave', 2);
     context.markDirty(1, 'c1');
     context.markAccountDirty(1);
     await context.flush(1, 'c1');
@@ -64,13 +67,13 @@ describe('秘境 run 生命周期（M5/M7）', () => {
   it('进图：扣票恰好一次并建档（runId / mapKey / enemyBorn）', async () => {
     await giveAccess();
     await service.start(1, 'c1');
-    const before = context.peek(1, 'c1')?.countTicket('town.cave2') ?? 0;
+    const before = context.peek(1, 'c1')?.countTicket('test.cave') ?? 0;
 
     const result = await service.enterMap(1, 'c1', DUNGEON, 'op-d1');
     expect(result.success).toBe(true);
 
     const player = context.peek(1, 'c1');
-    expect(player?.countTicket('town.cave2')).toBe(before - 1); // 唯一扣费点：进图
+    expect(player?.countTicket('test.cave')).toBe(before - 1); // 唯一扣费点：进图
     const extras = await context.extrasOf(1);
     const run = extras.dungeonRuns['c1'];
     expect(run?.mapKey).toBe(DUNGEON);
@@ -82,7 +85,7 @@ describe('秘境 run 生命周期（M5/M7）', () => {
     await giveAccess();
     await service.start(1, 'c1');
     await service.enterMap(1, 'c1', DUNGEON, 'op-d2');
-    const afterEnter = context.peek(1, 'c1')?.countTicket('town.cave2') ?? 0;
+    const afterEnter = context.peek(1, 'c1')?.countTicket('test.cave') ?? 0;
     const runId = (await context.extrasOf(1)).dungeonRuns['c1']?.runId;
 
     await service.stop(1, 'c1');
@@ -92,7 +95,7 @@ describe('秘境 run 生命周期（M5/M7）', () => {
 
     expect(resumed.world.map).toBe(DUNGEON);
     expect((resumed.world.enemyBorn as DungeonState).ticketPaid).toBe(true);
-    expect(context.peek(1, 'c1')?.countTicket('town.cave2')).toBe(afterEnter); // 恢复不扣票
+    expect(context.peek(1, 'c1')?.countTicket('test.cave')).toBe(afterEnter); // 恢复不扣票
     expect((await context.extrasOf(1)).dungeonRuns['c1']?.runId).toBe(runId);
   });
 

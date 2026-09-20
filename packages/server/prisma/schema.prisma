@@ -62,7 +62,7 @@ model account_state {
 
 /// 角色。`state` 是 `game-core` `Player.toJSON()` 的整档 JSONB
 /// （含背包 / 装备 / 职业进度 / 技能等级 / 钥石 / 拾取规则等）。
-/// 抽出的 `role` / `career` / `level` / `peak_level` 只用于**列表页与排序**，
+/// 抽出的 `role` / `career` / `level` 只用于**列表页与排序**，
 /// 权威数值一律以 `state` 为准（它们是 `state` 的投影，落库时同步刷新）。
 model characters {
   id             String   @id @db.Text
@@ -71,7 +71,6 @@ model characters {
   role           String   @default("warrior") @db.Text
   career         String   @default("warrior") @db.Text
   level          Int      @default(1)
-  peak_level     Int      @default(0)
   state          Json     @default("{}") @db.JsonB
   created_at     DateTime @default(now()) @db.Timestamptz(6)
   last_settle_at DateTime @default(now()) @db.Timestamptz(6)

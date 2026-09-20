@@ -24,7 +24,7 @@ import { enemies } from './enemies.js';
 import { enhances } from './enhances.js';
 import { goods } from './goods.js';
 import { legends } from './legends.js';
-import { maps } from './maps.js';
+import { maps } from './maps-world.js';
 import { medicines } from './medicines.js';
 import { passives } from './passives.js';
 import { roles } from './roles.js';

@@ -43,10 +43,6 @@ export class PlayerStore {
     return this.state?.level ?? 0;
   }
 
-  get peakLevel(): number {
-    return this.state?.peakLevel ?? 0;
-  }
-
   get gold(): number {
     return this.state?.gold ?? 0;
   }

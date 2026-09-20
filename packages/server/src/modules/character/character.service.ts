@@ -9,7 +9,7 @@
  *
  * 表（scripts/init-db.mjs）：
  *   characters(id text pk, user_id bigint, name text, role text, career text,
- *              level int, peak_level int, state jsonb, created_at timestamptz, last_settle_at timestamptz)
+ *              level int, state jsonb, created_at timestamptz, last_settle_at timestamptz)
  *   account_state(user_id bigint pk, diamonds int, player_slot_count int, highest_endless_level int, data jsonb, …)
  */
 import { randomUUID } from 'node:crypto';
@@ -39,7 +39,6 @@ interface CharacterRow {
   role: string;
   career: string;
   level: number;
-  peak_level: number;
   created_at: Date | string;
 }
 
@@ -72,7 +71,7 @@ export class CharacterService {
   /** 角色列表（轻量元数据，用于选择界面）。 */
   async list(userId: number): Promise<ActionResult<PlayerMetaDto[]>> {
     const rows = await this.database.query<CharacterRow>(
-      `SELECT id, user_id, name, role, career, level, peak_level, created_at
+      `SELECT id, user_id, name, role, career, level, created_at
          FROM characters
         WHERE user_id = $1
         ORDER BY created_at ASC, id ASC`,
@@ -131,8 +130,8 @@ export class CharacterService {
       // 存档里的 role 优先（`adopt` 已经从 state 里读回真实 role）。
       const career = player.currentCareer ?? '';
       await this.database.query(
-        'UPDATE characters SET role = $1, career = $2, level = $3, peak_level = $4 WHERE id = $5 AND user_id = $6',
-        [player.role, career, finiteInt(player.level, 1), finiteInt(player.peakLevel, 0), id, userId],
+        'UPDATE characters SET role = $1, career = $2, level = $3 WHERE id = $4 AND user_id = $5',
+        [player.role, career, finiteInt(player.level, 1), id, userId],
       );
       return ok(this.metaOfPlayer(player, userId));
     } catch (error) {
@@ -163,7 +162,6 @@ export class CharacterService {
       currentCareer: career ?? '',
       currentCareerName: careerDisplayName(this.tables, career),
       level: finiteInt(player.level, 1),
-      peakLevel: finiteInt(player.peakLevel, 0),
       createdAt: finiteInt(player.timestamp, 0),
       inBattle: this.battle.isInBattle(userId, player.key),
     };
@@ -180,7 +178,6 @@ export class CharacterService {
       currentCareer: row.career,
       currentCareerName: careerDisplayName(this.tables, row.career),
       level: finiteInt(row.level, 1),
-      peakLevel: finiteInt(row.peak_level, 0),
       createdAt: toEpochMs(row.created_at),
       inBattle: this.battle.isInBattle(userId, row.id),
     };
@@ -229,9 +226,9 @@ export class CharacterService {
     career: string,
   ): Promise<ActionResult<PlayerMetaDto> | null> {
     const inserted = await this.database.query<CharacterRow>(
-      `INSERT INTO characters (id, user_id, name, role, career, level, peak_level, state, last_settle_at)
-       VALUES ($1, $2, $3, $4, $5, 1, 0, '{}'::jsonb, CURRENT_TIMESTAMP)
-       RETURNING id, user_id, name, role, career, level, peak_level, created_at`,
+      `INSERT INTO characters (id, user_id, name, role, career, level, state, last_settle_at)
+       VALUES ($1, $2, $3, $4, $5, 1, '{}'::jsonb, CURRENT_TIMESTAMP)
+       RETURNING id, user_id, name, role, career, level, created_at`,
       [id, userId, name, role, career],
     );
     if (!inserted.rows[0]) return fail(BusinessErrorCode.INTERNAL, '角色创建失败');

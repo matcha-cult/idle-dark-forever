@@ -45,9 +45,14 @@ export function mapListDtoOf(
     dto.unlocked = unlocked;
     out.push(dto);
   }
-  // 可进入的排前面：数据表里有 47 张图，早期全部平铺时玩家很难在 45 张锁定的卡片里
-  // 找到那唯一一张能进的（这是实际被反馈过的问题）。同组内保持数据表顺序（地图推进是有序的）。
-  return out.sort((a, b) => Number(b.unlocked === true) - Number(a.unlocked === true));
+  // 按等级段排序：`level` 升序，同级再按 `key` 升序（W3）。
+  // 旧的「已解锁排前面」在等级段模型下会把高段图打乱顺序（0/5/15/… 的推进链必须是列表顺序）。
+  // `unlocked` / `lockedReason` 语义不变，客户端仍按这两个字段渲染。
+  return out.sort((a, b) => {
+    if (a.level !== b.level) return a.level - b.level;
+    if (a.key === b.key) return 0;
+    return a.key < b.key ? -1 : 1;
+  });
 }
 
 function safeTicketCount(player: Player, group: string): number {

@@ -209,9 +209,9 @@ try {
     JSON.stringify({ count: rereadRules.length, minLevel: reread.action?.data?.minLevel }).slice(0, 160),
   );
 
-  // 5) 进 town.street（有小怪）
-  const enter = await call(ws, CMD.world, SUB.world.enterMap, { map: 'town.street', characterId: characterKey });
-  check('world.enterMap town.street 成功', enter.ok, JSON.stringify(enter.action).slice(0, 200));
+  // 5) 进 world.1（有小怪）
+  const enter = await call(ws, CMD.world, SUB.world.enterMap, { map: 'world.1', characterId: characterKey });
+  check('world.enterMap world.1 成功', enter.ok, JSON.stringify(enter.action).slice(0, 200));
 
   // 6) 等掉落
   const loots = await waitForLoot(WINDOW_MS);

@@ -24,24 +24,36 @@ export interface CareerInfoJson {
   type: string;
   exp: number;
   level: number;
-  peakExp: number;
-  peakLevel: number;
   maxLevel: number;
   equipments: Record<EquipSlot, InventorySlotJson>;
   selectedSkills: string[];
   selectedEnhances: string[];
 }
 
-/** 原版 `player.js:175-253`：单职业的等级 / 巅峰 / 装备 / 已选技能。 */
+/** 默认角色等级上限（Q8：60 → 100）。各职业表可用 `CareerData.maxLevel` 覆写。 */
+export const DEFAULT_MAX_LEVEL = 100;
+
+/** 职业表里配置的等级上限（缺失 / 非法 → {@link DEFAULT_MAX_LEVEL}）。 */
+function careerMaxLevelOf(tables: DataTables, type: string): number {
+  const value = tables.careers[type]?.maxLevel;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.trunc(value)
+    : DEFAULT_MAX_LEVEL;
+}
+
+/** 存档里的 `maxLevel` 只在是**有限正数**时生效；否则回落职业表 / 默认值。 */
+function savedMaxLevelOf(raw: unknown, fallback: number): number {
+  return typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? Math.trunc(raw) : fallback;
+}
+
+/** 原版 `player.js:175-253`：单职业的等级 / 装备 / 已选技能。 */
 export class CareerInfo {
   readonly tables: DataTables;
   type: string;
   /** 经验值。 */
   exp = 0;
   level = 1;
-  peakExp = 0;
-  peakLevel = 0;
-  maxLevel = 60;
+  maxLevel: number;
   equipments: Record<EquipSlot, InventorySlot>;
   selectedSkills: string[] = [];
   selectedEnhances: string[] = [];
@@ -49,6 +61,7 @@ export class CareerInfo {
   constructor(tables: DataTables, type = '') {
     this.tables = tables;
     this.type = type;
+    this.maxLevel = careerMaxLevelOf(tables, type);
     this.equipments = Object.fromEntries(
       EQUIP_SLOTS.map((slot) => [slot, new InventorySlot(tables, 'equip')]),
     ) as Record<EquipSlot, InventorySlot>;
@@ -68,25 +81,13 @@ export class CareerInfo {
     return career.expFormula.map((v, i) => v * this.level ** i).reduce((a, b) => a + b, 0);
   }
 
-  /** 原版 `maxPeakExp`：把 `peakLevel + 60` 代回同一条多项式。 */
-  get maxPeakExp(): number {
-    const career = this.tables.careers[this.type];
-    if (!career) {
-      return 10000000;
-    }
-    const level = this.peakLevel + 60;
-    return career.expFormula.map((v, i) => v * level ** i).reduce((a, b) => a + b, 0);
-  }
-
   /** 原版 `CareerInfo.fromJS`。 */
   fromJSON(value: unknown): this {
     const raw = asRecord(value);
     this.exp = asNumber(raw.exp, 0);
     // 原版是 `v.level || 1` / `v.maxLevel || 60`：0 也要落到默认值
     this.level = asTruthyNumber(raw.level, 1);
-    this.peakExp = asNumber(raw.peakExp, 0);
-    this.peakLevel = asNumber(raw.peakLevel, 0);
-    this.maxLevel = asTruthyNumber(raw.maxLevel, 60);
+    this.maxLevel = savedMaxLevelOf(raw.maxLevel, careerMaxLevelOf(this.tables, this.type));
 
     if (raw.equipments) {
       const equipments = asRecord(raw.equipments);
@@ -114,8 +115,6 @@ export class CareerInfo {
       type: this.type,
       exp: this.exp,
       level: this.level,
-      peakExp: this.peakExp,
-      peakLevel: this.peakLevel,
       maxLevel: this.maxLevel,
       equipments: Object.fromEntries(
         EQUIP_SLOTS.map((slot) => [slot, this.equipments[slot].toJSON()]),

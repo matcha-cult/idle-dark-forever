@@ -15,11 +15,14 @@ import {
   offlineExtrapolationMs,
 } from '../../../src/modules/logic/idle/idle-logic.service.js';
 import { FakeDatabase } from '../../helpers/fake-database.js';
+import { addTestDungeons } from '../../helpers/test-dungeons.js';
 
 const tables: DataTables = createDefaultTables();
+// W3：旧 town.* 秘境图已删除；单测自备等价秘境图（W6 一并移除）。
+addTestDungeons(tables);
 const HOUR = 3600_000;
-const DUNGEON = 'town.cave2'; // 1 个相位，outside 见数据表
-const OPEN = 'town.valley'; // 开放世界战斗图
+const DUNGEON = 'test.cave'; // 1 个相位，outside = world.1
+const OPEN = 'world.2'; // 开放世界战斗图
 
 describe('IdleService · R5-b 离线队列顺序模拟', () => {
   let db: FakeDatabase;
@@ -90,8 +93,8 @@ describe('IdleService · R5-b 离线队列顺序模拟', () => {
     if (!result.success) return;
 
     const extras = await context.extrasOf(1);
-    // town.cave2.outside = town.cave（非秘境战斗图）→ 秘境打完继续在那里打
-    expect(extras.worldMaps['c1']?.map).toBe('town.cave');
+    // test.cave.outside = world.1（非秘境战斗图）→ 秘境打完继续在那里打
+    expect(extras.worldMaps['c1']?.map).toBe('world.1');
     // 共享预算被用满（秘境清完 + outside 续跑）
     expect(result.data.simulatedMs).toBe(30 * 60 * 1000);
   });

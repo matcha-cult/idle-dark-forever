@@ -114,9 +114,8 @@ export class CareerStore {
   handleNotification(frame: unknown): void {
     const notification = frame as { cmd?: number; subCmd?: number; data?: unknown };
     if (notification.cmd !== CAREER_CMD.cmd || notification.subCmd !== CAREER_CMD.levelup) return;
-    const data = notification.data as { level?: number; peak?: boolean; career?: string } | undefined;
-    const scope = data?.peak === true ? '巅峰等级提升' : '等级提升';
-    this.ctx.toast.info(scope, data?.level === undefined ? undefined : `Lv.${data.level}`);
+    const data = notification.data as { level?: number; career?: string } | undefined;
+    this.ctx.toast.info('等级提升', data?.level === undefined ? undefined : `Lv.${data.level}`);
     void this.load();
     void this.ctx.root().player.load();
   }

@@ -57,8 +57,8 @@ export class RecordingSink implements BattleSink {
   buff(e: { unitId: string; buffKey: string; name: string; on: boolean }): void {
     this.events.push({ kind: 'buff', unitId: e.unitId, buffKey: e.buffKey, name: e.name, on: e.on });
   }
-  exp(e: { amount: number; level: number; peak: boolean }): void {
-    this.events.push({ kind: 'exp', amount: e.amount, level: e.level, peak: e.peak });
+  exp(e: { amount: number; level: number }): void {
+    this.events.push({ kind: 'exp', amount: e.amount, level: e.level });
   }
   general(e: { text: string }): void {
     this.events.push({ kind: 'general', text: e.text });
@@ -332,12 +332,9 @@ export function makePlayer(overrides?: Partial<PlayerLike>): PlayerLike {
     key: 1,
     name: 'Hero',
     level: 1,
-    peakLevel: 0,
     exp: 0,
     maxExp: 100,
-    peakExp: 0,
-    maxPeakExp: 100,
-    maxLevel: 60,
+    maxLevel: 100,
     roleData: { key: 'hero', attrBase: { str: 5, dex: 5, int: 5 }, atk: 10, atkSpeed: 1 },
     careerData: {
       key: 'warrior',

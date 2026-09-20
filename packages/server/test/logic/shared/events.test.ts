@@ -30,7 +30,7 @@ describe('InProcessEventBus', () => {
       userId: 1,
       characterId: 'c1',
       runId: 'r1',
-      mapKey: 'town.cave2',
+      mapKey: 'nightmare.slime',
       endlessLevel: 1,
       reason: 'clear',
     });
@@ -42,7 +42,7 @@ describe('InProcessEventBus', () => {
       userId: 1,
       characterId: 'c1',
       runId: 'r1',
-      mapKey: 'town.cave2',
+      mapKey: 'nightmare.slime',
       endlessLevel: 1,
       reason: 'clear',
     });

@@ -103,14 +103,14 @@ describe('PlayerContextService', () => {
     const extras = await ctx.extrasOf(1);
     extras.challengeQueue['c1'] = [
       { key: 'home', endlessLevel: 0 },
-      { key: 'town.valley', endlessLevel: 2 },
+      { key: 'world.1', endlessLevel: 2 },
     ];
     extras.dungeonCooldowns['c1'] = {
-      'town.cave2': { stacks: 1, lastResetAt: 1_700_000_000_000, lastUsedAt: 1_699_999_000_000 },
+      'nightmare.slime': { stacks: 1, lastResetAt: 1_700_000_000_000, lastUsedAt: 1_699_999_000_000 },
     };
     extras.dungeonRuns['c1'] = {
       runId: 'run-1',
-      mapKey: 'town.cave2',
+      mapKey: 'nightmare.slime',
       endlessLevel: 0,
       enemyBorn: { currentPhase: 2, ticketPaid: true },
     };
@@ -121,16 +121,16 @@ describe('PlayerContextService', () => {
     const reloaded = await ctx.extrasOf(1);
     expect(reloaded.challengeQueue['c1']).toEqual([
       { key: 'home', endlessLevel: 0 },
-      { key: 'town.valley', endlessLevel: 2 },
+      { key: 'world.1', endlessLevel: 2 },
     ]);
-    expect(reloaded.dungeonCooldowns['c1']?.['town.cave2']).toEqual({
+    expect(reloaded.dungeonCooldowns['c1']?.['nightmare.slime']).toEqual({
       stacks: 1,
       lastResetAt: 1_700_000_000_000,
       lastUsedAt: 1_699_999_000_000,
     });
     expect(reloaded.dungeonRuns['c1']).toEqual({
       runId: 'run-1',
-      mapKey: 'town.cave2',
+      mapKey: 'nightmare.slime',
       endlessLevel: 0,
       enemyBorn: { currentPhase: 2, ticketPaid: true },
     });
@@ -147,14 +147,14 @@ describe('PlayerContextService', () => {
           c1: [{ key: 'home' }, { key: 'no.such.map' }, { key: '' }, null, 'x'],
         },
         dungeonCooldowns: {
-          c1: { 'town.cave2': { stacks: Number.NaN, lastResetAt: 'bad', lastUsedAt: -1 } },
+          c1: { 'nightmare.slime': { stacks: Number.NaN, lastResetAt: 'bad', lastUsedAt: -1 } },
         },
       };
     }
     ctx.reset();
     const extras = await ctx.extrasOf(1);
     expect(extras.challengeQueue['c1']).toEqual([{ key: 'home', endlessLevel: 0 }]);
-    const cd = extras.dungeonCooldowns['c1']?.['town.cave2'];
+    const cd = extras.dungeonCooldowns['c1']?.['nightmare.slime'];
     expect(cd?.stacks).toBe(0);
     expect(cd?.lastResetAt).toBe(0);
     expect(Number.isFinite(cd?.lastUsedAt)).toBe(true);

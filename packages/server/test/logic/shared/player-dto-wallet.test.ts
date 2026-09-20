@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { InventorySlot } from '@idle-dark/game-core';
 
-import { playerStateDtoOf, slotDtoOf, walletDtoOf } from '../../../src/modules/logic/shared/player-dto.js';
+import { playerMetaDtoOf, playerStateDtoOf, slotDtoOf, walletDtoOf } from '../../../src/modules/logic/shared/player-dto.js';
 import { makeFixture } from '../_helpers.js';
 
 function stateOf(fixture: ReturnType<typeof makeFixture>) {
@@ -93,5 +93,20 @@ describe('钱包 DTO：脏数据过滤', () => {
       name: 'unknown.good',
       type: 'material',
     });
+  });
+});
+
+describe('W3：巅峰字段已从线协议投影中删除（Q8）', () => {
+  it('PlayerStateDto / CareerProgressDto / PlayerMetaDto 都不含 peak 字段', () => {
+    const fixture = makeFixture();
+    const state = stateOf(fixture);
+    expect(JSON.stringify(state).toLowerCase().includes('peak')).toBe(false);
+    expect(state.level).toBe(1);
+    for (const progress of state.careers) {
+      expect(Object.keys(progress).filter((k) => k.toLowerCase().includes('peak')), progress.key).toEqual([]);
+      expect(progress.maxLevel).toBe(100);
+    }
+    const meta = playerMetaDtoOf(fixture.tables, fixture.player, false);
+    expect(Object.keys(meta).filter((k) => k.toLowerCase().includes('peak'))).toEqual([]);
   });
 });

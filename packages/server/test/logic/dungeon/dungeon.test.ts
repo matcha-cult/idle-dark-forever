@@ -11,8 +11,11 @@ import type { MapLogicService } from '../../../src/modules/logic/map/map.logic.s
 import type { WorldService } from '../../../src/modules/logic/world/world.service.js';
 import { InProcessEventBus } from '../../../src/modules/logic/shared/event-bus.js';
 import { FIXED_NOW, makeFakeContexts, makeFixture } from '../_helpers.js';
+import { addTestDungeons } from '../../helpers/test-dungeons.js';
 
 const tables = createDefaultTables();
+// W3：旧 town.* 秘境图已随地图种子替换删除；单测自备等价秘境图（W6 一并移除）。
+addTestDungeons(tables);
 
 interface WorldCalls {
   enterMap: Array<{ mapKey: string; opId?: string }>;
@@ -44,6 +47,7 @@ function makeMaps(calls: WorldCalls): MapLogicService {
 
 function makeService(diamonds = 0) {
   const fixture = makeFixture();
+  addTestDungeons(fixture.tables);
   fixture.account.diamonds = diamonds;
   const calls: WorldCalls = { enterMap: [], leave: 0, openWorld: [] };
   const events = new InProcessEventBus();
@@ -85,7 +89,7 @@ describe('DungeonLogicService · 挑战队列（RC4）', () => {
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.entries).toEqual([]);
-    const cave2 = result.data.tickets.find((t) => t.ticketKey === 'town.cave2');
+    const cave2 = result.data.tickets.find((t) => t.ticketKey === 'test.cave');
     expect(cave2).toBeDefined();
     expect(cave2?.stacks).toBeGreaterThan(0); // 首次评估即回满
     expect(cave2?.available).toBe(false); // 无实际钥匙 → 不可挑战
@@ -97,15 +101,15 @@ describe('DungeonLogicService · 挑战队列（RC4）', () => {
     const set = await service.queueSet(1, 'char-1', [
       { key: 'home' },
       { key: 'no.such.map' },
-      { key: 'town.valley', endlessLevel: 2 },
+      { key: 'world.1', endlessLevel: 2 },
     ]);
     expect(set.success).toBe(true);
     if (set.success) expect(set.data.entries).toEqual([
       { key: 'home', endlessLevel: 0 },
-      { key: 'town.valley', endlessLevel: 2 },
+      { key: 'world.1', endlessLevel: 2 },
     ]);
 
-    const added = await service.queueAdd(1, 'char-1', { key: 'town.mine.2' });
+    const added = await service.queueAdd(1, 'char-1', { key: 'test.mine' });
     expect(added.success).toBe(true);
     if (added.success) expect(added.data.entries).toHaveLength(3);
 
@@ -115,7 +119,7 @@ describe('DungeonLogicService · 挑战队列（RC4）', () => {
 
     const removed = await service.queueRemove(1, 'char-1', 0);
     expect(removed.success).toBe(true);
-    if (removed.success) expect(removed.data.entries.map((e) => e.key)).toEqual(['town.valley', 'town.mine.2']);
+    if (removed.success) expect(removed.data.entries.map((e) => e.key)).toEqual(['world.1', 'test.mine']);
 
     const cleared = await service.queueClear(1, 'char-1');
     expect(cleared.success).toBe(true);
@@ -124,9 +128,9 @@ describe('DungeonLogicService · 挑战队列（RC4）', () => {
 
   it('enter/leave 过渡转发到 battle 会话宿主（opId 原样）', async () => {
     const { service, calls } = makeService();
-    await service.enter(1, 'char-1', 'town.cave2', 'op-1');
+    await service.enter(1, 'char-1', 'test.cave', 'op-1');
     await service.leave(1, 'char-1');
-    expect(calls.enterMap).toEqual([{ mapKey: 'town.cave2', opId: 'op-1' }]);
+    expect(calls.enterMap).toEqual([{ mapKey: 'test.cave', opId: 'op-1' }]);
     expect(calls.leave).toBe(1);
   });
 });
@@ -134,17 +138,17 @@ describe('DungeonLogicService · 挑战队列（RC4）', () => {
 describe('DungeonLogicService · 神力重置（RC3）', () => {
   it('可重置秘境：扣对应神力并把层数回满', async () => {
     const { service, fixture } = makeService(100);
-    const result = await service.reset(1, 'char-1', 'town.cave2');
+    const result = await service.reset(1, 'char-1', 'test.cave');
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.cost).toBe(30);
-    expect(result.data.stacks).toBe(maxStacksOf(tables.maps['town.cave2']));
+    expect(result.data.stacks).toBe(maxStacksOf(tables.maps['test.cave']));
     expect(fixture.account.diamonds).toBe(70);
   });
 
   it('resetPrice=-1 → 不可重置（INVALID_PARAM），不扣神力', async () => {
     const { service, fixture } = makeService(9999);
-    const result = await service.reset(1, 'char-1', 'silver.warrior');
+    const result = await service.reset(1, 'char-1', 'test.noreset');
     expect(result.success).toBe(false);
     if (!result.success) expect(result.data.code).toBe('INVALID_PARAM');
     expect(fixture.account.diamonds).toBe(9999);
@@ -152,7 +156,7 @@ describe('DungeonLogicService · 神力重置（RC3）', () => {
 
   it('神力不足 → NOT_ENOUGH_DIAMONDS；非秘境 → MAP_LOCKED', async () => {
     const poor = makeService(0);
-    const notEnough = await poor.service.reset(1, 'char-1', 'town.cave2');
+    const notEnough = await poor.service.reset(1, 'char-1', 'test.cave');
     expect(notEnough.success).toBe(false);
     if (!notEnough.success) expect(notEnough.data.code).toBe('NOT_ENOUGH_DIAMONDS');
 
@@ -167,39 +171,39 @@ describe('DungeonLogicService · 队列推进（RunEnded，RD3/RD4/RD5）', () =
   it('队列驱动：下一条秘境可打（有票 + 冷却就绪）→ 进入它并弹出', async () => {
     const { service, fixture, calls, events } = makeService();
     fixture.extras.challengeQueue['char-1'] = [
-      { key: 'town.cave2', endlessLevel: 0 },
-      { key: 'town.mine.2', endlessLevel: 0 },
+      { key: 'test.cave', endlessLevel: 0 },
+      { key: 'test.mine', endlessLevel: 0 },
     ];
-    fixture.player.dungeonTickets.set('town.mine.2', 1);
+    fixture.player.dungeonTickets.set('test.mine', 1);
 
-    await emitRunEnded(service, events, 'town.cave2');
+    await emitRunEnded(service, events, 'test.cave');
 
-    expect(calls.enterMap.map((c) => c.mapKey)).toEqual(['town.mine.2']);
+    expect(calls.enterMap.map((c) => c.mapKey)).toEqual(['test.mine']);
     expect(fixture.extras.challengeQueue['char-1']).toEqual([]);
   });
 
   it('无票 → 跳过并继续；全部不可用且无非秘境条目 → openWorld(run.outside)（RD4）', async () => {
     const { service, fixture, calls, events } = makeService();
     fixture.extras.challengeQueue['char-1'] = [
-      { key: 'town.cave2', endlessLevel: 0 },
-      { key: 'town.mine.2', endlessLevel: 0 },
+      { key: 'test.cave', endlessLevel: 0 },
+      { key: 'test.mine', endlessLevel: 0 },
     ];
 
-    await emitRunEnded(service, events, 'town.cave2', 'town.valley');
+    await emitRunEnded(service, events, 'test.cave', 'world.1');
 
     expect(calls.enterMap).toEqual([]);
-    expect(calls.openWorld).toEqual(['town.valley']);
+    expect(calls.openWorld).toEqual(['world.1']);
     expect(fixture.extras.challengeQueue['char-1']).toEqual([]);
   });
 
   it('非秘境条目 → 转入该图（RD3）', async () => {
     const { service, fixture, calls, events } = makeService();
     fixture.extras.challengeQueue['char-1'] = [
-      { key: 'town.cave2', endlessLevel: 0 },
+      { key: 'test.cave', endlessLevel: 0 },
       { key: 'home', endlessLevel: 0 },
     ];
 
-    await emitRunEnded(service, events, 'town.cave2');
+    await emitRunEnded(service, events, 'test.cave');
 
     expect(calls.enterMap).toEqual([]);
     expect(calls.openWorld).toEqual(['home']);
@@ -208,13 +212,13 @@ describe('DungeonLogicService · 队列推进（RunEnded，RD3/RD4/RD5）', () =
   it('手动进图（队首不匹配）/ 空队列 → 不接管队列', async () => {
     const manual = makeService();
     manual.fixture.extras.challengeQueue['char-1'] = [{ key: 'home', endlessLevel: 0 }];
-    await emitRunEnded(manual.service, manual.events, 'town.cave2');
+    await emitRunEnded(manual.service, manual.events, 'test.cave');
     expect(manual.calls.enterMap).toEqual([]);
     expect(manual.calls.openWorld).toEqual([]);
     expect(manual.fixture.extras.challengeQueue['char-1']).toEqual([{ key: 'home', endlessLevel: 0 }]);
 
     const empty = makeService();
-    await emitRunEnded(empty.service, empty.events, 'town.cave2');
+    await emitRunEnded(empty.service, empty.events, 'test.cave');
     expect(empty.calls.enterMap).toEqual([]);
     expect(empty.calls.openWorld).toEqual([]);
   });

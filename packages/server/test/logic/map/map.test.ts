@@ -83,19 +83,19 @@ describe('pickOpenWorldMap（RD4）', () => {
   const open = Object.keys(tables.maps).find((key) => !tables.maps[key]?.isDungeon);
 
   it('优先级：candidate → persisted → home', () => {
-    // town.street 是开放世界图；pickOpenWorldMap 只看"非秘境"属性。
-    expect(pickOpenWorldMap(tables, 'home', 'town.valley')).toBe('home');
-    expect(pickOpenWorldMap(tables, undefined, 'town.valley')).toBe('town.valley');
+    // world.1 是开放世界图；pickOpenWorldMap 只看"非秘境"属性。
+    expect(pickOpenWorldMap(tables, 'home', 'world.1')).toBe('home');
+    expect(pickOpenWorldMap(tables, undefined, 'world.1')).toBe('world.1');
     expect(pickOpenWorldMap(tables, undefined, undefined)).toBe('home');
   });
 
   it('候选非法 / 是秘境 / 不存在 → 落到下一档，最终 home', () => {
     expect(dungeon).toBeTruthy();
-    // town.woods 在这份数据里就是秘境（isDungeon=true）
-    expect(tables.maps['town.woods']?.isDungeon).toBe(true);
-    expect(pickOpenWorldMap(tables, 'town.woods', 'town.valley')).toBe('town.valley');
-    expect(pickOpenWorldMap(tables, dungeon, 'town.valley')).toBe('town.valley');
-    expect(pickOpenWorldMap(tables, 'no.such.map', 'town.valley')).toBe('town.valley');
+    // nightmare.slime 在这份数据里就是秘境（isDungeon=true）
+    expect(tables.maps['nightmare.slime']?.isDungeon).toBe(true);
+    expect(pickOpenWorldMap(tables, 'nightmare.slime', 'world.1')).toBe('world.1');
+    expect(pickOpenWorldMap(tables, dungeon, 'world.1')).toBe('world.1');
+    expect(pickOpenWorldMap(tables, 'no.such.map', 'world.1')).toBe('world.1');
     expect(pickOpenWorldMap(tables, '', '')).toBe('home');
     expect(pickOpenWorldMap(tables, null, dungeon)).toBe('home');
     expect(open).toBeTruthy();
@@ -103,16 +103,31 @@ describe('pickOpenWorldMap（RD4）', () => {
 });
 
 describe('MapLogicService', () => {
-  it('list：返回地图目录，已解锁排前、锁定带 lockedReason', async () => {
+  it('list：按等级段排序（level 升序 → key 升序），锁定图带非空 lockedReason', async () => {
     const calls: WorldCalls = { enterMap: [], leave: [], snapshot: [] };
     const service = makeService(calls);
     const result = await service.list(1, 'char-1');
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.length).toBeGreaterThan(0);
-    const firstLocked = result.data.findIndex((m) => m.unlocked !== true);
-    const lastUnlocked = result.data.map((m) => m.unlocked === true).lastIndexOf(true);
-    expect(firstLocked === -1 || lastUnlocked < firstLocked).toBe(true);
+
+    // 段顺序：level 升序，同级 key 升序（不是"已解锁排前"）。
+    for (let i = 1; i < result.data.length; i += 1) {
+      const prev = result.data[i - 1]!;
+      const cur = result.data[i]!;
+      const ordered = prev.level < cur.level || (prev.level === cur.level && prev.key <= cur.key);
+      expect(ordered, `${prev.key}(${prev.level}) 应排在 ${cur.key}(${cur.level}) 之前`).toBe(true);
+    }
+    // 1 级角色的解锁面：home 与 level 0 的 world.1 解锁，高段图锁定且带文案。
+    const world1 = result.data.find((m) => m.key === 'world.1');
+    expect(world1?.unlocked).toBe(true);
+    expect(world1?.lockedReason).toBeNull();
+    const high = result.data.find((m) => m.key === 'world.9');
+    expect(high?.unlocked).toBe(false);
+    expect(typeof high?.lockedReason).toBe('string');
+    expect((high?.lockedReason ?? '').length).toBeGreaterThan(0);
+    // ⚠️ 不再断言「已解锁排前」：W3 改为等级段顺序后，该不变式不再成立
+    //（且 `maxLevel` 提到 100 后，`atLeastMaxLevel: 70` 的旧梦魇图对 1 级角色也会解锁）。
     for (const m of result.data) {
       if (m.unlocked === true) expect(m.lockedReason).toBeNull();
       else expect(typeof m.lockedReason).toBe('string');
@@ -141,8 +156,8 @@ describe('MapLogicService', () => {
   it('enter：条件未满足的地图 → MAP_LOCKED（不转发）', async () => {
     const calls: WorldCalls = { enterMap: [], leave: [], snapshot: [] };
     const service = makeService(calls);
-    // silver.warrior 要求 level 60，裸角色（1 级）不可进
-    const result = await service.enter(1, 'char-1', 'silver.warrior');
+    // world.9 要求 level 75，裸角色（1 级）不可进
+    const result = await service.enter(1, 'char-1', 'world.9');
     expect(result.success).toBe(false);
     if (!result.success) expect(result.data.code).toBe('MAP_LOCKED');
     expect(calls.enterMap).toHaveLength(0);

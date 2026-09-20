@@ -258,6 +258,13 @@ export interface MapData {
   resetPrice?: number;
   level?: number;
   exp?: number;
+  /**
+   * 守关 BOSS 的敌人 key（W3 新增）。
+   *
+   * 野外战斗图每 20 波刷出的 BOSS；由 W4 生成、W6 的「通关全部野外 BOSS」解锁判据消费。
+   * 旧地图 / 秘境图不写该字段（缺省 = 无守关 BOSS）。
+   */
+  boss?: string;
   loots?: LootEntry[];
   /** 无尽副本分组，如 'nightmare.3'。 */
   group?: string;
@@ -340,6 +347,12 @@ export interface CareerData {
   name: string;
   description: string;
   requirement: Requirement;
+  /**
+   * 角色等级上限（可选）。缺失 → `CareerInfo` 的默认值 100（Q8）。
+   *
+   * 仅在数据表显式配置时覆写默认上限；当前没有职业设置它。
+   */
+  maxLevel?: number;
   equipments: Partial<Record<EquipPosition, string>>;
   /** 等级 → 升级所需经验的系数多项式，`expFormula.map((v, i) => v * level ** i)`。 */
   expFormula: number[];

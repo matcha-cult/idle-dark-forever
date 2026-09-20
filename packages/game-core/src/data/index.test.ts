@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest';
 import type { DataTables } from '../contracts/data.js';
 import type { Rng } from '../contracts/ports.js';
 import { CRAFT_DROP_SPECS, ESSENCE_DROP_RATES, createDefaultTables } from './index.js';
+import { DEFAULT_LEVEL } from '../rules/inventory-slot.js';
 
 const tables: DataTables = createDefaultTables();
 const tables2: DataTables = createDefaultTables();
@@ -557,9 +558,21 @@ describe('E6/P11 + 工艺通货：掉落门禁与实装清单', () => {
     }
   });
 
-  it('0 级城镇地图存在（P8 底材商店入口骨架）', () => {
-    const town = tables.maps['town'];
-    expect(town).toBeDefined();
-    expect(town?.level).toBe(0);
+  it('0 级起始战斗图存在（W3 新地图种子 world.1）', () => {
+    const start = tables.maps['world.1'];
+    expect(start).toBeDefined();
+    expect(start?.level).toBe(0);
+    expect(start?.requirement?.level).toBe(0);
+  });
+
+  it('DEFAULT_LEVEL 的每个底材 key 都存在于 goods（W3 旧引用清理审计）', () => {
+    // W3 只换地图，**不动**与地图无关的底材目录；因此 DEFAULT_LEVEL 必须保持可用。
+    const missing: string[] = [];
+    for (const [key, level] of Object.entries(DEFAULT_LEVEL)) {
+      if (!tables.goods[key]) missing.push(key);
+      expect(Number.isFinite(level), key).toBe(true);
+    }
+    expect(missing).toEqual([]);
+    expect(Object.keys(DEFAULT_LEVEL).length).toBeGreaterThan(0);
   });
 });

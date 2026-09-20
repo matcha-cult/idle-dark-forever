@@ -69,7 +69,7 @@ describe('WorldService', () => {
 
   async function startInStreet(): Promise<void> {
     const extras = await context.extrasOf(1);
-    extras.worldMaps['c1'] = { map: 'town.street', endlessLevel: 0 };
+    extras.worldMaps['c1'] = { map: 'world.1', endlessLevel: 0 };
     context.markAccountDirty(1);
     await context.flushAccount(1);
     const session = await service.start(1, 'c1');
@@ -84,7 +84,7 @@ describe('WorldService', () => {
 
   it('start 后 positionOf / activeCharacterOf 正确', async () => {
     await startInStreet();
-    expect(service.positionOf(1, 'c1')).toEqual({ map: 'town.street', endlessLevel: 0 });
+    expect(service.positionOf(1, 'c1')).toEqual({ map: 'world.1', endlessLevel: 0 });
     expect(service.activeCharacterOf(1)).toBe('c1');
     expect(service.isInBattle(1, 'c1')).toBe(true);
   });
@@ -147,16 +147,16 @@ describe('WorldService', () => {
 
   it('enterMap 重复进入当前地图 → 成功（按「重置本图」处理，不报 ALREADY_IN_MAP）', async () => {
     await startInStreet();
-    const result = await service.enterMap(1, 'c1', 'town.street');
+    const result = await service.enterMap(1, 'c1', 'world.1');
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.data.map).toBe('town.street');
+    expect(result.data.map).toBe('world.1');
   });
 
   it('enterMap 条件未满足 → MAP_LOCKED', async () => {
     await startInStreet();
-    // silver.warrior 要求 level 60，1 级角色不可进。
-    const result = await service.enterMap(1, 'c1', 'silver.warrior');
+    // world.9 要求 level 75，1 级角色不可进。
+    const result = await service.enterMap(1, 'c1', 'world.9');
     expect(result.success).toBe(false);
     if (!result.success) expect(result.data.code).toBe('MAP_LOCKED');
   });
@@ -165,13 +165,13 @@ describe('WorldService', () => {
     const session = await service.start(1, 'c1');
     expect(session).not.toBeNull();
 
-    const first = await service.enterMap(1, 'c1', 'town.street', 'op-map-1');
+    const first = await service.enterMap(1, 'c1', 'world.1', 'op-map-1');
     expect(first.success).toBe(true);
-    expect(service.positionOf(1, 'c1')?.map).toBe('town.street');
+    expect(service.positionOf(1, 'c1')?.map).toBe('world.1');
 
-    const second = await service.enterMap(1, 'c1', 'town.street', 'op-map-1');
+    const second = await service.enterMap(1, 'c1', 'world.1', 'op-map-1');
     expect(second.success).toBe(true);
-    expect(service.positionOf(1, 'c1')?.map).toBe('town.street');
+    expect(service.positionOf(1, 'c1')?.map).toBe('world.1');
   });
 
   it('enterMap 未知地图 → MAP_LOCKED（不抛错）', async () => {
@@ -186,7 +186,7 @@ describe('WorldService', () => {
     const result = await service.snapshot(1, 'c1');
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.data.map).toBe('town.street');
+    expect(result.data.map).toBe('world.1');
     expect(result.data.units.length).toBeGreaterThan(0);
     expect(result.data.maps.length).toBeGreaterThan(0);
     expect(result.data.paused).toBe(true);

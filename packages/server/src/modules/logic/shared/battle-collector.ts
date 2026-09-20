@@ -91,7 +91,6 @@ export class BattleCollector implements BattleSink {
       kind: 'exp',
       amount: finite(e.amount),
       level: finite(e.level),
-      peak: e.peak === true,
     });
   }
 

@@ -55,7 +55,7 @@ export const SkillsPanel = observer(function SkillsPanel() {
                       {active ? <Tag color="blue">当前</Tag> : null}
                     </Flex>
                     <Typography.Text style={{ fontSize: token.fontSizeSM, color: token.colorTextTertiary }}>
-                      {`Lv.${entry.level}/${entry.maxLevel}${entry.peakLevel > 0 ? ` · 巅峰 ${entry.peakLevel}` : ''}`}
+                      {`Lv.${entry.level}/${entry.maxLevel}`}
                     </Typography.Text>
                     <Progress
                       percent={percent}
@@ -81,16 +81,10 @@ export const SkillsPanel = observer(function SkillsPanel() {
               <StatList
                 items={[
                   { key: 'level', label: '当前等级', value: formatAmount(current.level) },
-                  { key: 'peak', label: '巅峰等级', value: formatAmount(current.peakLevel) },
                   {
                     key: 'exp',
                     label: '经验',
                     value: `${formatAmount(current.exp)} / ${formatAmount(current.maxExp)}`,
-                  },
-                  {
-                    key: 'peakExp',
-                    label: '巅峰经验',
-                    value: `${formatAmount(current.peakExp)} / ${formatAmount(current.maxPeakExp)}`,
                   },
                 ]}
               />

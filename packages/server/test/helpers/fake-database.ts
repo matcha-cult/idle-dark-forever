@@ -14,7 +14,6 @@ export interface FakeCharacterRow {
   role: string;
   career: string;
   level: number;
-  peak_level: number;
   state: unknown;
   created_at: Date;
   last_settle_at: Date;
@@ -43,7 +42,6 @@ export class FakeDatabase {
       role: row.role ?? 'Eyer',
       career: row.career ?? 'warrior',
       level: row.level ?? 1,
-      peak_level: row.peak_level ?? 0,
       state: row.state ?? {},
       created_at: row.created_at ?? new Date(0),
       last_settle_at: row.last_settle_at ?? new Date(0),
@@ -103,15 +101,14 @@ export class FakeDatabase {
     }
 
     if (upper.startsWith('UPDATE CHARACTERS')) {
-      // UPDATE ... SET state=$1, role=$2, career=$3, level=$4, peak_level=$5 WHERE id=$6 AND user_id=$7
+      // UPDATE ... SET state=$1, role=$2, career=$3, level=$4 WHERE id=$5 AND user_id=$6
       this.writes += 1;
-      const row = this.characters.get(String(params[5]));
-      if (row && row.user_id === String(params[6])) {
+      const row = this.characters.get(String(params[4]));
+      if (row && row.user_id === String(params[5])) {
         row.state = parseJson(params[0]);
         row.role = String(params[1]);
         row.career = String(params[2]);
         row.level = Number(params[3]);
-        row.peak_level = Number(params[4]);
         return { rows: [], rowCount: 1 };
       }
       return { rows: [], rowCount: 0 };
@@ -126,7 +123,6 @@ export class FakeDatabase {
         role: String(params[3]),
         career: String(params[4]),
         level: 1,
-        peak_level: 0,
         state: {},
         created_at: new Date(0),
         last_settle_at: new Date(0),

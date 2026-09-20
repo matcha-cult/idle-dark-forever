@@ -115,25 +115,25 @@ await action(ws, 20, 6, { key: characterKey });
 // ---- queueGet：空队列 + 票键状态 ----
 const initial = await action(ws, 140, 1, {});
 check('dungeon.queueGet 空队列', initial?.success === true && Array.isArray(initial.data?.entries), `entries=${initial?.data?.entries?.length}`);
-const cave2 = (initial?.data?.tickets ?? []).find((t) => t.ticketKey === 'town.cave2');
-check('票键状态含 town.cave2（stacks/available/nextResetAt）', cave2 !== undefined && typeof cave2.stacks === 'number' && typeof cave2.available === 'boolean' && Number.isFinite(cave2.nextResetAt), JSON.stringify(cave2));
+const cave2 = (initial?.data?.tickets ?? []).find((t) => t.ticketKey === 'nightmare.1');
+check('票键状态含 nightmare.1（stacks/available/nextResetAt）', cave2 !== undefined && typeof cave2.stacks === 'number' && typeof cave2.available === 'boolean' && Number.isFinite(cave2.nextResetAt), JSON.stringify(cave2));
 check('票键状态按票键去重', new Set((initial?.data?.tickets ?? []).map((t) => t.ticketKey)).size === (initial?.data?.tickets ?? []).length);
 
 // ---- queueSet：非法条目被过滤 ----
 const set = await action(ws, 140, 2, {
-  entries: [{ key: 'home' }, { key: 'no.such.map' }, { key: 'town.valley', endlessLevel: 2 }, null],
+  entries: [{ key: 'home' }, { key: 'no.such.map' }, { key: 'world.1', endlessLevel: 2 }, null],
 });
 check('queueSet 过滤未知地图 / 非法条目', set?.success === true && set.data.entries.length === 2, JSON.stringify(set?.data?.entries));
 
 // ---- queueAdd ----
-const added = await action(ws, 140, 3, { entry: { key: 'town.mine.2' } });
+const added = await action(ws, 140, 3, { entry: { key: 'nightmare.wolf' } });
 check('queueAdd 追加成功', added?.success === true && added.data.entries.length === 3);
 const badAdd = await action(ws, 140, 3, { entry: { key: 'no.such.map' } });
 check('queueAdd 非法条目 → INVALID_PARAM', badAdd?.success === false && badAdd?.data?.code === 'INVALID_PARAM', JSON.stringify(badAdd?.data));
 
 // ---- queueRemove ----
 const removed = await action(ws, 140, 4, { index: 0 });
-check('queueRemove 按下标删除', removed?.success === true && removed.data.entries.map((e) => e.key).join(',') === 'town.valley,town.mine.2', JSON.stringify(removed?.data?.entries));
+check('queueRemove 按下标删除', removed?.success === true && removed.data.entries.map((e) => e.key).join(',') === 'world.1,nightmare.wolf', JSON.stringify(removed?.data?.entries));
 
 // ---- 落库往返：留下一条，重连后仍在 ----
 await action(ws, 140, 5, {});
@@ -146,11 +146,11 @@ const afterReload = await action(ws, 140, 1, {});
 check('重新连接后队列仍在（已落库）', afterReload?.success === true && afterReload.data.entries.length === 1 && afterReload.data.entries[0].key === 'home', JSON.stringify(afterReload?.data?.entries));
 
 // ---- reset 失败路径 ----
-const notResettable = await action(ws, 140, 8, { map: 'silver.warrior' });
-check('reset resetPrice=-1 → INVALID_PARAM（不可重置）', notResettable?.success === false && notResettable?.data?.code === 'INVALID_PARAM', JSON.stringify(notResettable?.data));
+const notResettable = await action(ws, 140, 8, { map: 'year2018.dungeon' });
+check('reset 无 resetPrice → INVALID_PARAM（不可重置）', notResettable?.success === false && notResettable?.data?.code === 'INVALID_PARAM', JSON.stringify(notResettable?.data));
 const notDungeon = await action(ws, 140, 8, { map: 'home' });
 check('reset 非秘境 → MAP_LOCKED', notDungeon?.success === false && notDungeon?.data?.code === 'MAP_LOCKED', JSON.stringify(notDungeon?.data));
-const poor = await action(ws, 140, 8, { map: 'town.cave2' });
+const poor = await action(ws, 140, 8, { map: 'nightmare.slime' });
 check('reset 神力不足 → NOT_ENOUGH_DIAMONDS', poor?.success === false && poor?.data?.code === 'NOT_ENOUGH_DIAMONDS', JSON.stringify(poor?.data));
 
 // ---- 清理 + leave ----

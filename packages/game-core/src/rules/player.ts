@@ -193,17 +193,6 @@ export class Player extends PlayerMeta {
     }
   }
 
-  get peakLevel(): number {
-    return this.careerInfo?.peakLevel ?? 0;
-  }
-
-  set peakLevel(value: number) {
-    const info = this.careerInfo;
-    if (info) {
-      info.peakLevel = value;
-    }
-  }
-
   get exp(): number {
     return this.careerInfo?.exp ?? 0;
   }
@@ -215,17 +204,6 @@ export class Player extends PlayerMeta {
     }
   }
 
-  get peakExp(): number {
-    return this.careerInfo?.peakExp ?? 0;
-  }
-
-  set peakExp(value: number) {
-    const info = this.careerInfo;
-    if (info) {
-      info.peakExp = value;
-    }
-  }
-
   get equipments(): Record<EquipSlot, InventorySlot> | undefined {
     return this.careerInfo?.equipments;
   }
@@ -233,10 +211,6 @@ export class Player extends PlayerMeta {
   /** 升级所需经验。 */
   get maxExp(): number {
     return this.careerInfo?.maxExp ?? 0;
-  }
-
-  get maxPeakExp(): number {
-    return this.careerInfo?.maxPeakExp ?? 0;
   }
 
   get maxSkillCount(): number {

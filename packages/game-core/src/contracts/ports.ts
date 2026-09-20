@@ -124,7 +124,6 @@ export interface BuffEvent {
 export interface ExpEvent {
   amount: number;
   level: number;
-  peak: boolean;
 }
 export interface GeneralEvent {
   text: string;

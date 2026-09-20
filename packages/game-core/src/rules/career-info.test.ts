@@ -6,14 +6,12 @@ import { createTestTables } from './fixtures.test.js';
 const tables = createTestTables();
 
 describe('CareerInfo', () => {
-  it('默认值与原版一致', () => {
+  it('默认值（Q8：等级上限 100，无巅峰字段）', () => {
     const info = new CareerInfo(tables, 'warrior');
     expect(info.type).toBe('warrior');
     expect(info.exp).toBe(0);
     expect(info.level).toBe(1);
-    expect(info.peakExp).toBe(0);
-    expect(info.peakLevel).toBe(0);
-    expect(info.maxLevel).toBe(60);
+    expect(info.maxLevel).toBe(100);
     expect(info.selectedSkills).toEqual([]);
     expect(info.selectedEnhances).toEqual([]);
     expect(Object.keys(info.equipments)).toEqual([
@@ -40,31 +38,42 @@ describe('CareerInfo', () => {
     expect(info.maxExp).toBe(100 + 600 + 3600);
   });
 
-  it('maxPeakExp 把 peakLevel + 60 代回同一多项式', () => {
-    const info = new CareerInfo(tables, 'warrior');
-    info.peakLevel = 0;
-    expect(info.maxPeakExp).toBe(100 + 10 * 60 + 60 ** 2);
-    info.peakLevel = 5;
-    expect(info.maxPeakExp).toBe(100 + 10 * 65 + 65 ** 2);
+  it('maxLevel 可由职业表覆写；缺失 / 非法 → 默认 100', () => {
+    // 真实职业表没有配置 maxLevel → 默认 100（Q8）。
+    expect(new CareerInfo(tables, 'warrior').maxLevel).toBe(100);
+    expect(new CareerInfo(tables, 'nobody').maxLevel).toBe(100);
+
+    const withOverride = createTestTables();
+    withOverride.careers['warrior']!.maxLevel = 120;
+    expect(new CareerInfo(withOverride, 'warrior').maxLevel).toBe(120);
+
+    for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      withOverride.careers['warrior']!.maxLevel = bad;
+      expect(new CareerInfo(withOverride, 'warrior').maxLevel, `bad=${bad}`).toBe(100);
+    }
   });
 
-  it('未知职业的 maxExp/maxPeakExp 回退 10000000', () => {
+  it('未知职业的 maxExp 回退 10000000', () => {
     const info = new CareerInfo(tables, 'nobody');
     expect(info.maxExp).toBe(10000000);
-    expect(info.maxPeakExp).toBe(10000000);
   });
 
   it('fromJSON：缺失字段兜底，level 至少为 1', () => {
     const info = new CareerInfo(tables, 'warrior').fromJSON({});
     expect(info.exp).toBe(0);
     expect(info.level).toBe(1);
-    expect(info.peakExp).toBe(0);
-    expect(info.peakLevel).toBe(0);
-    expect(info.maxLevel).toBe(60);
+    expect(info.maxLevel).toBe(100);
 
     const zeros = new CareerInfo(tables, 'warrior').fromJSON({ level: 0, maxLevel: 0 });
     expect(zeros.level).toBe(1);
-    expect(zeros.maxLevel).toBe(60);
+    expect(zeros.maxLevel).toBe(100);
+
+    // 存档里的合法 maxLevel 仍生效（有限正数）。
+    expect(new CareerInfo(tables, 'warrior').fromJSON({ maxLevel: 130 }).maxLevel).toBe(130);
+    // 非法值（NaN / Infinity / 负数）→ 回落默认，而不是写坏上限。
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, -5]) {
+      expect(new CareerInfo(tables, 'warrior').fromJSON({ maxLevel: bad }).maxLevel).toBe(100);
+    }
   });
 
   it('fromJSON：装备位缺字段时保留空槽，已有字段被载入', () => {
@@ -118,15 +127,13 @@ describe('CareerInfo', () => {
     });
     expect(info.level).toBe(1);
     expect(info.exp).toBe(Number.POSITIVE_INFINITY);
-    expect(info.maxLevel).toBe(60);
+    expect(info.maxLevel).toBe(100);
   });
 
-  it('toJSON → fromJSON 深度等价', () => {
+  it('toJSON → fromJSON 深度等价，且 JSON 里不含任何 peak 字段', () => {
     const info = new CareerInfo(tables, 'warrior').fromJSON({
       exp: 12,
       level: 7,
-      peakExp: 3,
-      peakLevel: 2,
       maxLevel: 62,
       equipments: { weapon: { key: 'stickSword', count: 1, level: 14 } },
       selectedSkills: ['slash'],
@@ -134,5 +141,6 @@ describe('CareerInfo', () => {
     });
     const restored = new CareerInfo(tables, 'warrior').fromJSON(info.toJSON());
     expect(restored.toJSON()).toEqual(info.toJSON());
+    expect(Object.keys(info.toJSON()).filter((k) => k.toLowerCase().includes('peak'))).toEqual([]);
   });
 });

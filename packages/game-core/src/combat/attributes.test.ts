@@ -25,11 +25,10 @@ function withExtraSta(player: PlayerLike, value: number): PlayerLike {
 }
 
 describe('E1 属性三化', () => {
-  it('三维按 `attrBase + attrGrow × (level + peakLevel)` 现算', () => {
+  it('三维按 `attrBase + attrGrow × level` 现算（Q8 删巅峰后无额外等级项）', () => {
     const t = makeTestWorld({ seed: 1 });
     const player = makePlayer({
       level: 10,
-      peakLevel: 2,
       roleData: { key: 'hero', attrBase: { str: 5, dex: 6, int: 7 }, atk: 10, atkSpeed: 1 },
       careerData: {
         key: 'warrior',
@@ -39,10 +38,10 @@ describe('E1 属性三化', () => {
       },
     });
     const unit = t.world.addPlayer(player);
-    // 5 + 2*12 = 29 / 6 + 3*12 = 42 / 7 + 5*12 = 67
-    expect(unit.str).toBe(29);
-    expect(unit.dex).toBe(42);
-    expect(unit.int).toBe(67);
+    // 5 + 2*10 = 25 / 6 + 3*10 = 36 / 7 + 5*10 = 57
+    expect(unit.str).toBe(25);
+    expect(unit.dex).toBe(36);
+    expect(unit.int).toBe(57);
   });
 
   it('内核不再提供 `sta` getter（残留字段不产生属性）', () => {
@@ -94,7 +93,7 @@ describe('E1 属性三化', () => {
       roleData: { key: 'hero', attrBase: { str: Number.NaN, dex: -1, int: 0 }, atk: 10, atkSpeed: 1 },
     });
     const unit = t.world.addPlayer(player);
-    // 属性是 `attrBase + attrGrow × (level + peakLevel)`：角色默认 attrGrow 各 1、level 1。
+    // 属性是 `attrBase + attrGrow × level`：角色默认 attrGrow 各 1、level 1。
     expect(Number.isNaN(unit.str)).toBe(true); // NaN + 1
     expect(unit.dex).toBe(0); // -1 + 1
     expect(unit.int).toBe(1); // 0 + 1

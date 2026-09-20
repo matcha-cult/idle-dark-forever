@@ -117,7 +117,7 @@ export class CareerLogicService {
    */
   notifyLevelup(
     userId: number,
-    payload: { level: number; peak: boolean; career: string },
+    payload: { level: number; career: string },
   ): void {
     pushCareerLevelup(this.batcher, userId, payload);
   }

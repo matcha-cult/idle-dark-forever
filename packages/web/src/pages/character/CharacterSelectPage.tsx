@@ -72,7 +72,7 @@ export const CharacterSelectPage = observer(function CharacterSelectPage({ onCre
                   <Space wrap>
                     <Typography.Text strong>{player.name}</Typography.Text>
                     <Tag>{player.roleName}</Tag>
-                    <Tag color="blue">{`Lv.${player.level}${player.peakLevel > 0 ? ` · 巅峰 ${player.peakLevel}` : ''}`}</Tag>
+                    <Tag color="blue">{`Lv.${player.level}`}</Tag>
                     {player.inBattle ? <Tag color="red">战斗中</Tag> : null}
                   </Space>
                   <Typography.Text type="secondary">{`职业：${player.currentCareerName || '—'}`}</Typography.Text>

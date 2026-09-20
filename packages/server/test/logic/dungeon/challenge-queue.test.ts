@@ -46,12 +46,12 @@ describe('normalizeChallengeQueue', () => {
 
   it('逐条校验：坏的丢弃、好的保留、顺序不变', () => {
     const out = normalizeChallengeQueue(
-      [{ key: 'home' }, { key: 'nope' }, { key: 'town.street', endlessLevel: 1 }, null, 42],
+      [{ key: 'home' }, { key: 'nope' }, { key: 'world.1', endlessLevel: 1 }, null, 42],
       tables,
     );
     expect(out).toEqual([
       { key: 'home', endlessLevel: 0 },
-      { key: 'town.street', endlessLevel: 1 },
+      { key: 'world.1', endlessLevel: 1 },
     ]);
   });
 
@@ -67,11 +67,11 @@ describe('normalizeChallengeQueue', () => {
 describe('removeChallengeEntryAt', () => {
   const entries = [
     { key: 'home', endlessLevel: 0 },
-    { key: 'town.valley', endlessLevel: 0 },
+    { key: 'world.2', endlessLevel: 0 },
   ];
 
   it('按下标删除；越界 / 非法下标返回原样副本', () => {
-    expect(removeChallengeEntryAt(entries, 0)).toEqual([{ key: 'town.valley', endlessLevel: 0 }]);
+    expect(removeChallengeEntryAt(entries, 0)).toEqual([{ key: 'world.2', endlessLevel: 0 }]);
     expect(removeChallengeEntryAt(entries, 5)).toEqual(entries);
     expect(removeChallengeEntryAt(entries, -1)).toEqual(entries);
     expect(removeChallengeEntryAt(entries, Number.NaN)).toEqual(entries);

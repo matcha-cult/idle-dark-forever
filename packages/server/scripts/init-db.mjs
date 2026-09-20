@@ -41,7 +41,6 @@ CREATE TABLE IF NOT EXISTS characters (
   role           TEXT NOT NULL DEFAULT 'warrior',
   career         TEXT NOT NULL DEFAULT 'warrior',
   level          INTEGER NOT NULL DEFAULT 1,
-  peak_level     INTEGER NOT NULL DEFAULT 0,
   state          JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_settle_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -56,8 +55,10 @@ ALTER TABLE account_state   ADD COLUMN IF NOT EXISTS player_slot_count INTEGER N
 ALTER TABLE account_state   ADD COLUMN IF NOT EXISTS highest_endless_level INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE account_state   ADD COLUMN IF NOT EXISTS data JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE characters      ADD COLUMN IF NOT EXISTS state JSONB NOT NULL DEFAULT '{}'::jsonb;
-ALTER TABLE characters      ADD COLUMN IF NOT EXISTS peak_level INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE characters      ADD COLUMN IF NOT EXISTS last_settle_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- W3：删除巅峰等级设定（列不再落库 / 不再读取）
+ALTER TABLE characters      DROP COLUMN IF EXISTS peak_level;
 `;
 
 try {

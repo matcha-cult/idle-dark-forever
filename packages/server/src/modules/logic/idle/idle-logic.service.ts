@@ -707,9 +707,8 @@ export function applyExpBounded(player: Player, exp: number): void {
     if (career.level < career.maxLevel) {
       career.level += 1;
       player.currentCareerLevel = career.level;
-    } else if (career.level >= 60 && career.peakLevel < Number.MAX_SAFE_INTEGER) {
-      career.peakLevel += 1;
     } else {
+      // 满级：无巅峰，溢出经验直接丢弃（Q8）。
       break;
     }
   }

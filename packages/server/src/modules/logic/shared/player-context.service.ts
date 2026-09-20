@@ -278,15 +278,13 @@ export class PlayerContextService {
               role = $2,
               career = $3,
               level = $4,
-              peak_level = $5,
               last_settle_at = CURRENT_TIMESTAMP
-        WHERE id = $6 AND user_id = $7`,
+        WHERE id = $5 AND user_id = $6`,
       [
         JSON.stringify(state),
         player.role,
         career ?? '',
         finiteInt(player.level, 1),
-        finiteInt(player.peakLevel, 0),
         characterId,
         userId,
       ],

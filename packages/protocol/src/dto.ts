@@ -118,7 +118,6 @@ export interface PlayerMetaDto {
   currentCareer: string;
   currentCareerName: string;
   level: number;
-  peakLevel: number;
   createdAt: number;
   /** 该角色是否处于战斗中（服务端世界是否在跑）。 */
   inBattle: boolean;
@@ -129,12 +128,9 @@ export interface CareerProgressDto {
   key: string;
   name: string;
   level: number;
-  peakLevel: number;
   maxLevel: number;
   exp: number;
   maxExp: number;
-  peakExp: number;
-  maxPeakExp: number;
   /** 该职业下所有技能 key → 解锁等级。 */
   skills: Record<string, number>;
   /** 该职业下所有被动 key → 解锁等级。 */
@@ -178,7 +174,6 @@ export interface PlayerStateDto {
   role: string;
   roleName: string;
   level: number;
-  peakLevel: number;
   exp: number;
   maxExp: number;
   gold: number;
@@ -325,7 +320,7 @@ export type BattleEventDto =
   | { kind: 'dodge'; fromId: string; toId: string; skill: string }
   | { kind: 'death'; unitId: string; name: string; camp: string }
   | { kind: 'buff'; unitId: string; buffKey: string; name: string; on: boolean }
-  | { kind: 'exp'; amount: number; level: number; peak: boolean }
+  | { kind: 'exp'; amount: number; level: number }
   | { kind: 'general'; text: string };
 
 /** (world, tick) 推送载荷：单位增量 + 可选事件。 */

@@ -3,7 +3,7 @@
  *
  * 前端对各推送的消费方式（见任务书附录 A.2）：
  * - `inventory.changed`：`data` 为 `InventorySlotDto[]` → 整体替换；
- * - `career.levelup`：`data` 为 `{ level, peak, career }`。
+ * - `career.levelup`：`data` 为 `{ level, career }`。
  */
 import type { InventorySlotDto } from '@idle-dark/protocol';
 import { CAREER_CMD, INVENTORY_CMD } from '@idle-dark/protocol';
@@ -24,7 +24,7 @@ export function pushInventoryChanged(
 export function pushCareerLevelup(
   batcher: NotificationBatcher,
   userId: number,
-  payload: { level: number; peak: boolean; career: string },
+  payload: { level: number; career: string },
 ): void {
   batcher.enqueue(userId, {
     cmd: CAREER_CMD.cmd,

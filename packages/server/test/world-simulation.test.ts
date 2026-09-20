@@ -38,7 +38,7 @@ function run(seed: number, ms: number): { texts: string[]; frames: number } {
   const { world } = buildBattleWorld({
     tables,
     player,
-    map: 'town.street',
+    map: 'world.1',
     seed,
     sink: collector,
     clock,
@@ -61,7 +61,7 @@ describe('buildBattleWorld（在线/离线共用装配）', () => {
     const { world, playerUnit } = buildBattleWorld({
       tables,
       player,
-      map: 'town.street',
+      map: 'world.1',
       seed: 42,
       sink: collector,
       clock,
@@ -125,7 +125,7 @@ describe('sendGeneralMsg 出站链路（数据层 → 内核适配器 → 服务
     const { world } = buildBattleWorld({
       tables,
       player,
-      map: 'town.street',
+      map: 'world.1',
       seed: 5,
       sink: collector,
       clock,
@@ -150,7 +150,7 @@ describe('sendGeneralMsg 出站链路（数据层 → 内核适配器 → 服务
     const { world } = buildBattleWorld({
       tables,
       player,
-      map: 'town.street',
+      map: 'world.1',
       seed: 6,
       sink: collector,
       clock,
@@ -173,7 +173,7 @@ describe('sendGeneralMsg 出站链路（数据层 → 内核适配器 → 服务
     const { world } = buildBattleWorld({
       tables,
       player,
-      map: 'town.street',
+      map: 'world.1',
       seed: 7,
       sink: collector,
       clock,
