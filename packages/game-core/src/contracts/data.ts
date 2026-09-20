@@ -60,6 +60,13 @@ export interface GoodData {
   quality?: Quality;
   /** 可堆叠上限；不可堆叠为 undefined。 */
   stack?: number;
+  /**
+   * 是否为**钱包物品**（R1）：通货 / 精华 / 将来的「一般等价物」不占背包格，
+   * 由 `Player.loot` 计入 `Player.wallet`（无容量上限）。
+   *
+   * ⚠️ 混沌钥石（PoE 式地图物品）**不是**钱包物品，仍走背包。
+   */
+  wallet?: boolean;
   price: number;
   /** 炼金能量（material）。 */
   energy?: number;

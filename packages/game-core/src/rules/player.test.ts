@@ -685,16 +685,17 @@ describe('Player.loot 返回值（掉落如实上报）', () => {
   it('正常入包返回实际数量', () => {
     const player = makePlayer();
     player.postCreate();
-    const item = new InventorySlot(tables, 'loot').fromJSON({ key: 'currency.chaos', count: 3 });
+    // ⚠️ 用普通可堆叠材料 `potion`；通货 `currency.*` 自 R1 起是钱包物品（不占背包）。
+    const item = new InventorySlot(tables, 'loot').fromJSON({ key: 'potion', count: 3 });
     expect(player.loot(item)).toBe(3);
-    expect(player.inventory.some((slot) => slot.key === 'currency.chaos' && slot.count === 3)).toBe(true);
+    expect(player.inventory.some((slot) => slot.key === 'potion' && slot.count === 3)).toBe(true);
   });
 
   it('背包满：返回 0，且剩余数量原样保留（不静默吞掉）', () => {
     const player = makePlayer();
     player.postCreate();
     fillBag(player);
-    const item = new InventorySlot(tables, 'loot').fromJSON({ key: 'currency.chaos', count: 3 });
+    const item = new InventorySlot(tables, 'loot').fromJSON({ key: 'potion', count: 3 });
     expect(player.loot(item)).toBe(0);
     expect(item.count).toBe(3);
   });

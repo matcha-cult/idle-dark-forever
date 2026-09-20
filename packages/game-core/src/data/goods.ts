@@ -1127,6 +1127,7 @@ return  [
 // 修仙原表 13 种通货中的 `vaal`（瓦尔宝珠）**不实装**（用户指定）。
 // 精华槽共 12 个：本期实装 6 个，其余 6 个是 `essence.07..12` 空位（不参与掉落）。
 const __goods_craft = ((): GoodEntry[] => {
+  // `wallet: true`（R1）：通货 / 精华不占背包格，计入 `Player.wallet`（无上限）。
   const currency = (key: string, name: string, price: number, description: string): GoodEntry => ({
     key: `currency.${key}`,
     type: 'material',
@@ -1134,6 +1135,7 @@ const __goods_craft = ((): GoodEntry[] => {
     description,
     price,
     stack: 9999,
+    wallet: true,
   });
   const essence = (key: string, name: string, description: string): GoodEntry => ({
     key: `essence.${key}`,
@@ -1142,6 +1144,7 @@ const __goods_craft = ((): GoodEntry[] => {
     description,
     price: 150,
     stack: 9999,
+    wallet: true,
   });
   const reserved = (n: number): GoodEntry => {
     const nn = String(n).padStart(2, '0');
@@ -1152,6 +1155,8 @@ const __goods_craft = ((): GoodEntry[] => {
       description: '精华槽位预留（下期实装，暂不参与掉落）。',
       price: 0,
       stack: 9999,
+      // 精华空位同属钱包物品（与实装精华一致），避免将来实装时出现承载层分叉。
+      wallet: true,
     };
   };
   return [

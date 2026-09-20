@@ -26,7 +26,7 @@ describe('掉落如实上报（服务端）', () => {
       record: (slot: InventorySlot, handled: string) =>
         records.push({ handled, count: slot.count ?? 0 }),
     });
-    const placed = like.loot!({ key: 'currency.chaos', count: 2, quality: 0, handled: 'pickup' });
+    const placed = like.loot!({ key: 'mucus', count: 2, quality: 0, handled: 'pickup' });
     expect(placed).toBe(0);
     expect(records).toEqual([{ handled: 'lost', count: 2 }]);
   });
@@ -40,7 +40,8 @@ describe('掉落如实上报（服务端）', () => {
       record: (slot: InventorySlot, handled: string) =>
         records.push({ handled, count: slot.count ?? 0 }),
     });
-    const placed = like.loot!({ key: 'currency.chaos', count: 3, quality: 0, handled: 'pickup' });
+    // ⚠️ 用普通可堆叠材料 `mucus`；通货 `currency.*` 自 R1 起是钱包物品（永远入包成功）。
+    const placed = like.loot!({ key: 'mucus', count: 3, quality: 0, handled: 'pickup' });
     expect(placed).toBe(3);
     expect(records).toEqual([{ handled: 'pickup', count: 3 }]);
   });

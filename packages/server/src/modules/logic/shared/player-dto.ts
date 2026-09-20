@@ -18,6 +18,7 @@ import type {
   Quality,
   SkillDto,
   SlotLimits,
+  WalletEntryDto,
 } from '@idle-dark/protocol';
 import type { DataTables } from '@idle-dark/game-core';
 import {
@@ -185,6 +186,8 @@ export function slotDtoOf(slot: InventorySlot, index: number): InventorySlotDto 
     if (good.position) dto.equipPosition = good.position;
     if (typeof good.stack === 'number' && good.stack > 0) dto.stack = good.stack;
     if (typeof good.energy === 'number') dto.energy = good.energy;
+    // R1：钱包物品标记（前端据此把掉落分流到钱包展示，不当作背包格）。
+    if (good.wallet === true) dto.wallet = true;
   }
   if (slot.isEquip) {
     const atkSpeed = slot.atkSpeed;
@@ -213,6 +216,35 @@ export function equipmentsDtoOf(career: CareerInfo | undefined): EquipmentsDto {
     const slot = career.equipments[key];
     out[key as EquipPosition] = slot ? slotDtoOf(slot, 0) : null;
   }
+  return out;
+}
+
+/**
+ * 钱包投影（R1）。
+ *
+ * - 只输出数量 > 0 的条目（NaN / Infinity / 负数一律丢弃，不污染 UI）；
+ * - `name` / `type` 由服务端从数据表补全，前端零推导；
+ * - 排序：`goodOrder` 优先，其次 key —— 保证存档往返后顺序稳定。
+ */
+export function walletDtoOf(tables: DataTables, player: Player): WalletEntryDto[] {
+  const out: WalletEntryDto[] = [];
+  for (const [key, count] of player.wallet) {
+    if (!Number.isFinite(count) || count <= 0) continue;
+    const good = tables.goods[key];
+    out.push({
+      key,
+      count,
+      name: good?.name ?? key,
+      type: (good?.type ?? 'material') as GoodType,
+    });
+  }
+  out.sort((a, b) => {
+    const ao = tables.goods[a.key]?.goodOrder ?? 0;
+    const bo = tables.goods[b.key]?.goodOrder ?? 0;
+    if (ao !== bo) return ao - bo;
+    if (a.key === b.key) return 0;
+    return a.key < b.key ? -1 : 1;
+  });
   return out;
 }
 
@@ -386,6 +418,7 @@ export function playerStateDtoOf(
     inventory: slotListDtoOf(player.inventory),
     buildInventory: slotListDtoOf(player.buildInventory),
     awardInventory: slotListDtoOf(player.awardInventory),
+    wallet: walletDtoOf(tables, player),
     inventorySize: player.inventory.length,
     slotLimits: slotLimitsOf(player),
     selectedSkills: [...(career?.selectedSkills ?? [])],

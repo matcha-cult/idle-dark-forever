@@ -78,6 +78,13 @@ export interface InventorySlotDto {
   affixes: AffixDto[];
   /** 副本钥匙所属 group（如 'nightmare.3'）。 */
   dungeonKey?: string;
+  /**
+   * 是否为钱包物品（R1）：通货 / 精华 / 一般等价物**不占背包格**。
+   *
+   * 服务端权威标记（`GoodData.wallet`）；前端只据此分流展示，**不做任何推导**。
+   * `(battle, loot)` 推送复用同一 `InventorySlotDto`，钱包物品这里为 `true`。
+   */
+  wallet?: boolean;
   /** 可堆叠上限。 */
   stack?: number;
   /** 分解/炼金能量。 */
@@ -86,6 +93,19 @@ export interface InventorySlotDto {
 
 /** 装备栏（9 个固定槽，P2；槽位定义见 `equip.ts`）。 */
 export type EquipmentsDto = Partial<Record<EquipPosition, InventorySlotDto | null>>;
+
+/**
+ * 钱包条目（R1）。
+ *
+ * 通货 / 精华 / 一般等价物不占背包格，以「key → 数量」独立承载。
+ * `name` / `type` 由服务端算好下发，前端零推导。
+ */
+export interface WalletEntryDto {
+  key: string;
+  count: number;
+  name: string;
+  type: GoodType;
+}
 
 // ────────────────────────────── 角色 ──────────────────────────────
 
@@ -170,6 +190,11 @@ export interface PlayerStateDto {
   inventory: InventorySlotDto[];
   buildInventory: InventorySlotDto[];
   awardInventory: InventorySlotDto[];
+  /**
+   * 钱包（R1）：通货 / 精华 / 一般等价物，**不占 `inventory` 格**。
+   * 仅包含数量 > 0 的条目（服务端已过滤），顺序稳定。
+   */
+  wallet?: WalletEntryDto[];
   inventorySize: number;
   slotLimits: SlotLimits;
   /** 已选主动技能（顺序即优先级）。 */

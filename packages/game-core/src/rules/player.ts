@@ -99,6 +99,8 @@ export interface PlayerJson extends PlayerMetaJson {
   lootRule: Record<string, number>;
   minLootLevel: number;
   dungeonTickets: Record<string, number>;
+  /** 钱包（R1）：通货 / 精华 / 一般等价物，key → 数量；**不占背包格**。 */
+  wallet: Record<string, number>;
 }
 
 /** 原版 `player.js:589-1367`。 */
@@ -127,6 +129,12 @@ export class Player extends PlayerMeta {
   lootRule = new Map<string, number>();
   minLootLevel = 0;
   dungeonTickets = new Map<string, number>();
+  /**
+   * 钱包（R1）：通货 / 精华 / 一般等价物，key → 数量，**无容量上限、不占背包格**。
+   *
+   * 只承载 `GoodData.wallet === true` 的物品；混沌钥石（PoE 式地图物品）**不走钱包**。
+   */
+  wallet = new Map<string, number>();
 
   constructor(
     tables: DataTables,
@@ -357,6 +365,15 @@ export class Player extends PlayerMeta {
       this.lootRule.set(key, asNumber(item, 0));
     }
 
+    // 钱包（R1）：负数 / NaN 一律收敛为 0（存档可能被手改，不能污染后续掉落累加）。
+    this.wallet = new Map();
+    for (const [key, item] of entriesOf(raw.wallet)) {
+      const count = asNumber(item, 0);
+      if (Number.isFinite(count) && count > 0) {
+        this.wallet.set(key, count);
+      }
+    }
+
     // dungeonTickets：缺失时按地图配置补齐（原版语义）
     this.dungeonTickets = new Map();
     for (const key of Object.keys(this.tables.maps)) {
@@ -394,6 +411,10 @@ export class Player extends PlayerMeta {
     for (const [key, item] of this.dungeonTickets) {
       dungeonTickets[key] = item;
     }
+    const wallet: Record<string, number> = {};
+    for (const [key, item] of this.wallet) {
+      wallet[key] = item;
+    }
 
     return {
       ...super.toJSON(),
@@ -411,6 +432,7 @@ export class Player extends PlayerMeta {
       lootRule,
       minLootLevel: this.minLootLevel,
       dungeonTickets,
+      wallet,
     };
   }
 
@@ -540,6 +562,9 @@ export class Player extends PlayerMeta {
   /**
    * 原版 `loot(good, _target)`：入包（金币/神力直接结算，其余按堆叠规则）。
    *
+   * R1 起：`GoodData.wallet === true` 的物品（通货 / 精华 / 一般等价物）走**钱包分支** ——
+   * 不碰 `inventory`、无容量上限，返回**全部**数量（因此钱包物品永远不会 `lost`）。
+   *
    * @returns **实际落地**的数量（0 = 包裹放不下、整份被丢弃）。调用方据此决定是否上报
    *          「获得战利品」—— 否则会出现「弹了提示但背包里没有」。
    */
@@ -560,6 +585,15 @@ export class Player extends PlayerMeta {
       this.account.diamonds += before;
       good.clear();
       return before;
+    }
+    // 钱包物品：无容量上限，永远全额落地（负数 / NaN 收敛为 0，不污染钱包）。
+    if (this.isWalletGood(key)) {
+      const amount = Number.isFinite(before) && before > 0 ? before : 0;
+      if (amount > 0) {
+        this.wallet.set(key, (this.wallet.get(key) ?? 0) + amount);
+      }
+      good.clear();
+      return amount;
     }
     // 原版 `goods[key].stack`（未知 key 会 TypeError）；这里未知 key 视为不可堆叠
     const limit = key === 'ticket' ? MAX_TICKET_STACK : this.tables.goods[key]?.stack;
@@ -652,9 +686,43 @@ export class Player extends PlayerMeta {
     }
   }
 
-  /** 原版 `countGood(key)`：只统计背包（不含银行/锻造/奖励格）。 */
+  /** 原版 `countGood(key)`：只统计背包（不含银行/锻造/奖励格，**也不含钱包**）。 */
   countGood(key: string): number {
     return this.inventory.reduce((sum, slot) => (slot.key === key ? sum + (slot.count ?? 0) : sum), 0);
+  }
+
+  /** 该 key 是否为钱包物品（`GoodData.wallet === true`）。未知 key 一律 false。 */
+  isWalletGood(key: string): boolean {
+    return this.tables.goods[key]?.wallet === true;
+  }
+
+  /** 钱包持有量（不存在 / 脏数据 → 0）。 */
+  walletCount(key: string): number {
+    const count = this.wallet.get(key);
+    return typeof count === 'number' && Number.isFinite(count) && count > 0 ? count : 0;
+  }
+
+  /**
+   * 从钱包扣除 `count`，返回**未扣完的剩余数量**（0 = 扣清）。
+   *
+   * 与 `costGood` 保持同一返回约定；余额不足时不部分扣除（原子语义：要么全扣、要么不动），
+   * 调用方按剩余 > 0 判失败。负数 / NaN 的 `count` 视为非法，原样返回（不扣款）。
+   */
+  costWallet(key: string, count: number): number {
+    if (Number.isNaN(count) || count <= 0) {
+      return Number.isNaN(count) ? count : 0;
+    }
+    const have = this.walletCount(key);
+    if (have < count) {
+      return count - have;
+    }
+    const rest = have - count;
+    if (rest > 0) {
+      this.wallet.set(key, rest);
+    } else {
+      this.wallet.delete(key);
+    }
+    return 0;
   }
 
   /** 原版 `costGood(key, count)`：从背包**尾部**开始扣，返回未扣完的剩余数量。 */
