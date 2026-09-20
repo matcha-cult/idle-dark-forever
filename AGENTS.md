@@ -699,3 +699,92 @@ __IDLE_DARK__                   // 根 store（临时排查）
   `BattleCollector` **跳过 `'lost'`**（不计入战利品 / 金币 / 离线报告）。
   ⚠️ 旧实现先发事件后落地，会出现「弹了获得提示但背包里没有」——不要改回。
 
+---
+
+## 19. 钱包 · 新地图 · 混沌仪（13 号任务书 W0–W7 重构后的硬约定）
+
+> 来源：[`ai-docs/13-下一期重构-地图·无尽·钱包交接任务书.md`](ai-docs/13-下一期重构-地图·无尽·钱包交接任务书.md)。
+> **本节覆盖 §18.6 与更早文档里关于「剧情 / 氪金秘境 / 旧地图」的旧描述**——那些系统已物理删除。
+
+### 19.1 钱包（R1）：通货 / 精华不占背包格
+
+- `GoodData.wallet?: boolean` 标记钱包物品。已标记：`currency.*`（12 种）+ `essence.*`（实装 6 + 空位 6）。
+  **普通材料仍占背包**；**混沌钥石不是钱包物品**（走背包）。
+- `Player.wallet: Map<string, number>`：**无容量上限**。`Player.loot` 命中钱包物品时走独立分支 ——
+  不碰 `inventory`、返回**全额**（因此钱包物品永远不会 `handled:'lost'`）。
+  `walletCount` / `costWallet`（原子扣款；0/负数/NaN/Infinity 均安全）。
+- `PlayerJson.wallet` 落 `characters.state`；`fromJSON` 丢弃 ≤0 / 非有限值。
+- DTO：`InventorySlotDto.wallet?`（服务端按 `good.wallet` 打标，`(battle,loot)` 推送复用同一 DTO）、
+  `WalletEntryDto`、`PlayerStateDto.wallet?`（`walletDtoOf` 排序：goodOrder → key）。**前端零推导**。
+- 钱包物品**本期不可卖店**（`opSell` 仍只作用于背包格）。
+
+### 19.2 新地图（R2）：等级段 + 一次性野外 BOSS
+
+- 地图种子在 `packages/game-core/src/data/maps-world.ts`（旧 `data/maps.ts` 已物理删除）。
+  `home`（自宅）保留；战斗图为 `world.1`…`world.13`（**9 段各 1 张**，等级 = 段下界
+  `0/5/15/25/35/45/55/65/75`；**85+ 共 4 张**，等级 85）。
+- 解锁：`Requirement` 只保留 `level`（**`stories`/`beforeStories` 已删除**），并新增可选
+  `bossKilled?: string`（上一段守关 BOSS 所在图 key）。`world.2..9` 接 `world.(N-1)`；
+  `world.10..13` 都接 `world.9`。`checkRequirement` 中 `bossKilled` 缺失即 fail-closed。
+- **波次**（`combat/spawner.ts`）：1 波 = 该图 `monsters` 全部条目刷满 `config.total` 且清空；
+  `Born.reset()` 单调推进，`EnemyBorn.wave` 随 `dumpState` 往返（离线/读档不丢波数）。
+- **守关 BOSS**：每 `WORLD_BOSS_WAVE_INTERVAL = 20` 波尝试刷新；同屏一只；
+  **一次性**——击杀记在角色 `Player.worldBossKilled: Set<string>`（`PlayerJson.worldBossKilled`），
+  已击杀的图不再刷 BOSS 但普通怪照常 farm。BOSS 单位用显式 `worldBoss` 标记（**不要用 key 比较**：
+  `slime.queen` 既可能是某图 BOSS 又是另一图普通怪）。
+- **怪物等级**（`EnemyUnit.levelOverride`，`BattleWorld.addEnemy` 对非混沌图设置）：
+  普通 = 地图等级 / 稀有（`quality>=1`）= +1 / 守关 BOSS = +2。地图无 `level` 时回落旧公式。
+- 等级上限 **100**（`CareerInfo.maxLevel` 默认 100，`CareerData.maxLevel?` 可覆写）；
+  **巅峰等级体系已全部删除**（`peakLevel`/`peakExp`/`maxPeakExp`/`levelUpPeak`、DB `peak_level`）。
+  满级后经验溢出直接丢弃，不再有任何巅峰轨迹。
+
+### 19.3 混沌钥石（R3 / W5）：PoE 式白图
+
+- 16 种独立物品 `keystone.t01`…`keystone.t16`（`data/goods.ts`）：`type:'material'` + `stack:9999`，
+  **本期无词缀、无加工入口、不接 `AffixInfo`**；同阶可堆叠；**不进钱包**。
+- 掉落规则（`rules/keystone.ts` + `BattleWorld.rollKeystoneDrop`）：
+  `tier = clamp(floor(level) - 84, 1, 16)`；**仅地图 `level >= 85`** 掉落；
+  单只怪最多掉 **自身阶 + 1**（`maxKeystoneDropTier`）；基础率 `KEYSTONE_DROP_RATE`，
+  掷阶 `P(cap)=0.75` 否则在 `1..cap-1` 均匀。全程走 `rng.loot`，**禁止 `Math.random()`**。
+- 词缀化 + 洗图参考 PoE，随 A1 炼器一起做（届时改为按实例、不堆叠）；T16 后的「梦魇地图」属后续。
+
+### 19.4 混沌仪（R3 / W6）：无尽挂机建筑
+
+- 地图种子 `data/maps-chaos.ts`：`chaos.t01`…`chaos.t16`，**地图等级 = 84 + T**（`MapData.chaos?: number`）。
+  **开图 UI 只显示 T 阶**；混沌图从 `map.list`（`mapListDtoOf`）中过滤，普通 `map.enter` 一律 `MAP_LOCKED`。
+- **解锁 = 通关全部野外 BOSS**（13 张 `world.*`），判定 `Player.hasAllWorldBossesKilled()`。
+- **钥石序列**：`Player.chaosSequence: string[]`（≤16，可重复）、`chaosFailMode:'normal'|'continue'`、
+  `chaosIndex` / `chaosRetry` / `chaosActive`，随角色存档往返。
+- 状态机唯一实现在 `packages/server/src/modules/logic/chaos/internal/chaos-ops.ts`（纯函数，在线/离线共用）：
+  每次进入消耗 1 把钥石；`clear` → 下一把；`death + normal` → 中断回普通地图；
+  `death + continue` → 重试当前把，**连败 3 次跳下一把**；越界 / 缺钥石 → 干净停止。
+- 运行接线：battle 的 `BattleWorld.chaosOutcome`（混沌 BOSS 死 = `clear`，**不写** `worldBossKilled`、可重复刷；
+  玩家死 = `death`）→ `WorldService.tick` 发跨服事件 **`ChaosRunEnded`**（`shared/events.ts`）→
+  `ChaosLogicService` 订阅后用 `BATTLE_COMMAND.enterMap(..., { allowChaos: true })` 推进。
+  ⚠️ `clear` 必须等守关 BOSS **清尸（`clean()` 掉落结算）后**才上报，否则换图会 dispose 掉清尸计时器、吞掉落。
+- 协议：`CMD_SEGMENTS.chaos = 140`（**复用已退役的 dungeon 段**）、`CHAOS_CMD{state,setSequence,setFailMode,start,stop}`；
+  逻辑服 `idle` 同时拥有 `idle(120)` 与 `chaos(140)`（roots 含 `modules/logic/idle` + `modules/logic/chaos`）。
+- **离线**：`IdleService.settle` 在 `chaosActive` 且持久化地图是混沌图时，用同一 `VirtualClock`/预算循环模拟并复用
+  `chaos-ops` 推进；**预算耗尽 / run 未结算 → 停在当前钥石，`extrapolatedMs = 0`**（混沌部分不外推）。
+  非混沌图的开放世界 C2 外推保持不变。
+- 前端面板 `ChaosPanel.tsx` + `chaos-store.ts`（T1~T16 + 钥石数、可编辑序列、失败选项、start/stop）。
+
+### 19.5 已物理删除的旧体系（不要回引）
+
+- **剧情 / quest 域**：`data/stories.ts`、story 逻辑服、`story` cmd 段（100）、`StoriesPanel`/`story-store`、
+  `MapEntered`/`EnemyKilled` 事件、`story-entry-smoke.mjs`；`Requirement.stories` 已删。
+- **旧氪金秘境**：`dungeon` cmd 段（140，现由 `chaos` 复用）、`challengeQueue`/`dungeonRuns`/`dungeonCooldowns`、
+  `dungeonTickets`/`countTicket`/`costTicket`、`endlessLevel`/`pendingMaps`、`nightmare.*` 图、
+  `data/packages/nightmare.ts`、`DungeonState`/phases、`year2018.dungeon`、`dungeon-queue-smoke.mjs`、
+  `dungeon → map` 过渡白名单。`TRANSITIONAL_DEEP_IMPORTS` 现为空。
+
+### 19.6 本期基线（W7 收尾）
+
+- `pnpm run verify` = 0，**1333 用例**：protocol 30 / ionet-transport 73 / game-core 555 /
+  ui-kit 194 / server 404 / web 77。
+- 数据库冒烟 6 项全绿：路由 **28/28**（含 `chaos 140/1..5`）、指标 9/9、线协议 15/15、
+  完整流程 22/22、角色归属 10/10、地图控制器 15/15。
+- 提交序列：W1 `0783da2` 钱包 → W2 `d62e60e` 删剧情 → W3 `bf8181e` 地图/100 级/删巅峰 →
+  W4 `b473692` 波次/BOSS → W5 `a0dde55` 钥石 → W6a `343e6d0` 删旧秘境 → W6b `514bc00` 混沌仪 →
+  W7 文档收尾。
+
