@@ -72,7 +72,7 @@ pnpm --filter @idle-dark/ui-kit exec vitest run
 |---|---|
 | `theme/` | ConfigProvider + antd App 外壳、主题配置纯函数、零副作用持久化 store、明暗切换 |
 | `layout/` | AppShell（桌面 Sider ↔ 移动 Drawer）、SideNav、HudBar、PageShell、SectionCard、Toolbar |
-| `game/` | 品质 7 档、物品卡/网格、五类资源条、战斗单位卡、数量选择、费用清单、操作条 |
+| `game/` | 品质 3 档、物品卡/网格、五类资源条、战斗单位卡、数量选择、费用清单、操作条 |
 | `data/` | 属性列表、日志面板 |
 | `feedback/` | 错误边界、连接徽标、空态 |
 | `form/` | 受控表单行（按需增补） |

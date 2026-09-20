@@ -18,8 +18,15 @@ import type { AffixData, DataTables, GoodData, LegendData } from '../contracts/d
 import type { Rng } from '../contracts/ports.js';
 import { AffixInfo, InventorySlot } from './inventory-slot.js';
 
-/** 原版 `baseQualityRate`（品质骰阈值，从高到低）。 */
-export const BASE_QUALITY_RATE: readonly number[] = [1, 0.5, 0.05, 0.005, 0.0005, 0];
+/**
+ * 品质骰阈值（从高到低）。
+ *
+ * P4：品质压成 3 档（0 普通 / 1 优秀 / 2 传奇），故阈值表压到 4 项。
+ * 判定与长度绑定：`quality = max(0, findIndex(v => v < dice) - 1)`，长度 4 ⇒ 最大品质 2。
+ * 取值沿用原档位边界：`dice ≥ 0.5` → 普通；`[0.005, 0.5)` → 优秀；
+ * `dice < 0.005` → 传奇（≈ 原版「史诗 + 传说」合计 0.5% 的稀有度）。
+ */
+export const BASE_QUALITY_RATE: readonly number[] = [1, 0.5, 0.005, 0];
 
 /** 原版 `materialKey`：下标 1 = 尘（dust），2 = 碎片（piece）。 */
 export const MATERIAL_KEY: readonly (readonly string[])[] = [
@@ -114,7 +121,7 @@ export function isValidAffix(tables: DataTables, key: string, affix: string, lev
 }
 
 /**
- * 原版 `specialRate`：质量 4（传说）时「抽中传奇词缀」的概率。
+ * 原版 `specialRate`：质量档为传奇（P4 后 `quality === 2`）时「抽中传奇词缀」的概率。
  *
  * ⚠️ 原版是 `__DEV__ ? 1 : Object.keys(legends).filter(v => !legends[v].special).length / 100`。
  * game-core 无 `__DEV__`，**固定采用生产公式**；开发态 100% 传奇的行为不移植。
@@ -184,7 +191,7 @@ export function randomEquip(
 
   let legendType: string | null = null;
 
-  if (quality === 4) {
+  if (quality === 2) {
     if (rng.next() < specialLegendRate(tables)) {
       const validLegends = Object.keys(tables.legends).filter((legendKey) => {
         const legend = tables.legends[legendKey];
@@ -256,9 +263,9 @@ export function getDecomposeMatrials(input: { level: number; quality: number }):
     }
   }
 
-  if (input.quality >= 3) {
-    // 分解出神力
-    ret.diamonds = Math.ceil(3 + (input.level / 100) * (1 << (input.quality - 3)));
+  if (input.quality >= 2) {
+    // 分解出神力（P4：传奇档 = quality 2；指数从该档起算）。
+    ret.diamonds = Math.ceil(3 + (input.level / 100) * (1 << (input.quality - 2)));
   }
   return ret;
 }

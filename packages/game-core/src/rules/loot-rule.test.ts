@@ -35,7 +35,7 @@ describe('loot-rule：key 编解码', () => {
   });
 
   it('parse 解析合法 key（class 含冒号时按最后一个冒号切）', () => {
-    expect(parseLootRuleKey('c:sword:3')).toEqual({ clazz: 'sword', quality: 3 });
+    expect(parseLootRuleKey('c:sword:2')).toEqual({ clazz: 'sword', quality: 2 });
     expect(parseLootRuleKey('c:a:b:1')).toEqual({ clazz: 'a:b', quality: 1 });
     expect(parseLootRuleKey(`c:x:${LOOT_RULE_MAX_QUALITY}`)).toEqual({
       clazz: 'x',

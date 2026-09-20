@@ -127,11 +127,11 @@ export function careerDisplayName(tables: DataTables, career: string | null | un
   return tables.careers[career]?.name ?? career;
 }
 
-/** 品质夹取到 `Quality`（0..6）。非法 / 缺失 → 0。 */
+/** 品质夹取到 `Quality`（0..2，P4）。非法 / 缺失 / 越界 → 夹到端点。 */
 function asQuality(value: unknown): Quality {
   const n = typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : 0;
   if (n < 0) return 0;
-  if (n > 6) return 6;
+  if (n > 2) return 2;
   return n as Quality;
 }
 

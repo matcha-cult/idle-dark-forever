@@ -816,7 +816,7 @@ function safeTicketCount(player: Player, ticketKey: string): number {
 function clampQuality(value: unknown): Quality {
   const n = typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : 0;
   if (n < 0) return 0;
-  if (n > 6) return 6;
+  if (n > 2) return 2;
   return n as Quality;
 }
 

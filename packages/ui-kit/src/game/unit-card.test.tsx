@@ -10,7 +10,7 @@ describe('UnitCard', () => {
     const html = renderToHtml(<UnitCard unit={makeUnit()} />);
     expect(htmlToText(html)).toContain('无名剑士');
     expect(htmlToText(html)).toContain('Lv.12');
-    expect(htmlToText(html)).toContain('精良');
+    expect(htmlToText(html)).toContain('传奇');
     expect(html).toContain('data-unit-id');
     expect(html).toContain('resource-bar-hp');
     expect(htmlToText(html)).toContain('800/1,000');

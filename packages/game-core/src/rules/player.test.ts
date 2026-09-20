@@ -562,12 +562,12 @@ describe('Player 装备', () => {
   it('equip 与已装备武器互换', () => {
     const player = makePlayer();
     player.postCreate();
-    const newSword = new InventorySlot(tables, 'inventory').fromJSON({ key: 'stickSword', count: 1, level: 20, quality: 3 });
+    const newSword = new InventorySlot(tables, 'inventory').fromJSON({ key: 'stickSword', count: 1, level: 20, quality: 2 });
     player.inventory[0]!.fromJSON(newSword.toJSON());
 
     player.equip(player.inventory[0]!);
     expect(player.equipments!.weapon.level).toBe(20);
-    expect(player.equipments!.weapon.quality).toBe(3);
+    expect(player.equipments!.weapon.quality).toBe(2);
     // 旧武器换到了背包原格
     expect(player.inventory[0]!.key).toBe('stickSword');
     expect(player.inventory[0]!.level).toBe(1);

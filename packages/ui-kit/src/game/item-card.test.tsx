@@ -29,7 +29,7 @@ describe('ItemCard', () => {
     const html = renderToHtml(<ItemCard slot={makeSlot()} />);
     expect(htmlToText(html)).toContain('夜刃短剑');
     expect(html).toContain('data-quality="2"');
-    expect(html).toContain('精良');
+    expect(html).toContain('传奇');
     expect(html).toContain('Lv.12');
     expect(htmlToText(html)).toContain('攻击力 +12');
     expect(htmlToText(html)).toContain('暴击率 +3%');

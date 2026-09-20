@@ -138,7 +138,7 @@ describe('InventorySlot 基础', () => {
       key: 'stickSword',
       count: 1,
       level: 10,
-      quality: 4,
+      quality: 2,
       legendType: 'flame',
       affixes: [{ key: 'flame', value: 5 }],
     });
@@ -265,7 +265,7 @@ describe('InventorySlot.fromJSON 隐式兼容', () => {
       key: 'stickSword',
       count: 1,
       level: 30,
-      quality: 3,
+      quality: 2,
       locked: true,
       enchantTimes: 2,
       legendType: 'flame',

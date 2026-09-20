@@ -73,7 +73,7 @@ function rollOneEquip(player: Player, minLootLevel = 0): Recorded[] {
 function setAllRules(player: Player, action: LootRuleAction, enabled = true): void {
   opUpdateLootRule(player, {
     rules: equipmentClasses(player).flatMap((clazz) =>
-      [0, 1, 2, 3, 4].map((quality) => ({
+      [0, 1, 2].map((quality) => ({
         id: lootRuleKeyOf(clazz, quality),
         minQuality: quality,
         minLevel: 0,
@@ -158,18 +158,18 @@ describe('拾取规则：面板设置必须驱动真实掉落结算', () => {
     expect(equipCountInBag(player)).toBe(0);
   });
 
-  it('规则与掉落错位（只配 sword:3）时不误伤其他掉落', () => {
+  it('规则与掉落错位（只配 sword:2）时不误伤其他掉落', () => {
     const player = freshPlayer();
     setAllRules(player, 0);
     opUpdateLootRule(player, {
       rules: [
-        { id: lootRuleKeyOf('sword', 3), minQuality: 3, minLevel: 0, action: 1, enabled: true },
+        { id: lootRuleKeyOf('sword', 2), minQuality: 2, minLevel: 0, action: 1, enabled: true },
       ],
     });
 
     const recorded = rollOneEquip(player);
 
-    // 不保证这一抽恰好是 sword:3，但无论命中与否都必须自洽：
+    // 不保证这一抽恰好是 sword:2，但无论命中与否都必须自洽：
     // 命中 → sell；未命中 → pickup。绝不允许出现「设置了却分解」这类错配。
     expect(recorded).toHaveLength(1);
     expect(['sell', 'pickup']).toContain(recorded[0]?.handled);

@@ -184,15 +184,15 @@ describe('randomEquip', () => {
     expect(a.toJSON()).toEqual(b.toJSON());
   });
 
-  it('mfRate 极大时必出传说品质（quality=4）', () => {
+  it('mfRate 极大时必出传奇品质（quality=2）', () => {
     for (let seed = 1; seed <= 20; seed++) {
       const item = randomEquip(tables, 50, 1e9, undefined, makeRng(seed));
-      expect(item.quality).toBe(4);
+      expect(item.quality).toBe(2);
     }
   });
 
   it('品质骰严格遵循 baseQualityRate 阈值（mfRate=1 时 dice = 首个随机数）', () => {
-    expect(BASE_QUALITY_RATE).toEqual([1, 0.5, 0.05, 0.005, 0.0005, 0]);
+    expect(BASE_QUALITY_RATE).toEqual([1, 0.5, 0.005, 0]);
     for (let seed = 1; seed <= 50; seed++) {
       const dice = makeRng(seed).next();
       const expected = Math.max(0, BASE_QUALITY_RATE.findIndex((value) => value < dice) - 1);
@@ -206,7 +206,7 @@ describe('randomEquip', () => {
       const high = randomEquip(tables, 50, 100, undefined, makeRng(seed)).quality;
       expect(high).toBeGreaterThanOrEqual(low);
     }
-    expect(randomEquip(tables, 50, 1e9, undefined, makeRng(3)).quality).toBe(4);
+    expect(randomEquip(tables, 50, 1e9, undefined, makeRng(3)).quality).toBe(2);
   });
 
   it('position 过滤只产出该部位的装备', () => {
@@ -265,31 +265,35 @@ describe('getDecomposeMatrials', () => {
     expect(getDecomposeMatrials({ level: 20, quality: 0 })).toEqual({});
   });
 
-  it('quality 1 给尘；quality 2 追加碎片', () => {
+  it('quality 1 给尘；quality 2 追加碎片 + 神力', () => {
     expect(getDecomposeMatrials({ level: 20, quality: 1 })).toEqual({ dust1: 1 });
-    expect(getDecomposeMatrials({ level: 20, quality: 2 })).toEqual({ dust1: 1, piece1: 1 });
-  });
-
-  it('quality >= 3 追加神力，且按品质指数放大', () => {
-    expect(getDecomposeMatrials({ level: 20, quality: 3 })).toEqual({
+    expect(getDecomposeMatrials({ level: 20, quality: 2 })).toEqual({
       dust1: 1,
       piece1: 1,
-      diamonds: 4, // ceil(3 + 0.2 * 1)
+      diamonds: 4, // ceil(3 + 0.2 * 2^0)
     });
+  });
+
+  it('quality 2（传奇档）追加神力，且按品质指数放大', () => {
+    expect(getDecomposeMatrials({ level: 100, quality: 2 })).toEqual({
+      dust4: 1,
+      piece4: 1,
+      diamonds: 4, // ceil(3 + 1 * 2^0)
+    });
+    // 防御性边界：越界 quality（老数据）仍不抛错，指数按 (quality - 2) 放大。
     expect(getDecomposeMatrials({ level: 100, quality: 4 })).toEqual({
       dust4: 1,
       piece4: 1,
-      diamonds: 5, // ceil(3 + 1 * 2)
-    });
-    expect(getDecomposeMatrials({ level: 100, quality: 6 })).toEqual({
-      dust4: 1,
-      piece4: 1,
-      diamonds: 11, // ceil(3 + 1 * 8)
+      diamonds: 7, // ceil(3 + 1 * (1 << 2))
     });
   });
 
   it('高等级材料档位映射正确', () => {
-    expect(getDecomposeMatrials({ level: 200, quality: 2 })).toEqual({ dust6: 1, piece6: 1 });
+    expect(getDecomposeMatrials({ level: 200, quality: 2 })).toEqual({
+      dust6: 1,
+      piece6: 1,
+      diamonds: 5, // ceil(3 + 2 * 2^0)
+    });
     expect(MATERIAL_KEY[1]).toHaveLength(6);
     expect(MATERIAL_KEY[2]).toHaveLength(6);
   });

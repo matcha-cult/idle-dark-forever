@@ -86,7 +86,7 @@ function parseRules(raw: unknown): { ok: true; value: LootRuleEntryDto[] } | { o
     const minLevel = toFiniteInt(entry['minLevel']);
     const action = toFiniteInt(entry['action']);
     const enabled = toBoolean(entry['enabled']);
-    if (minQuality === undefined || minQuality < 0 || minQuality > 6) {
+    if (minQuality === undefined || minQuality < 0 || minQuality > 2) {
       return { ok: false, fail: ActionError.invalidParam('minQuality 非法') };
     }
     if (minLevel === undefined || minLevel < 0) {

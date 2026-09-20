@@ -9,10 +9,15 @@
 
 // ────────────────────────────── 基础枚举 ──────────────────────────────
 
-/** 品质 0..6：普通 / 优秀 / 精良 / 史诗 / 传说 / 远古 / 神器。 */
-export type Quality = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+/**
+ * 装备品质 0..2：普通 / 优秀 / 传奇（P4：7 档压到 3 档）。
+ *
+ * ⚠️ 破坏性契约变更（已获 P4 批准）：旧存档 / 旧 lootRule 键不再兼容（P1 无真实玩家）。
+ * ⚠️ 与 `UnitStateDto.quality` 同名**不同义**：后者是敌人词缀条数（可 >2），故那里用 `number`。
+ */
+export type Quality = 0 | 1 | 2;
 
-export const QUALITY_NAMES: readonly string[] = ['普通', '优秀', '精良', '史诗', '传说', '远古', '神器'];
+export const QUALITY_NAMES: readonly string[] = ['普通', '优秀', '传奇'];
 
 /** 物品大类。 */
 export type GoodType = 'equip' | 'material' | 'junk' | 'package';
@@ -202,7 +207,13 @@ export interface UnitStateDto {
   name: string;
   camp: string;
   level: number;
-  quality: Quality;
+  /**
+   * 敌人词缀条数（`EnemyUnit.quality`）。
+   *
+   * ⚠️ 与装备 `Quality`（0..2）**同名不同义**：这是「带几条敌人词缀」的计数，可 >2，
+   * 因此这里刻意用 `number` 而不是 `Quality`（12 号任务书 §3.6 第 8 条）。
+   */
+  quality: number;
   hp: number;
   maxHp: number;
   mp: number;
@@ -507,7 +518,7 @@ export interface SystemNoticeDto {
 export interface LootRuleEntryDto {
   /** 规则 id。 */
   id: string;
-  /** 品质下限 0..6。 */
+  /** 品质下限 0..2。 */
   minQuality: number;
   /** 等级下限。 */
   minLevel: number;

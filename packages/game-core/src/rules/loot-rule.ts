@@ -42,8 +42,8 @@ export const LOOT_RULE_PREFIX = 'c:';
 /** 停用一条规则时在 action 上叠加的偏移量。 */
 export const LOOT_RULE_DISABLED_OFFSET = 10;
 
-/** 品质维度上限（原版 UI 为 5 格：普通..传说；留 6 容忍历史数据）。 */
-export const LOOT_RULE_MAX_QUALITY = 6;
+/** 品质维度上限（P4：品质只有 3 档，0..2）。 */
+export const LOOT_RULE_MAX_QUALITY = 2;
 
 /** 本模块只用到的玩家形状（`Player` 与 `combat` 的 `PlayerLike` 都满足）。 */
 export interface LootRulePlayerLike {

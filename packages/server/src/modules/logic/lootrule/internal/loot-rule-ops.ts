@@ -30,8 +30,8 @@ import {
 import { OpError } from '../../shared/op-error.js';
 
 
-/** 规则矩阵的品质维度（原版 UI 为 5 格：普通..传说）。 */
-export const RULE_QUALITY_COUNT = 5;
+/** 规则矩阵的品质维度（P4：品质只有 3 档 0..2，与 `LOOT_RULE_MAX_QUALITY` 对齐）。 */
+export const RULE_QUALITY_COUNT = 3;
 
 /** 展示用装备大类集合（按数据表顺序去重）。 */
 export function equipmentClasses(player: Player): string[] {

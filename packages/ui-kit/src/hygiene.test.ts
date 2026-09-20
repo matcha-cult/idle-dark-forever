@@ -16,7 +16,7 @@
  * 5. 反馈纪律：禁止静态 `message.*` / `notification.*` / `Modal.confirm`（须走 `App.useApp()`）；
  * 6. 结构纪律：单文件 ≤200 行、`.tsx` 只导出一个组件、禁止 `export default`。
  *
- * 品质 7 档与 protocol `QUALITY_NAMES` 的一致性断言在 `game/quality.test.ts`
+ * 品质 3 档与 protocol `QUALITY_NAMES` 的一致性断言在 `game/quality.test.ts`
  * （它是那条规则的天然归属地，也避免本文件膨胀）。
  *
  * 测试文件（`*.test.ts(x)`）自身**不在扫描范围内**：它们允许 import `node:`、

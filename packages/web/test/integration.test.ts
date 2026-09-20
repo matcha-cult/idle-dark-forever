@@ -274,7 +274,7 @@ describe('登录 → 选角 → 推送 → 面板更新', () => {
     // 4) 服务端推送背包变更 → 格子整体替换
     server.pushRoute(INVENTORY_CMD.cmd, INVENTORY_CMD.changed, [
       makeSlot(),
-      makeSlot({ id: 's2', name: '夜蝠之牙', quality: 4 }),
+      makeSlot({ id: 's2', name: '夜蝠之牙', quality: 2 }),
     ]);
     expect(root.inventory.inventory.map((slot) => slot.id)).toEqual(['s1', 's2']);
   });

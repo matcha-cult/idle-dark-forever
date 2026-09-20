@@ -4,18 +4,24 @@
  * 前端 `world.tick` 只做整体替换，不做任何推导，因此这里把资源 / 目标 / 读条 / Buff
  * 全部算好。
  */
-import type { UnitStateDto, Quality } from '@idle-dark/protocol';
+import type { UnitStateDto } from '@idle-dark/protocol';
 import { EnemyUnit, PlayerUnit, Unit } from '@idle-dark/game-core';
 
 function finite(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
-function qualityOf(value: number): Quality {
+/**
+ * `EnemyUnit.quality`（敌人**词缀条数**）→ DTO。
+ *
+ * ⚠️ 这不是装备品质：装备品质已是 `Quality = 0|1|2`，而敌人词缀条数可 >2。
+ * 因此 `UnitStateDto.quality` 的类型是 `number`（12 号任务书 §3.6 第 8 条）。
+ */
+function qualityOf(value: number): number {
   const n = finite(value);
   if (n < 0) return 0;
   if (n > 6) return 6;
-  return n as Quality;
+  return n;
 }
 
 /** 单位类型标识。 */

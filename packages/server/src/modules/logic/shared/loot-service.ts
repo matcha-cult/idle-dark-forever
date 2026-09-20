@@ -24,7 +24,7 @@ function finite(value: unknown, fallback: number): number {
 function clampQuality(value: unknown): number {
   const n = Math.trunc(finite(value, 0));
   if (n < 0) return 0;
-  if (n > 6) return 6;
+  if (n > 2) return 2;
   return n;
 }
 
