@@ -5,6 +5,9 @@
  * 末段是**跨包一致性门禁**：protocol 的 `QUALITY_NAMES` 是值导出，本包运行时不能 import 它
  * （红线：只依赖 antd + react），所以直接读 `packages/protocol/src/dto.ts` 源码做逐字比对。
  * 放在这里而不是 `hygiene.test.ts`：它是「品质」这条契约的天然归属地。
+ *
+ * **配色不在本包**：色板由应用层经 `RarityPaletteProvider` 注入（见 `rarity-palette.tsx`），
+ * 取色与徽标渲染的测试在 `rarity-tag.test.tsx`。
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -12,21 +15,20 @@ import { describe, expect, it } from 'vitest';
 import { parseStringArrayLiteral } from '../testing/hygiene-scan.js';
 import {
   clampQuality,
+  COMMON_QUALITY,
   MAX_QUALITY,
-  QUALITY_COLOR_TOKEN_NAMES,
   QUALITY_LABELS,
-  qualityColorTokenName,
   qualityLabel,
 } from './quality.js';
 
 describe('QUALITY_LABELS', () => {
-  it('3 档且顺序与协议一致', () => {
-    expect(QUALITY_LABELS).toEqual(['普通', '优秀', '传奇']);
+  it('3 档且顺序与协议一致（档位 1 的玩家文案是「稀有」）', () => {
+    expect(QUALITY_LABELS).toEqual(['普通', '稀有', '传奇']);
   });
 
-  it('色 token 名 3 个且互不重复', () => {
-    expect(QUALITY_COLOR_TOKEN_NAMES).toHaveLength(3);
-    expect(new Set(QUALITY_COLOR_TOKEN_NAMES).size).toBe(3);
+  it('普通档 = 最低档，且默认不渲染徽标', () => {
+    expect(COMMON_QUALITY).toBe(0);
+    expect(QUALITY_LABELS[COMMON_QUALITY]).toBe('普通');
   });
 });
 
@@ -58,6 +60,7 @@ describe('clampQuality', () => {
 describe('qualityLabel', () => {
   it('缺省用内置文案', () => {
     expect(qualityLabel(0)).toBe('普通');
+    expect(qualityLabel(1)).toBe('稀有');
     expect(qualityLabel(2)).toBe('传奇');
   });
 
@@ -70,18 +73,6 @@ describe('qualityLabel', () => {
   it('越界夹取后取文案', () => {
     expect(qualityLabel(42)).toBe('传奇');
     expect(qualityLabel(-1)).toBe('普通');
-  });
-});
-
-describe('qualityColorTokenName', () => {
-  it('3 档各自映射到不同 token 名', () => {
-    const names = Array.from({ length: 3 }, (_, index) => qualityColorTokenName(index));
-    expect(names).toEqual([...QUALITY_COLOR_TOKEN_NAMES]);
-  });
-
-  it('越界夹取', () => {
-    expect(qualityColorTokenName(99)).toBe(QUALITY_COLOR_TOKEN_NAMES[2]);
-    expect(qualityColorTokenName(Number.NaN)).toBe(QUALITY_COLOR_TOKEN_NAMES[0]);
   });
 });
 
@@ -102,8 +93,7 @@ describe('与 @idle-dark/protocol 的一致性（协议是唯一真相）', () =
     expect(QUALITY_LABELS).toEqual(protocolNames);
   });
 
-  it('本地色 token 名恰好 3 个且互不重复', () => {
-    expect(QUALITY_COLOR_TOKEN_NAMES).toHaveLength(protocolNames.length);
-    expect(new Set(QUALITY_COLOR_TOKEN_NAMES).size).toBe(protocolNames.length);
+  it('本地 MAX_QUALITY 与协议档数一致', () => {
+    expect(MAX_QUALITY).toBe(protocolNames.length - 1);
   });
 });

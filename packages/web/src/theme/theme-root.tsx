@@ -6,11 +6,15 @@
  * 主题持久化的唯一真相是 `theme/theme-store.ts`（键 `idle-dark:theme`，与 `index.html`
  * 的防闪烁内联脚本一致）；ui-kit 自带的 `createThemeStore` 键名不同且不被本应用使用 ——
  * `ThemeProvider` 本身是**受控无状态**的，因此不会产生两套主题真相。
+ *
+ * 稀有度色板在这里注入（`rarity-palette.ts`）：配色随主题切换，是**应用层**决策，
+ * ui-kit 只提供 `RarityPaletteProvider` 契约（它自己的源码零内联 hex）。
  */
 import { observer } from 'mobx-react-lite';
 import type { ReactNode } from 'react';
-import { ThemeProvider, ThemeToggle } from '@idle-dark/ui-kit';
+import { RarityPaletteProvider, ThemeProvider, ThemeToggle } from '@idle-dark/ui-kit';
 import { useRootStore } from '../app/root-context.js';
+import { rarityPaletteOf } from './rarity-palette.js';
 
 export interface ThemeRootProps {
   children: ReactNode;
@@ -20,7 +24,7 @@ export const ThemeRoot = observer(function ThemeRoot({ children }: ThemeRootProp
   const { theme } = useRootStore();
   return (
     <ThemeProvider mode={theme.mode} className="app-root">
-      {children}
+      <RarityPaletteProvider palette={rarityPaletteOf(theme.mode)}>{children}</RarityPaletteProvider>
     </ThemeProvider>
   );
 });

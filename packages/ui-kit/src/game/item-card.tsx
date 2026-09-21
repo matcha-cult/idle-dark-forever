@@ -15,8 +15,8 @@
 import { Flex, Typography, theme } from 'antd';
 import type { KeyboardEvent, ReactNode } from 'react';
 import type { InventorySlotDto } from '@idle-dark/protocol';
-import { qualityColorTokenName } from './quality.js';
 import { RarityTag } from './rarity-tag.js';
+import { useRarityColor } from './rarity-palette.js';
 
 export interface ItemCardProps {
   slot: InventorySlotDto | null;
@@ -57,6 +57,8 @@ export function ItemCard(props: ItemCardProps) {
     emptyText = '空',
   } = props;
   const { token } = theme.useToken();
+  // 钩子无条件调用（下面 `slot === null` 会提前 return）；空格占位取普通档 = 主题正文色
+  const nameColor = useRarityColor(slot === null ? 0 : (slot.displayQuality ?? slot.quality)).name;
 
   if (slot === null) {
     return (
@@ -80,7 +82,6 @@ export function ItemCard(props: ItemCardProps) {
   }
 
   const interactive = !disabled && (onClick !== undefined || onActivate !== undefined);
-  const nameColor = token[qualityColorTokenName(slot.displayQuality ?? slot.quality)];
   const affixes = (slot.affixes ?? []).slice(0, Math.max(0, maxAffixes));
   const hiddenAffixCount = (slot.affixes?.length ?? 0) - affixes.length;
 

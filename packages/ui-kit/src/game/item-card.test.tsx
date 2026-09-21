@@ -35,6 +35,19 @@ describe('ItemCard', () => {
     expect(htmlToText(html)).toContain('暴击率 +3%');
   });
 
+  it('普通档不显示品质 tag，但名称仍用正文色渲染', () => {
+    const html = renderToHtml(<ItemCard slot={makeSlot({ quality: 0, displayQuality: 0 })} />);
+    expect(html).not.toContain('rarity-tag');
+    expect(htmlToText(html)).not.toContain('普通');
+    expect(htmlToText(html)).toContain('夜刃短剑');
+  });
+
+  it('稀有档显示「稀有」标签', () => {
+    const html = renderToHtml(<ItemCard slot={makeSlot({ quality: 1, displayQuality: 1 })} />);
+    expect(html).toContain('data-quality="1"');
+    expect(htmlToText(html)).toContain('稀有');
+  });
+
   it('词缀超长按 maxAffixes 截断并提示剩余条数', () => {
     const html = renderToHtml(<ItemCard slot={makeSlot({ affixes })} maxAffixes={2} />);
     expect(htmlToText(html)).toContain('词缀 0');

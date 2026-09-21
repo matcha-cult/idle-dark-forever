@@ -5,14 +5,20 @@ export { ItemCard, type ItemCardProps } from './item-card.js';
 export { ItemGrid, type ItemGridProps } from './item-grid.js';
 export {
   clampQuality,
+  COMMON_QUALITY,
   MAX_QUALITY,
-  QUALITY_COLOR_TOKEN_NAMES,
   QUALITY_LABELS,
-  qualityColorTokenName,
   qualityLabel,
-  type QualityColorTokenName,
 } from './quality.js';
 export { QuantityInput, type QuantityInputProps } from './quantity-input.js';
+export {
+  RarityPaletteProvider,
+  type RarityColor,
+  type RarityPalette,
+  type RarityPaletteProviderProps,
+  useRarityColor,
+  useRarityTagStyle,
+} from './rarity-palette.js';
 export { RarityTag, type RarityTagProps } from './rarity-tag.js';
 export {
   RESOURCE_COLOR_TOKEN_NAMES,

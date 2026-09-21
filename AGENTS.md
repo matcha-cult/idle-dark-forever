@@ -324,9 +324,19 @@ cmd 段唯一归属、每个 `*LogicServer` 里不得出现 `@ActionMethod`。
 
 - **装备槽 9 个**（箭袋属副手，不是第 10 槽）：唯一真相是 `@idle-dark/protocol` 的 `equip.ts`；
   `canEquipOffHand(main, off)` 是前后端**共用**判定表（禁止各写一份）；`Player.equip()` 返回 boolean。
-- **品质三档** `Quality = 0|1|2`（普通 / 优秀 / 传奇），`BASE_QUALITY_RATE = [1, 0.5, 0.005, 0]`。
+- **品质三档** `Quality = 0|1|2`（普通 / **稀有** / 传奇），`BASE_QUALITY_RATE = [1, 0.5, 0.005, 0]`。
   ⚠️ `UnitStateDto.quality` 是**敌人词缀条数**（可 >2），与装备品质**同名不同义**，不要夹到 0..2。
-- **词缀**按前后缀分池（普通 1+1 / 优秀 3+3 / 传奇 3+3+1，传奇词缀豁免前后缀规则）；
+  ⚠️ 档位 1 的**玩家文案是「稀有」**（`game-core` 内部注释仍叫「优秀」，只是内部代号）——
+  展示文案的唯一真相是 protocol `QUALITY_NAMES`，ui-kit 镜像由门禁测试逐字比对。
+- **稀有度视觉**：`普通` **不显示徽标**（`RarityTag` 返回 `null`；需要文字的场景传 `showCommon`）。
+  稀有 `#ffff77` / 传奇 `#ef6916` 是**徽标底色**（实色块 + 深色字），**两种主题完全一致** ——
+  换主题只换**名称文字**（亮色主题用同色系深色变体，否则 `#ffff77` 对白底 1.06:1 看不见）。
+  色板放**应用层**（`web/src/theme/rarity-palette.ts`），ui-kit 只提供 `RarityPaletteProvider` +
+  `useRarityColor`（`{name, chip, chipText}`）契约 —— 因为 ui-kit 有「源码零内联 hex」硬门禁。
+  ⚠️ **徽标底不要跟着主题变**（曾把亮色主题的徽标底也换成 `#7a6c00`，观感与设计色差太远）。
+  ⚠️ **不要**改回 antd `Tag color={hex}`：那条分支会把背景按 HSL 亮度 0.95 提亮、文字设成同一个色，
+  `#ffff77` 会变成「浅底浅字」完全看不见。详见 `ai-docs/18` §18.2。
+- **词缀**按前后缀分池（普通 1+1 / 稀有 3+3 / 传奇 3+3+1，传奇词缀豁免前后缀规则）；
   不变式：同一 `tag` 只归前缀或后缀之一（有门禁）。
 - **元素 = fire/cold/lightning；物理 = melee；混沌 chaos 非元素**（`allResist` 不作用于它）。
   唯一真相 `game-core/src/rules/damage.ts`；护甲/抗性分支收口到 `mitigationKindOf`，

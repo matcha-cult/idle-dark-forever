@@ -333,7 +333,8 @@ export const InventoryPanel = observer(function InventoryPanel() {
                     <Flex vertical gap={token.marginXXS}>
                       {inventory.lootRule.rules.map((rule) => (
                         <Flex key={rule.id} align="center" gap={token.marginXS} data-testid={`loot-rule-${rule.id}`}>
-                          <RarityTag quality={rule.minQuality} />
+                          {/* 规则行必须有档位文字：普通档默认不显示徽标，这里强制显示 */}
+                          <RarityTag quality={rule.minQuality} showCommon />
                           <Select<LootRuleAction>
                             value={rule.action}
                             options={LOOT_ACTIONS.map((action) => ({ ...action }))}
