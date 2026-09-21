@@ -63,6 +63,8 @@ export interface WorldFrame {
   gainedExp: number;
   gainedGold: number;
   wave: number;
+  /** 本窗口末「守关 BOSS 是否还会出现」（见 `WorldTickDto.bossPending`）。 */
+  bossPending: boolean;
 }
 
 /** 单位列表 → `id → DTO` 索引。非法条目（非对象 / 缺 id / 空 id）**跳过**，不抛错。 */
@@ -198,26 +200,32 @@ export interface WorldFrameInput {
   wave: number;
   /** 上次**非静默**窗口末的波数（波数推进本身也是一次变化）。 */
   prevWave: number;
+  /** 本窗口末「守关 BOSS 是否还会出现」。 */
+  bossPending: boolean;
+  /** 上次**非静默**窗口末的同一个值（击杀守关 BOSS 会翻转它）。 */
+  prevBossPending: boolean;
 }
 
 /**
  * 组装本窗口的推送内容；返回 `null` = **完全无变化** ⇒ 不产生任何 WS 消息。
  *
  * 判定「有变化」的口径（缺一不可，顺序无关）：
- * 单位补丁非空 ∨ 日志非空 ∨ 掉落非空 ∨ 经验非零 ∨ 金币非零 ∨ 波数推进。
+ * 单位补丁非空 ∨ 日志非空 ∨ 掉落非空 ∨ 经验非零 ∨ 金币非零 ∨ 波数推进 ∨ 守关 BOSS 可刷状态翻转。
  */
 export function worldFrameOf(input: WorldFrameInput): WorldFrame | null {
   const gainedExp = finiteOr0(input.gainedExp);
   const gainedGold = finiteOr0(input.gainedGold);
   const wave = finiteOr0(input.wave);
   const prevWave = finiteOr0(input.prevWave);
+  const bossPending = input.bossPending === true;
   const hasContent =
     input.patch.length > 0 ||
     input.log.length > 0 ||
     input.loot.length > 0 ||
     gainedExp !== 0 ||
     gainedGold !== 0 ||
-    wave !== prevWave;
+    wave !== prevWave ||
+    bossPending !== (input.prevBossPending === true);
   if (!hasContent) return null;
   return {
     patch: [...input.patch],
@@ -226,6 +234,7 @@ export function worldFrameOf(input: WorldFrameInput): WorldFrame | null {
     gainedExp,
     gainedGold,
     wave,
+    bossPending,
   };
 }
 

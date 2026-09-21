@@ -74,13 +74,14 @@ describe('WorldService', () => {
     );
   });
 
-  async function startInStreet(): Promise<void> {
+  async function startInStreet() {
     const extras = await context.extrasOf(1);
     extras.worldMaps['c1'] = { map: 'world.1' };
     context.markAccountDirty(1);
     await context.flushAccount(1);
     const session = await service.start(1, 'c1');
     expect(session).not.toBeNull();
+    return session!;
   }
 
   function tickFrames(): WorldTickDto[] {
@@ -159,6 +160,7 @@ describe('WorldService', () => {
     // 只发生日志 / 经验金币 / 波次推进的窗口同样要发帧（判据见 `worldFrameOf`）。
     // 真正的不变式是「发出去的帧至少有一个非空分区」（其逆否即「无变化不发」）。
     let prevWave = 0;
+    let prevBossPending = false;
     for (const frame of ticks) {
       expect(frame.units).toEqual([]);
       expect(frame.events).toEqual([]);
@@ -166,15 +168,18 @@ describe('WorldService', () => {
       expect(Array.isArray(frame.log)).toBe(true);
       expect(Array.isArray(frame.loot)).toBe(true);
       const wave = frame.wave ?? 0;
+      const bossPending = frame.bossPending === true;
       const hasContent =
         (frame.patch ?? []).length > 0 ||
         (frame.log ?? []).length > 0 ||
         (frame.loot ?? []).length > 0 ||
         frame.gainedExp !== 0 ||
         frame.gainedGold !== 0 ||
-        wave !== prevWave;
+        wave !== prevWave ||
+        bossPending !== prevBossPending;
       expect(hasContent).toBe(true);
       prevWave = wave;
+      prevBossPending = bossPending;
     }
 
     // 首帧必为 `reset`（客户端差分基线），因此至少有帧带补丁。
@@ -402,6 +407,25 @@ describe('WorldService', () => {
     if (!result.success) return;
     expect(result.data.wave).toBe(0);
     expect(result.data.bossEvery).toBe(WORLD_BOSS_WAVE_INTERVAL);
+  });
+
+  it('snapshot / tick 下发 bossPending：未通关 true，已通关 false（UI 据此收起倒计时）', async () => {
+    const session = await startInStreet();
+    const live = await service.snapshot(1, 'c1');
+    expect(live.success).toBe(true);
+    if (!live.success) return;
+    expect(live.data.bossPending).toBe(true);
+
+    now += 1000;
+    service.tick();
+    expect(tickFrames()[0]?.bossPending).toBe(true);
+
+    // 直接改内核的击杀登记（等价于「刚通关」）→ 下一个窗口必须把翻转下发出去。
+    session.world.player!.markWorldBossKilled?.('world.1');
+    frames.length = 0;
+    now += 1000;
+    service.tick();
+    expect(tickFrames().some((frame) => frame.bossPending === false)).toBe(true);
   });
 
   it('wave 持久化往返：stop 保存 → start 恢复（会话重启不丢波数）', async () => {

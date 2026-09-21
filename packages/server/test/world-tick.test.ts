@@ -19,6 +19,7 @@ function tick(partial: Partial<WorldTickDto>): WorldTickDto {
   };
   if (partial.wave !== undefined) out.wave = partial.wave;
   if (partial.bossEvery !== undefined) out.bossEvery = partial.bossEvery;
+  if (partial.bossPending !== undefined) out.bossPending = partial.bossPending;
   if (partial.seq !== undefined) out.seq = partial.seq;
   if (partial.patch !== undefined) out.patch = partial.patch;
   if (partial.log !== undefined) out.log = partial.log;
@@ -113,6 +114,22 @@ describe('mergeWorldTick', () => {
     const c = tick({ serverTime: 300 });
     expect(mergeWorldTick(b, c).wave).toBe(4);
     expect(mergeWorldTick(b, c).bossEvery).toBe(20);
+  });
+
+  it('bossPending 取最新帧（击杀后不得被同批旧帧翻回 true）；都缺时省略该字段', () => {
+    const beforeKill = tick({ serverTime: 100, wave: 20, bossPending: true });
+    const afterKill = tick({ serverTime: 200, wave: 20, bossPending: false });
+    expect(mergeWorldTick(beforeKill, afterKill).bossPending).toBe(false);
+    // 反向（换图回到还会刷的图）同样取最新
+    expect(mergeWorldTick(afterKill, beforeKill).bossPending).toBe(true);
+    // 最新帧缺字段 → 回落上一帧
+    expect(mergeWorldTick(afterKill, tick({ serverTime: 300 })).bossPending).toBe(false);
+    // 两帧都没有 → 不编造（客户端保留自己的默认值）
+    expect(mergeWorldTick(tick({ serverTime: 1 }), tick({ serverTime: 2 })).bossPending).toBeUndefined();
+    // 脏值（非布尔）被忽略
+    expect(
+      mergeWorldTick(afterKill, tick({ serverTime: 400, bossPending: 'no' as unknown as boolean })).bossPending,
+    ).toBe(false);
   });
 });
 

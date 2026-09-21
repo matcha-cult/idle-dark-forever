@@ -272,17 +272,21 @@ export const BattlePanel = observer(function BattlePanel() {
         title="地图"
         extra={
           <Space>
-            {/* W4：波次进度（服务端权威下发）。BOSS 波时明确提示「守关 BOSS 现身」。 */}
+            {/* W4：波次进度（服务端权威下发）。BOSS 波时明确提示「守关 BOSS 现身」。
+                `bossPending === false` = 本图没有守关 BOSS，或野外图已通关（一次性，不再刷）
+                → 整条 BOSS 文案不显示，避免给出一个永远不会到来的倒计时。 */}
             <Typography.Text type="secondary" data-testid="battle-wave">
               {`波次 ${world.wave}`}
             </Typography.Text>
-            <Typography.Text
-              type="secondary"
-              data-testid="battle-boss"
-              style={world.bossWave ? { color: token.colorWarning } : undefined}
-            >
-              {world.bossWave ? '守关 BOSS 现身' : `距守关 BOSS ${world.wavesToBoss} 波`}
-            </Typography.Text>
+            {world.bossPending ? (
+              <Typography.Text
+                type="secondary"
+                data-testid="battle-boss"
+                style={world.bossWave ? { color: token.colorWarning } : undefined}
+              >
+                {world.bossWave ? '守关 BOSS 现身' : `距守关 BOSS ${world.wavesToBoss} 波`}
+              </Typography.Text>
+            ) : null}
             <Typography.Text type="secondary">
               {world.updateRate > 1 ? `模拟倍速 ×${world.updateRate.toFixed(1)}` : '实时模拟'}
             </Typography.Text>

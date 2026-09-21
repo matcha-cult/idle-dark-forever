@@ -366,6 +366,13 @@ cmd 段唯一归属、每个 `*LogicServer` 里不得出现 `@ActionMethod`。
 - **守关 BOSS**：每 20 波尝试刷新，**一次性**（记 `Player.worldBossKilled`）；用显式 `worldBoss` 标记，
   **不要用 key 比较**（`slime.queen` 既可能是某图 BOSS 又是另一图普通怪）。怪物等级 = 地图等级 /
   稀有（`quality>=1`）+1 / BOSS +2。
+- **`bossPending`（BOSS 还会不会出）是唯一判据**：`BattleWorld.bossPending`
+  （无 `boss` 数据的图 / 野外图已通关 → `false`；混沌图可重复刷 → `true`）。
+  刷怪闸门 `EnemyBorn.trySpawnWorldBoss` 与 UI 的「距守关 BOSS N 波」**读同一个 getter**，
+  因此「UI 说还会出」与「引擎真的会刷」不会漂移。
+  服务端经 `WorldTickDto/WorldSnapshotDto.bossPending` 下发（翻转也算一次变化、合并取**最新**帧）；
+  前端 `world.bossPending === false` 时**整条 BOSS 文案都不显示**（含「守关 BOSS 现身」），
+  ⚠️ **不要再按 `wave % bossEvery` 直接显示倒计时** —— 通关后那个倒计时永远不会到来。
 - ⚠️ **经验衰减按怪物真实等级比较**（`gotExp(this.exp, this.level)`），窗口 = 玩家等级 < 地图等级 + 10；
   **不要再把怪物等级 `transformEquipLevel` 减半** —— 会让 world.4（L=25）起经验恒 0、进度死锁在 ~Lv.20。
 - ⚠️ **刷怪池必须按真实数值 + 阵营挑选**（不能只看 `level`）：普通怪与 BOSS 必须 `camp:'enemy'`

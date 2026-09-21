@@ -286,6 +286,16 @@ export interface WorldSnapshotDto {
   wave?: number;
   /** 守关 BOSS 的刷新间隔（波；缺省 20）。 */
   bossEvery?: number;
+  /**
+   * 本图守关 BOSS **是否还会出现**（服务端权威，前端零推导）。
+   *
+   * - `false`：本图没有守关 BOSS，或（野外图）该图 BOSS **已被击杀** —— 一次性语义，
+   *   通关之后不会再刷，UI **不应**再显示「距守关 BOSS N 波」；
+   * - `true`：还会出现（未通关的野外图；混沌图可重复刷，恒为 `true`）。
+   *
+   * ⚠️ 与 `UnitStateDto.quality` 无关，也与「当前是否有 BOSS 在场」无关（那是 `boss` 字段）。
+   */
+  bossPending?: boolean;
 }
 
 /** 战斗事件（推送给前端做日志渲染 / Toast）。 */
@@ -344,6 +354,8 @@ export interface WorldTickDto {
   wave?: number;
   /** 守关 BOSS 的刷新间隔（波；缺省 20）。 */
   bossEvery?: number;
+  /** 本图守关 BOSS **是否还会出现**（见 `WorldSnapshotDto.bossPending`）。 */
+  bossPending?: boolean;
   /** P2：本会话已发出的帧序号（单调递增；仅用于观测与调试，不参与一致性判定）。 */
   seq?: number;
   /** P2：本窗口的单位状态净差分（有序）。缺省 / 空数组 = 本窗口无单位变化。 */

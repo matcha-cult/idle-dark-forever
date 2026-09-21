@@ -13,7 +13,6 @@
 
 import type { Clock, Rng, TimerHandle } from '../contracts/ports.js';
 import type { MapData, MonsterSpawnConfig } from '../contracts/data.js';
-import { isChaosMap } from '../rules/chaos.js';
 import type { BattleWorld } from './battle-world.js';
 import { EnemyUnit } from './enemy-unit.js';
 
@@ -340,6 +339,9 @@ export class EnemyBorn {
    * - 一次性：角色已击杀该图 BOSS → 不再刷新（普通怪照旧，图仍可 farm）；
    * - 同一时刻只允许一只 BOSS 存活（上一只未死则本次跳过）；
    * - 等级 = 地图等级 + {@link WORLD_BOSS_LEVEL_OFFSET}；显式 `worldBoss` 标记该单位。
+   *
+   * ⚠️ 「还会不会出」的判据是 `BattleWorld.bossPending`（**唯一真相**，UI 读同一个 getter）：
+   * 混沌图可重复刷、野外图一次性、无 `boss` 数据的图根本不刷。
    */
   trySpawnWorldBoss(): void {
     const mapData = this.mapData;
@@ -347,9 +349,7 @@ export class EnemyBorn {
     if (!bossKey || !this.world.tables.enemies[bossKey]) {
       return;
     }
-    // W6：混沌图的守关 BOSS **可重复刷**（每次 run 第 20 波起都会再出），
-    // 因此**跳过**「已击杀」一次性判据；野外图保持一次性语义。
-    if (!isChaosMap(mapData) && this.world.player?.hasWorldBossKilled?.(this.map)) {
+    if (!this.world.bossPending) {
       return;
     }
     if (this.world.units.some((u) => u instanceof EnemyUnit && u.worldBoss)) {

@@ -87,6 +87,8 @@ export class WorldStore {
   private waveValue = 0;
   /** 服务端下发的守关 BOSS 刷新间隔（observable 源；对外经只读 `bossEvery` getter）。 */
   private bossEveryValue = DEFAULT_BOSS_EVERY;
+  /** 服务端下发的「守关 BOSS 是否还会出现」（observable 源；对外经只读 `bossPending`）。 */
+  private bossPendingValue = false;
 
   private readonly guard = new LoadGuard();
   private logSeq = 0;
@@ -175,6 +177,18 @@ export class WorldStore {
   /** 当前是否正好是守关 BOSS 波（0 波不算）。 */
   get bossWave(): boolean {
     return this.wave > 0 && this.wave % this.bossEvery === 0;
+  }
+
+  /**
+   * 本图守关 BOSS **是否还会出现**（服务端权威）。
+   *
+   * `false` = 本图没有守关 BOSS，或（野外图）已被击杀 —— 一次性语义，通关后不再刷，
+   * 因此 UI **不要**再显示「距守关 BOSS N 波」。
+   *
+   * 缺省 `false`：服务端没下发时**宁可少显示**，也不显示一个错误的倒计时。
+   */
+  get bossPending(): boolean {
+    return this.bossPendingValue === true;
   }
 
   /** 拉取世界快照。 */
@@ -318,7 +332,7 @@ export class WorldStore {
         if (Array.isArray(tick.log)) {
           this.log = appendEvents(this.log, tick.log, serverTime, () => (this.logSeq += 1));
         }
-        this.applyWave(tick.wave, tick.bossEvery);
+        this.applyWave(tick.wave, tick.bossEvery, tick.bossPending);
       });
       if (Array.isArray(tick.loot)) {
         for (const loot of tick.loot) this.applyLoot(loot);
@@ -430,20 +444,24 @@ export class WorldStore {
     this.maps = snapshot.maps;
     this.updateRate = snapshot.updateRate;
     this.paused = snapshot.paused;
-    this.applyWave(snapshot.wave, snapshot.bossEvery);
+    this.applyWave(snapshot.wave, snapshot.bossEvery, snapshot.bossPending);
   }
 
   /**
    * 应用服务端下发的波次状态（tick / snapshot 共用）。
    *
    * 只做**防御性校验**，不做任何数值推导：非法值保留上一份权威值。
+   * `bossPending` 是布尔，非法/缺省时也保留上一份（换图由服务端快照刷新）。
    */
-  private applyWave(wave: unknown, bossEvery: unknown): void {
+  private applyWave(wave: unknown, bossEvery: unknown, bossPending?: unknown): void {
     if (typeof wave === 'number' && Number.isFinite(wave) && wave >= 0) {
       this.waveValue = Math.trunc(wave);
     }
     if (typeof bossEvery === 'number' && Number.isFinite(bossEvery) && bossEvery > 0) {
       this.bossEveryValue = Math.trunc(bossEvery);
+    }
+    if (typeof bossPending === 'boolean') {
+      this.bossPendingValue = bossPending;
     }
   }
 }

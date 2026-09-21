@@ -217,6 +217,74 @@ describe('W4 一次性野外 BOSS', () => {
   });
 });
 
+describe('W4 守关 BOSS 是否还会出现（bossPending，UI 与刷怪闸门的唯一判据）', () => {
+  it('未击杀的野外图 → true', () => {
+    const killed = new Set<string>();
+    const { t } = setup({
+      hasWorldBossKilled: (map: string) => killed.has(map),
+      markWorldBossKilled: (map: string) => {
+        killed.add(map);
+      },
+    });
+    expect(t.world.bossPending).toBe(true);
+  });
+
+  it('击杀后 → false（同一 world 上立即翻转；通关不再刷 BOSS）', () => {
+    const killed = new Set<string>();
+    const { t, spawner } = setup({
+      hasWorldBossKilled: (map: string) => killed.has(map),
+      markWorldBossKilled: (map: string) => {
+        killed.add(map);
+      },
+    });
+    for (let i = 0; i < WORLD_BOSS_WAVE_INTERVAL; i += 1) spawner.completeWave();
+    expect(t.world.bossPending).toBe(true);
+    bossUnits(t)[0]!.kill();
+    expect(t.world.bossPending).toBe(false);
+  });
+
+  it('引擎真的不再刷 = 判据说 false（两者同源，不漂移）', () => {
+    const killed = new Set<string>();
+    const { t, spawner } = setup({
+      hasWorldBossKilled: (map: string) => killed.has(map),
+      markWorldBossKilled: (map: string) => {
+        killed.add(map);
+      },
+    });
+    for (let i = 0; i < WORLD_BOSS_WAVE_INTERVAL; i += 1) spawner.completeWave();
+    const boss = bossUnits(t)[0]!;
+    boss.kill();
+    t.world.removeUnit(boss);
+    expect(t.world.bossPending).toBe(false);
+    for (let w = WORLD_BOSS_WAVE_INTERVAL; w < 2 * WORLD_BOSS_WAVE_INTERVAL; w += 1) {
+      spawner.completeWave();
+    }
+    expect(bossUnits(t)).toHaveLength(0);
+  });
+
+  it('没有 boss 数据的图 → false（本图压根没有守关 BOSS）', () => {
+    const { t } = setup();
+    t.world.map = 'home';
+    expect(t.world.bossPending).toBe(false);
+  });
+
+  it('boss key 不在敌人表里 → false（fail-closed，不乱报「还会出」）', () => {
+    const { t } = setup();
+    t.world.mapData!.boss = 'not-in-tables';
+    expect(t.world.bossPending).toBe(false);
+  });
+
+  it('混沌图恒为 true（W6 可重复刷；已击杀记录不影响）', () => {
+    const { t } = setup();
+    t.world.mapData!.chaos = 1;
+    expect(t.world.bossPending).toBe(true);
+    // 即使该图被错误地记进 worldBossKilled（历史脏档），混沌图仍会刷
+    const killed = new Set<string>([WORLD_MAP]);
+    t.world.player!.hasWorldBossKilled = (map: string) => killed.has(map);
+    expect(t.world.bossPending).toBe(true);
+  });
+});
+
 describe('W4 怪物等级规则', () => {
   it('野外：普通 = 地图等级 / 稀有（quality>=1）= +1', () => {
     const { t } = setup();

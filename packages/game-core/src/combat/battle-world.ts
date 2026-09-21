@@ -303,6 +303,25 @@ export class BattleWorld {
     return isChaosMap(this.mapData);
   }
 
+  /**
+   * 本图守关 BOSS **是否还会出现**（W4 一次性语义的对外口径）。
+   *
+   * - 地图数据没有 `boss`（或该 key 不在敌人表里）→ `false`（本图压根没有守关 BOSS）；
+   * - 混沌图 → `true`（W6：可重复刷，每次 run 第 20 波起都会再出）；
+   * - 野外图 → 角色**尚未击杀**该图 BOSS 时 `true`，击杀后**永久 `false`**
+   *   （一次性；图仍可继续 farm 普通怪）。
+   *
+   * ⚠️ 这是**唯一判据**：`EnemyBorn.trySpawnWorldBoss` 的刷新闸门与 UI 的
+   * 「距守关 BOSS N 波」都读它，因此「UI 说还会出」与「引擎真的会刷」不可能漂移。
+   */
+  get bossPending(): boolean {
+    const mapData = this.mapData;
+    const bossKey = mapData?.boss;
+    if (!bossKey || !this.tables.enemies[bossKey]) return false;
+    if (isChaosMap(mapData)) return true;
+    return this.player?.hasWorldBossKilled?.(this._map) !== true;
+  }
+
   /** 记录混沌图守关 BOSS 击杀（仅混沌图有效；幂等，保留首个结果）。 */
   noteChaosBossKilled(): void {
     if (this.chaosOutcome === null && this.isChaosMap) {

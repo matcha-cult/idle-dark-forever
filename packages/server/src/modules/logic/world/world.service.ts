@@ -114,6 +114,8 @@ interface WorldSession {
   lastSentUnits: Map<string, UnitStateDto>;
   /** 上次成功发出的波数（波数推进本身也算一次变化）。 */
   lastSentWave: number;
+  /** 上次成功发出的「守关 BOSS 是否还会出现」（击杀会翻转它，也是一次变化）。 */
+  lastSentBossPending: boolean;
   /** 本会话已发出的帧序号（单调递增）。 */
   frameSeq: number;
   /** 需要发一帧 `reset`（会话首帧 / 客户端明确要求重建基线）。 */
@@ -445,6 +447,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     const collected = session.collector.snapshot();
     const units = session.world.units.map((unit) => unitStateDtoOf(unit, session.world.playerUnit));
     const wave = session.world.enemyBorn?.wave ?? 0;
+    const bossPending = session.world.bossPending;
     const loot = session.pendingLoot;
 
     const patch: UnitPatchOpDto[] = session.needsReset
@@ -460,6 +463,8 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       gainedGold: collected.gainedGold,
       wave,
       prevWave: session.lastSentWave,
+      bossPending,
+      prevBossPending: session.lastSentBossPending,
     });
 
     if (frame === null) {
@@ -477,6 +482,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       gainedGold: frame.gainedGold,
       wave: frame.wave,
       bossEvery: WORLD_BOSS_WAVE_INTERVAL,
+      bossPending: frame.bossPending,
       seq: session.frameSeq + 1,
       patch: frame.patch,
       log: frame.log,
@@ -497,6 +503,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     session.frameSeq += 1;
     session.lastSentUnits = unitStateIndexOf(units);
     session.lastSentWave = wave;
+    session.lastSentBossPending = bossPending;
     session.needsReset = false;
     session.collector.drain();
     loot.length = 0;
@@ -709,6 +716,8 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       lifecycle: createLifecycle(now),
       lastSentUnits: new Map<string, UnitStateDto>(),
       lastSentWave: 0,
+      // 会话首帧就是 `reset`，因此初值取 `false`（首帧一定发得出去，不依赖它触发）。
+      lastSentBossPending: false,
       frameSeq: 0,
       needsReset: true,
       refusedSeen: 0,
@@ -1012,6 +1021,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     // 避免紧接着又推一帧内容重复的 `reset`。
     session.lastSentUnits = unitStateIndexOf(units);
     session.lastSentWave = session.world.enemyBorn?.wave ?? 0;
+    session.lastSentBossPending = session.world.bossPending;
     session.needsReset = false;
     return {
       map: session.world.map,
@@ -1021,6 +1031,7 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       paused: session.clock.isPaused(),
       wave: session.lastSentWave,
       bossEvery: WORLD_BOSS_WAVE_INTERVAL,
+      bossPending: session.world.bossPending,
     };
   }
 }
@@ -1055,6 +1066,8 @@ export function mergeWorldTick(prev: unknown, next: unknown): WorldTickDto {
     );
   }
   if (!b) return a;
+  // BOSS 可刷状态取**最新**帧（`b`）：击杀后不得被同批旧帧翻回 `true`。
+  const bossPending = b.bossPending ?? a.bossPending;
   return {
     serverTime: Math.max(a.serverTime, b.serverTime),
     // P2：停止填充，固定为空数组（冻结契约保留字段）。
@@ -1065,6 +1078,8 @@ export function mergeWorldTick(prev: unknown, next: unknown): WorldTickDto {
     // 波次取**最新**帧（`b`）：同一批次内的旧帧不得把波数回退。
     wave: b.wave ?? a.wave ?? 0,
     bossEvery: b.bossEvery ?? a.bossEvery ?? WORLD_BOSS_WAVE_INTERVAL,
+    // 同理，BOSS 可刷状态也取最新帧：击杀后**不得**被同批旧帧翻回 `true`。
+    ...(bossPending === undefined ? {} : { bossPending }),
     seq: Math.max(finiteOr0(a.seq), finiteOr0(b.seq)),
     patch: [...(a.patch ?? []), ...(b.patch ?? [])],
     log: [...(a.log ?? []), ...(b.log ?? [])],
@@ -1091,6 +1106,7 @@ function asTick(value: unknown): WorldTickDto | null {
   if (typeof record.bossEvery === 'number' && Number.isFinite(record.bossEvery)) {
     tick.bossEvery = record.bossEvery;
   }
+  if (typeof record.bossPending === 'boolean') tick.bossPending = record.bossPending;
   if (typeof record.seq === 'number' && Number.isFinite(record.seq)) tick.seq = record.seq;
   if (Array.isArray(record.patch)) tick.patch = record.patch;
   if (Array.isArray(record.log)) tick.log = record.log;

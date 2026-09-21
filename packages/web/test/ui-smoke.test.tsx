@@ -8,6 +8,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ReactElement } from 'react';
 import { runInAction } from 'mobx';
+import { WORLD_CMD } from '@idle-dark/protocol';
 import { htmlToText, renderToHtml } from '@idle-dark/ui-kit/testing';
 import { RootStore } from '../src/app/root-store.js';
 import { RootStoreProvider } from '../src/app/root-context.js';
@@ -151,5 +152,46 @@ describe('页面渲染冒烟（有数据，防空分支假绿）', () => {
     const text = htmlToText(render(<>{renderPanelContent('battle')}</>, root));
     expect(text).toContain('可进入 0 / 1 张');
     expect(text).toContain('提升等级可解锁新地图');
+  });
+
+  /** 灌一帧真实 tick（`bossPending` 只能经服务端下发进入 store）。 */
+  function pushTick(root: RootStore, data: Record<string, unknown>): void {
+    runInAction(() => {
+      root.world.handleNotification({ cmd: WORLD_CMD.cmd, subCmd: WORLD_CMD.tick, data });
+    });
+  }
+
+  it('守关 BOSS 倒计时：bossPending=true 时显示', () => {
+    const root = seed([HOME, STREET]);
+    pushTick(root, {
+      serverTime: 1, units: [], events: [], gainedExp: 0, gainedGold: 0,
+      wave: 2, bossEvery: 20, bossPending: true,
+    });
+    const text = htmlToText(render(<>{renderPanelContent('battle')}</>, root));
+    expect(text).toContain('波次 2');
+    expect(text).toContain('距守关 BOSS 18 波');
+  });
+
+  it('守关 BOSS 倒计时：bossPending=false（通关后不再刷）时整条不显示', () => {
+    const root = seed([HOME, STREET]);
+    pushTick(root, {
+      serverTime: 1, units: [], events: [], gainedExp: 0, gainedGold: 0,
+      wave: 2, bossEvery: 20, bossPending: false,
+    });
+    const html = render(<>{renderPanelContent('battle')}</>, root);
+    const text = htmlToText(html);
+    expect(text).toContain('波次 2');
+    expect(text).not.toContain('距守关 BOSS');
+    expect(html).not.toContain('data-testid="battle-boss"');
+  });
+
+  it('守关 BOSS 倒计时：BOSS 波但已通关 → 也不显示「现身」', () => {
+    const root = seed([HOME, STREET]);
+    pushTick(root, {
+      serverTime: 1, units: [], events: [], gainedExp: 0, gainedGold: 0,
+      wave: 20, bossEvery: 20, bossPending: false,
+    });
+    const text = htmlToText(render(<>{renderPanelContent('battle')}</>, root));
+    expect(text).not.toContain('守关 BOSS 现身');
   });
 });

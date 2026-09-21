@@ -129,6 +129,45 @@ describe('WorldStore 波次（W4）', () => {
     expect(store.bossEvery).toBe(20);
   });
 
+  it('bossPending：快照下发 true / false 都照收（已通关不再显示倒计时）', async () => {
+    const on = makeHarness(snapshot({ wave: 2, bossPending: true }));
+    await on.store.load();
+    expect(on.store.bossPending).toBe(true);
+
+    const off = makeHarness(snapshot({ wave: 2, bossPending: false }));
+    await off.store.load();
+    expect(off.store.bossPending).toBe(false);
+  });
+
+  it('bossPending 缺省 / 非布尔 → false（宁可少显示，也不显示错误倒计时）', async () => {
+    const missing = makeHarness(snapshot({ wave: 2 }));
+    await missing.store.load();
+    expect(missing.store.bossPending).toBe(false);
+
+    const dirty = makeHarness(snapshot({ wave: 2, bossPending: 'yes' as unknown as boolean }));
+    await dirty.store.load();
+    expect(dirty.store.bossPending).toBe(false);
+  });
+
+  it('tick 把 bossPending 从 true 翻到 false（击杀守关 BOSS 的那一刻）', async () => {
+    const { store } = makeHarness(snapshot({ wave: 20, bossPending: true }));
+    await store.load();
+    expect(store.bossPending).toBe(true);
+    expect(store.bossWave).toBe(true);
+
+    pushTick(store, tick({ wave: 20, bossEvery: 20, bossPending: false }));
+    expect(store.bossPending).toBe(false);
+
+    // 非布尔值不得把权威状态冲掉（保留上一份）
+    pushTick(store, tick({ wave: 21, bossPending: 'x' as unknown as boolean }));
+    expect(store.bossPending).toBe(false);
+
+    const kept = makeHarness(snapshot({ wave: 3, bossPending: true }));
+    await kept.store.load();
+    pushTick(kept.store, tick({ wave: 4, bossPending: undefined as unknown as boolean }));
+    expect(kept.store.bossPending).toBe(true);
+  });
+
   it('tick 仍照常把经验/金币增量转给 PlayerStore', async () => {
     const { store, gains } = makeHarness();
     pushTick(store, tick({ gainedExp: 7, gainedGold: 3, serverTime: 42 }));

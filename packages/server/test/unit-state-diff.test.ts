@@ -262,6 +262,8 @@ describe('worldFrameOf', () => {
     gainedGold: 0,
     wave: 3,
     prevWave: 3,
+    bossPending: true,
+    prevBossPending: true,
   };
 
   it('全空且波数未推进 → null（新方案下不发任何消息）', () => {
@@ -279,6 +281,20 @@ describe('worldFrameOf', () => {
   it('只有波数推进也要发（客户端据此更新距 BOSS 波数）', () => {
     const frame = worldFrameOf({ ...base, wave: 4 });
     expect(frame?.wave).toBe(4);
+  });
+
+  it('守关 BOSS 可刷状态翻转也要发（通关后 UI 要立刻收起倒计时）', () => {
+    const frame = worldFrameOf({ ...base, bossPending: false });
+    expect(frame?.bossPending).toBe(false);
+    // 反向（换图重置到还会刷的图）同样要发
+    expect(worldFrameOf({ ...base, bossPending: true, prevBossPending: false })?.bossPending).toBe(true);
+  });
+
+  it('bossPending 缺失 / 脏值一律按 false（不显示倒计时），且不因缺失反复出帧', () => {
+    const noBoss = { ...base, bossPending: undefined as unknown as boolean, prevBossPending: undefined as unknown as boolean };
+    expect(worldFrameOf(noBoss)).toBeNull();
+    const frame = worldFrameOf({ ...noBoss, log: [{ kind: 'general', text: 'x' }] });
+    expect(frame?.bossPending).toBe(false);
   });
 
   it('脏输入归一：NaN / Infinity → 0，不被当成「有变化」', () => {
