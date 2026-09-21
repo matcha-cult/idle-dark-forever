@@ -18,6 +18,7 @@ vendor/session-collaboration/
 
 # 临时文件夹
 tmp/
+tmp-user/
 .devdb/
 
 # IDE
