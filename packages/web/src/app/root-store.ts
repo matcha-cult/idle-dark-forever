@@ -152,12 +152,27 @@ export class RootStore {
     this.startNotificationRouting();
   }
 
-  /** 恢复会话；有 token 则连接 WS（失败不抛，仅 toast）。 */
+  /**
+   * 恢复会话；有 token 则连接 WS（失败不抛，仅 toast），
+   * 并**自动进入上次的角色**（刷新页面不再强制走选角页）。
+   *
+   * ⚠️ `setRestoring(true)` 必须在**任何 `await` 之前**：`main.tsx` 里
+   * `void bootstrap()` 与首帧渲染是同一个同步批次，晚一步设标志就挡不住
+   * 「首帧按 `players` 还空着渲染建角页」的那次闪烁。
+   */
   async bootstrap(): Promise<void> {
     if (!this.session.restore()) return;
-    await this.connectAfterAuth();
-    await Promise.all([this.session.loadMe(), this.session.loadPlayers()]);
-    if (this.session.activePlayerKey !== null) await this.loadPanel();
+    this.session.setRestoring(true);
+    try {
+      await this.connectAfterAuth();
+      await Promise.all([this.session.loadMe(), this.session.loadPlayers()]);
+      // 自动恢复：key 来自本地缓存，且已过「账号一致 + 角色仍在列表里」两道校验。
+      const resumeKey = this.session.resumePlayerKey();
+      if (resumeKey !== null && (await this.selectCharacter(resumeKey))) return;
+      if (this.session.activePlayerKey !== null) await this.loadPanel();
+    } finally {
+      this.session.setRestoring(false);
+    }
   }
 
   /** 登录 → 存 token → `?token=` 连 WS → 并发拉账号/角色列表/面板。 */
@@ -271,8 +286,10 @@ export class RootStore {
   /**
    * 断线重连后重新进入当前角色（见构造函数里的 `onStateChange` 注释）。
    *
-   * 只在「本地已记住角色」时动作：全新登录 / 刷新页面时 `activePlayerKey` 为 null，
-   * 此时**故意不选角** —— 服务端也不该有该角色的会话（否则选角页会收到战斗推送）。
+   * 只在「本地已记住角色」时动作：`activePlayerKey` 为 null 表示**尚未进入任何角色**
+   * （全新登录、或用户主动点了「切换角色」），此时**故意不选角** ——
+   * 服务端也不该有该角色的会话（否则选角页会收到战斗推送）。
+   * 刷新页面的自动进入走的是 `bootstrap()` 里的 `resumePlayerKey()`，不是这里。
    */
   private async reenterCharacterIfNeeded(): Promise<void> {
     const key = this.session.activePlayerKey;

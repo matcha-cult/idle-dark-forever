@@ -33,7 +33,11 @@ import type {
 import { createFakePair } from '@idle-dark/ionet-transport/testing';
 import { RootStore } from '../src/app/root-store.js';
 import { createMemoryStorage, type StorageLike } from '../src/services/storage.js';
-import { TOKEN_STORAGE_KEY } from '../src/stores/session-store.js';
+import {
+  ACTIVE_PLAYER_STORAGE_KEY,
+  ME_STORAGE_KEY,
+  TOKEN_STORAGE_KEY,
+} from '../src/stores/session-store.js';
 
 // ─────────────────────────── 夹具 ───────────────────────────
 
@@ -362,6 +366,160 @@ describe('登录 → 选角 → 推送 → 面板更新', () => {
     await root.bootstrap();
     expect(root.session.isAuthenticated).toBe(false);
     expect(server.requests).toHaveLength(0);
+  });
+
+  /**
+   * 「刷新不再强制选角」的用例组。
+   *
+   * 机制：`player.select` 成功后把 `{userId, key}` 落盘；`bootstrap()` 拉完角色列表后
+   * 用 `resumePlayerKey()` 三重校验（形状 / 账号 / 仍在列表），通过就自动进入。
+   */
+  describe('已选角色缓存 → 刷新自动进角色', () => {
+    const ME = { userId: 'u1', displayName: '测试员', diamonds: 50, playerSlotCount: 1 };
+
+    /** 带 token + me 的存储（可选再塞一份角色缓存）。 */
+    function seedStorage(activePlayer?: string): StorageLike {
+      const storage = createMemoryStorage();
+      storage.setItem(TOKEN_STORAGE_KEY, 'jwt-restored');
+      storage.setItem(ME_STORAGE_KEY, JSON.stringify(ME));
+      if (activePlayer !== undefined) storage.setItem(ACTIVE_PLAYER_STORAGE_KEY, activePlayer);
+      return storage;
+    }
+
+    const selectCount = (server: Harness['server']): number =>
+      server.requests.filter((r) => r.cmd === PLAYER_CMD.cmd && r.subCmd === PLAYER_CMD.select).length;
+
+    it('有缓存 → bootstrap 自动进入该角色，并且不经过选角页', async () => {
+      const storage = seedStorage(JSON.stringify({ userId: 'u1', key: 'k1' }));
+      const { root, server } = createHarness(storage);
+      opened.push(root);
+
+      await root.bootstrap();
+
+      expect(root.session.activePlayerKey).toBe('k1');
+      expect(root.session.hasCharacter).toBe(true);
+      expect(root.player.state?.key).toBe('k1');
+      expect(selectCount(server)).toBeGreaterThan(0);
+      // 恢复标志必须复位（否则 App 会永远停在「正在恢复会话」）
+      expect(root.session.restoring).toBe(false);
+    });
+
+    it('没有缓存 → 不自动进入（仍停在选角页），且不调 player.select', async () => {
+      const { root, server } = createHarness(seedStorage());
+      opened.push(root);
+
+      await root.bootstrap();
+
+      expect(root.session.hasPlayers).toBe(true);
+      expect(root.session.hasCharacter).toBe(false);
+      expect(selectCount(server)).toBe(0);
+      expect(root.session.restoring).toBe(false);
+    });
+
+    it('选角成功后落盘；「切换角色」把它清掉 → 刷新后停在选角页', async () => {
+      const storage = seedStorage();
+      const first = createHarness(storage);
+      opened.push(first.root);
+      await first.root.bootstrap();
+      await first.root.selectCharacter('k1');
+      expect(JSON.parse(storage.getItem(ACTIVE_PLAYER_STORAGE_KEY) ?? 'null')).toEqual({
+        userId: 'u1',
+        key: 'k1',
+      });
+
+      // 用户主动离开角色（「切换角色」按钮）—— 刷新不该把他刚离开的角色又自动进回去
+      first.root.leaveCharacter();
+      expect(storage.getItem(ACTIVE_PLAYER_STORAGE_KEY)).toBeNull();
+
+      const second = createHarness(storage);
+      opened.push(second.root);
+      await second.root.bootstrap();
+      expect(second.root.session.hasCharacter).toBe(false);
+    });
+
+    it('登出后不再自动进入（缓存与 token 一起清）', async () => {
+      const storage = seedStorage(JSON.stringify({ userId: 'u1', key: 'k1' }));
+      const { root } = createHarness(storage);
+      opened.push(root);
+      await root.bootstrap();
+      expect(root.session.hasCharacter).toBe(true);
+
+      root.logout();
+      expect(storage.getItem(ACTIVE_PLAYER_STORAGE_KEY)).toBeNull();
+      expect(storage.getItem(TOKEN_STORAGE_KEY)).toBeNull();
+
+      const again = createHarness(storage);
+      opened.push(again.root);
+      await again.root.bootstrap();
+      expect(again.root.session.isAuthenticated).toBe(false);
+    });
+
+    it('缓存里的账号与当前账号不一致 → 不拿去选角，并清掉缓存', async () => {
+      const storage = seedStorage(JSON.stringify({ userId: '别人的账号', key: 'k1' }));
+      const { root, server } = createHarness(storage);
+      opened.push(root);
+
+      await root.bootstrap();
+
+      expect(root.session.hasCharacter).toBe(false);
+      expect(selectCount(server)).toBe(0);
+      expect(storage.getItem(ACTIVE_PLAYER_STORAGE_KEY)).toBeNull();
+    });
+
+    it('缓存里的角色已不在角色列表 → 不自动进入，并清掉缓存', async () => {
+      const storage = seedStorage(JSON.stringify({ userId: 'u1', key: '已被删掉的角色' }));
+      const { root, server } = createHarness(storage);
+      opened.push(root);
+
+      await root.bootstrap();
+
+      expect(root.session.hasCharacter).toBe(false);
+      expect(selectCount(server)).toBe(0);
+      expect(storage.getItem(ACTIVE_PLAYER_STORAGE_KEY)).toBeNull();
+    });
+
+    it('缓存载荷损坏 / 形状不对 → 静默忽略，不抛错、不选角（含空串与数组）', async () => {
+      const broken = [
+        'not-json',
+        '',
+        '{}',
+        '{"userId":"u1"}',
+        '{"key":"k1"}',
+        '{"userId":"","key":""}',
+        '{"userId":1,"key":"k1"}',
+        '{"userId":"u1","key":null}',
+        '[]',
+        'null',
+        '""',
+      ];
+      for (const raw of broken) {
+        const storage = seedStorage(raw);
+        const { root, server } = createHarness(storage);
+        opened.push(root);
+        await root.bootstrap();
+        expect(root.session.hasCharacter, `raw=${raw}`).toBe(false);
+        expect(selectCount(server), `raw=${raw}`).toBe(0);
+      }
+    });
+
+    it('恢复过程中 restoring=true，结束（含失败）一定复位', async () => {
+      const { root } = createHarness(seedStorage(JSON.stringify({ userId: 'u1', key: 'k1' })));
+      opened.push(root);
+      expect(root.session.restoring).toBe(false);
+      const pending = root.bootstrap();
+      expect(root.session.restoring).toBe(true);
+      await pending;
+      expect(root.session.restoring).toBe(false);
+    });
+
+    it('未登录时 restoring 不会被点亮（首帧不该挂恢复占位）', async () => {
+      const { root } = createHarness(createMemoryStorage());
+      opened.push(root);
+      const pending = root.bootstrap();
+      expect(root.session.restoring).toBe(false);
+      await pending;
+      expect(root.session.restoring).toBe(false);
+    });
   });
 });
 

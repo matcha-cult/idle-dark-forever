@@ -13,6 +13,7 @@ import { htmlToText, makeAttributes, renderToHtml } from '@idle-dark/ui-kit/test
 import { RootStore } from '../src/app/root-store.js';
 import { RootStoreProvider } from '../src/app/root-context.js';
 import { ThemeRoot } from '../src/theme/theme-root.js';
+import { App } from '../src/app/App.js';
 import { LoginPage } from '../src/pages/login/LoginPage.js';
 import { CharacterCreatePage } from '../src/pages/character/CharacterCreatePage.js';
 import { CharacterSelectPage } from '../src/pages/character/CharacterSelectPage.js';
@@ -259,5 +260,68 @@ describe('页面渲染冒烟（有数据，防空分支假绿）', () => {
 
     expect(html).not.toContain('data-testid="player-attributes-panel"');
     expect(text).toContain('暂无角色属性');
+  });
+});
+
+/**
+ * 顶层门（`App`）的会话恢复分支。
+ *
+ * 这一组挡的是「刷新页面先闪一下建角页」：`main.tsx` 里 `void bootstrap()` 与首帧渲染
+ * 在同一个同步批次，此时 `players` 还是空数组 —— 没有恢复占位就会落到建角页分支。
+ */
+describe('顶层门：刷新自动进角色（不闪错页面）', () => {
+  const PLAYER_META = {
+    key: 'k1',
+    name: '守夜人',
+    role: 'Eyer',
+    roleName: '艾尔',
+    currentCareer: 'warrior',
+    currentCareerName: '战士',
+    level: 5,
+    createdAt: 1,
+    inBattle: false,
+  };
+
+  function authedRoot(): RootStore {
+    const root = makeRoot();
+    runInAction(() => {
+      root.session.token = 'jwt-restored';
+      root.session.status = 'authenticated';
+    });
+    return root;
+  }
+
+  it('会话恢复中渲染恢复占位，而不是建角页 / 选角页', () => {
+    const root = authedRoot();
+    root.session.setRestoring(true);
+    const html = render(<App />, root);
+
+    expect(html).toContain('data-testid="app-restoring"');
+    expect(html).toContain('正在恢复会话');
+    expect(html).not.toContain('data-testid="character-create-page"');
+    expect(html).not.toContain('data-testid="character-select-page"');
+  });
+
+  it('恢复结束：无角色 → 建角页；有角色未进入 → 选角页', () => {
+    const root = authedRoot();
+    root.session.setRestoring(true);
+    root.session.setRestoring(false);
+    expect(render(<App />, root)).toContain('data-testid="character-create-page"');
+
+    runInAction(() => {
+      root.session.players = [PLAYER_META] as never;
+    });
+    const html = render(<App />, root);
+    expect(html).toContain('data-testid="character-select-page"');
+    expect(html).toContain('守夜人');
+  });
+
+  it('未登录时不会被恢复占位挡住（仍渲染登录页）', () => {
+    const root = makeRoot();
+    // 即使标志被误置为 true，未登录也走登录页（`authed && restoring` 才短路）
+    root.session.setRestoring(true);
+    const html = render(<App />, root);
+    expect(html).not.toContain('data-testid="app-restoring"');
+    expect(html).toContain('data-testid="login-page"');
   });
 });

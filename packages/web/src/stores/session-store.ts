@@ -24,6 +24,25 @@ import type { ToastStore } from './toast-store.js';
 
 export const TOKEN_STORAGE_KEY = 'idle-dark:token';
 export const ME_STORAGE_KEY = 'idle-dark:me';
+/**
+ * 「上次进入的角色」缓存键。
+ *
+ * 刷新页面时用它**自动进入角色**（不再强制走选角页）。载荷形状见 {@link CachedCharacter}。
+ */
+export const ACTIVE_PLAYER_STORAGE_KEY = 'idle-dark:active-player';
+
+/**
+ * 已选角色的缓存载荷。
+ *
+ * ⚠️ **必须带 `userId`**：`key` 是服务端生成的角色 UUID，不同账号的 key 互不相干，
+ * 但「同一浏览器先登 A 再登 B」时若不校验账号，B 就会拿着 A 的 key 去 `player.select`
+ * —— 服务端会以 `PLAYER_NOT_FOUND` 拒绝（`resolveActiveCharacter` 的归属校验），
+ * 表现为「换个账号一进页面就弹一个莫名其妙的错误」。
+ */
+export interface CachedCharacter {
+  userId: string;
+  key: string;
+}
 
 export type SessionStatus = 'anonymous' | 'authenticating' | 'authenticated';
 
@@ -40,6 +59,15 @@ export class SessionStore {
   errorMessage: string | null = null;
   /** 角色列表加载态。 */
   playersLoading = false;
+  /**
+   * 会话恢复（`RootStore.bootstrap()`）进行中。
+   *
+   * 用途只有一个：**别在首帧按「还没有角色」渲染建角页**。刷新页面时
+   * `players` 还没拉回来（空数组），`App` 的三态门会先落到建角页，几十毫秒后
+   * 才跳走 —— 这就是一次可见的错误页面闪烁。`App` 在 `restoring === true` 时
+   * 渲染「正在恢复会话」，等 bootstrap 落定再决定去哪个页面。
+   */
+  restoring = false;
 
   private readonly guard = new LoadGuard();
 
@@ -92,6 +120,72 @@ export class SessionStore {
       this.status = this.token !== null ? 'authenticated' : 'anonymous';
     });
     return this.token !== null;
+  }
+
+  // ────────────────────────── 已选角色缓存（刷新自动进角色） ──────────────────────────
+
+  /** 标记会话恢复进行中（`RootStore.bootstrap()` 调用；见 `restoring` 字段）。 */
+  setRestoring(value: boolean): void {
+    runInAction(() => {
+      this.restoring = value === true;
+    });
+  }
+
+  /**
+   * 读出缓存的「上次进入的角色」并**三重校验**；任一不满足都返回 `null`。
+   *
+   * 校验：① 载荷可解析且形状正确；② `userId` 与当前账号一致；③ key 仍在角色列表里。
+   *
+   * ⚠️ 校验失败时会**清掉缓存**（`userId` 不匹配 / 角色已被删）——那是确定性失效，
+   * 留着它只会让每次刷新都白试一次。但**网络/服务端瞬时失败不清缓存**：
+   * 那种情况下下次刷新应该继续重试自动进入。
+   */
+  resumePlayerKey(): string | null {
+    const cached = this.readCachedCharacter();
+    if (cached === null) return null;
+    const userId = this.me?.userId;
+    if (typeof userId !== 'string' || userId === '' || userId !== cached.userId) {
+      this.clearCachedCharacter();
+      return null;
+    }
+    if (!this.players.some((player) => player.key === cached.key)) {
+      this.clearCachedCharacter();
+      return null;
+    }
+    return cached.key;
+  }
+
+  /** 读缓存载荷（损坏 / 形状不对一律 `null`，不抛错）。 */
+  private readCachedCharacter(): CachedCharacter | null {
+    const raw = safeGet(this.storage, ACTIVE_PLAYER_STORAGE_KEY);
+    if (raw === null || raw === '') return null;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+    if (parsed === null || typeof parsed !== 'object') return null;
+    const record = parsed as { userId?: unknown; key?: unknown };
+    if (typeof record.userId !== 'string' || typeof record.key !== 'string') return null;
+    if (record.userId === '' || record.key === '') return null;
+    return { userId: record.userId, key: record.key };
+  }
+
+  /** 清掉「上次进入的角色」缓存（登出 / 换账号 / 回到选角页 / 角色被删）。 */
+  clearCachedCharacter(): void {
+    safeRemove(this.storage, ACTIVE_PLAYER_STORAGE_KEY);
+  }
+
+  /**
+   * 落盘「上次进入的角色」。
+   *
+   * `me` 缺失时**不写**：没有账号 id 就无从校验，写下去等于埋一个跨账号误用的雷。
+   */
+  private persistActivePlayer(key: string): void {
+    const userId = this.me?.userId;
+    if (typeof userId !== 'string' || userId === '' || key === '') return;
+    safeSet(this.storage, ACTIVE_PLAYER_STORAGE_KEY, JSON.stringify({ userId, key }));
   }
 
   /** REST 登录；成功后 token 落盘。失败不抛（返回 false + Toast）。 */
@@ -169,6 +263,9 @@ export class SessionStore {
       });
       safeSet(this.storage, TOKEN_STORAGE_KEY, data.token);
       safeSet(this.storage, ME_STORAGE_KEY, JSON.stringify(this.me));
+      // 换账号/注册都要丢掉上一个账号的角色缓存：`resumePlayerKey()` 还有 userId 校验兜底，
+      // 这里主动清一次是为了不给「跨账号误用」留任何入口。
+      this.clearCachedCharacter();
       return true;
     } catch (error) {
       runInAction(() => {
@@ -195,6 +292,8 @@ export class SessionStore {
     });
     safeRemove(this.storage, TOKEN_STORAGE_KEY);
     safeRemove(this.storage, ME_STORAGE_KEY);
+    // 登出后**不再自动进入角色**：否则下一次打开页面会绕过登录页的语义回到游戏。
+    this.clearCachedCharacter();
   }
 
   /** WS / REST 401 兜底：token 失效时清会话并提示。 */
@@ -236,13 +335,17 @@ export class SessionStore {
         return;
       }
       const players = result.data ?? [];
+      let dropped = false;
       runInAction(() => {
         this.players = players;
         // 选中的角色被删掉时回落
         if (this.activePlayerKey !== null && !players.some((p) => p.key === this.activePlayerKey)) {
           this.activePlayerKey = null;
+          dropped = true;
         }
       });
+      // 当前角色已不在列表里 → 缓存也就失效了（否则每次刷新都会白试一次自动进入）
+      if (dropped) this.clearCachedCharacter();
     } catch (error) {
       if (!this.guard.isCurrent(token)) return;
       this.toast.fromError(error, '角色列表加载失败');
@@ -315,6 +418,8 @@ export class SessionStore {
       runInAction(() => {
         this.activePlayerKey = state.key;
       });
+      // 记住「上次进入的角色」：下次刷新页面直接自动进入，不再强制走选角页。
+      this.persistActivePlayer(state.key);
       return state;
     } catch (error) {
       if (!this.guard.isCurrent(token)) return null;
@@ -341,6 +446,9 @@ export class SessionStore {
         this.players = this.players.filter((player) => player.key !== key);
         if (this.activePlayerKey === key) this.activePlayerKey = null;
       });
+      // 删掉的正是缓存里的角色 → 缓存必须一起清（否则刷新会拿一个不存在的 key 去选角）
+      const cached = this.readCachedCharacter();
+      if (cached !== null && cached.key === key) this.clearCachedCharacter();
       this.toast.success('角色已删除');
       return true;
     } catch (error) {
@@ -349,10 +457,16 @@ export class SessionStore {
     }
   }
 
-  /** 退出当前角色、回到选角页（不登出账号）。 */
+  /**
+   * 退出当前角色、回到选角页（不登出账号）。
+   *
+   * ⚠️ 同时清掉缓存：这是用户**主动**离开角色的动作，刷新页面时应当停在选角页，
+   * 而不是把用户刚刚离开的角色又自动进回去。
+   */
   leaveCharacter(): void {
     runInAction(() => {
       this.activePlayerKey = null;
     });
+    this.clearCachedCharacter();
   }
 }

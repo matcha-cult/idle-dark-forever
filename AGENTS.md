@@ -256,7 +256,14 @@ pnpm run test        # 仅本仓 packages/*，不含 vendor
   **不要再各写一份 `?? activeCharacterOf`**。
 - 理由：框架 `sendNotification(userId, …)` 会发给该账号**全部 OPEN 连接** —— 允许多会话就会互相串号
   + 双份 tick 推送（实测过）。
-- 回归：`server/test/character-switch.test.ts`、`scripts/character-scope-smoke.mjs`（11/11）。
+- **刷新页面自动进入上次的角色**（前端缓存，详版 §15.2）：`player.select` 成功后落盘
+  `{userId, key}`；`bootstrap()` 用 `resumePlayerKey()` 三重校验（形状 / 账号一致 / key 仍在角色列表）
+  后自动 `player.select`。⚠️ **必须校验 `userId`**（换账号后误用别人的 key → `PLAYER_NOT_FOUND`）；
+  登出 / 换账号 / 「切换角色」/ 角色被删**必须清缓存**；瞬时失败**不清**（下次刷新继续重试）。
+  ⚠️ `App` 在 `session.restoring` 时渲染「正在恢复会话」——`setRestoring(true)` 必须在
+  `bootstrap()` 第一个 `await` 之前，否则首帧会先闪一下**建角页**（那时 `players` 还空着）。
+- 回归：`server/test/character-switch.test.ts`、`scripts/character-scope-smoke.mjs`（11/11）、
+  `web/test/integration.test.ts`（缓存自动进入 9 例）、`web/test/ui-smoke.test.tsx`（顶层门 3 例）。
 - ⚠️ **别在 `pnpm dev:server` 运行时手动 build**：watcher 会抢写 dist → 端口短暂不可用。
 
 ---
