@@ -24,7 +24,7 @@ import {
   type LogLevel,
 } from '@idle-dark/ui-kit';
 import { useRootStore } from '../../../app/root-context.js';
-import { isAttackableCamp } from '../../../stores/world-store.js';
+import { isAttackableCamp, isDead } from '../../../stores/world-store.js';
 
 /** 战斗事件 → 日志条目（纯展示映射，不改变任何数值）。 */
 export function formatBattleEvent(
@@ -236,7 +236,7 @@ export const BattlePanel = observer(function BattlePanel() {
           <Flex vertical gap={token.paddingXS}>
             <Flex wrap gap={token.paddingXS} data-testid="battle-allies">
               {world.allies.map((unit) => (
-                <UnitCard key={unit.id} unit={unit} dead={unit.hp <= 0} />
+                <UnitCard key={unit.id} unit={unit} dead={isDead(unit)} />
               ))}
             </Flex>
             <Flex wrap gap={token.paddingXS} data-testid="battle-enemies">
@@ -244,7 +244,7 @@ export const BattlePanel = observer(function BattlePanel() {
                 <UnitCard
                   key={unit.id}
                   unit={unit}
-                  dead={unit.hp <= 0}
+                  dead={isDead(unit)}
                   onClick={focus}
                   extra={
                     <Flex gap={4}>

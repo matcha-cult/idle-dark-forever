@@ -26,10 +26,11 @@ import {
 } from '@idle-dark/game-core';
 import {
   type ActionResult,
-  BATTLE_CMD,
   BusinessErrorCode,
   type LootDto,
   type OfflineReportDto,
+  type UnitPatchOpDto,
+  type UnitStateDto,
   WORLD_CMD,
   type WorldSnapshotDto,
   type WorldTickDto,
@@ -71,6 +72,12 @@ import {
   type SessionLifecycle,
 } from './internal/session-lifecycle.js';
 import { unitStateDtoOf } from './internal/unit-state.js';
+import {
+  diffUnitStates,
+  frameByteLength,
+  unitStateIndexOf,
+  worldFrameOf,
+} from './internal/unit-state-diff.js';
 import { EXP_RATE, OFFLINE_MAX_MS, WORLD_CONFIG, parseSessionReapMs } from './world.config.js';
 
 /** Tick 上限：单一真相。 */
@@ -98,6 +105,21 @@ interface WorldSession {
   realMs: number;
   /** 生命周期（`active → closing → destroyed`；空闲回收与 dispose 幂等）。 */
   lifecycle: SessionLifecycle;
+  /**
+   * **上次成功发出的**单位状态快照（`id → UnitStateDto`），净差分的基线。
+   *
+   * 单位数上界 = 同屏上限 + 召唤物（实测 5 个），内存约 264B × N/会话。
+   * 只有**入队成功**才推进它；入队被丢时保持不动，下一窗口自动重发。
+   */
+  lastSentUnits: Map<string, UnitStateDto>;
+  /** 上次成功发出的波数（波数推进本身也算一次变化）。 */
+  lastSentWave: number;
+  /** 本会话已发出的帧序号（单调递增）。 */
+  frameSeq: number;
+  /** 需要发一帧 `reset`（会话首帧 / 客户端明确要求重建基线）。 */
+  needsReset: boolean;
+  /** 上次读到的 `world.refusedUnits`（用于换算成进程级累计量）。 */
+  refusedSeen: number;
 }
 
 /** 世界调度指标快照（07 T-A1；全部为进程内累计/瞬时值，无数据时为 0 或 1，绝不 NaN）。 */
@@ -122,6 +144,19 @@ export interface WorldStats {
   readonly sessionIdleReapMs: number;
   readonly callbackBudgetPerRound: number;
   readonly maxRoundCpuMs: number;
+  // ── P2 推送实际量（I3/I5：推送量、静默跳过、丢帧都必须可见） ──
+  /** 实际入队成功的 `(world, tick)` 帧数。 */
+  readonly pushFrames: number;
+  /** 「完全无变化、整帧未入队」的窗口数（**不是**丢弃，是设计行为）。 */
+  readonly pushQuietSkips: number;
+  /** 入队失败（batcher 路由超限丢弃）的帧数；>0 即缺陷信号。 */
+  readonly pushDropped: number;
+  /** 补丁操作总数（add/chg/del/reset 合计）。 */
+  readonly pushPatchOps: number;
+  readonly pushFrameBytes: number;
+  readonly pushFrameBytesMax: number;
+  /** 因超过单图单位硬顶（`MAX_UNITS_PER_WORLD`）被拒绝注册的敌人累计数。 */
+  readonly refusedUnits: number;
 }
 
 @Injectable()
@@ -146,6 +181,15 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
   private debtWarnTotal = 0;
   private reapedTotal = 0;
   private lastSweepAt: number | null = null;
+  // ── P2 推送实际量（全部为真实发送量，不再是影子） ──
+  private pushFrames = 0;
+  private pushQuietSkips = 0;
+  private pushDropped = 0;
+  private pushPatchOps = 0;
+  private pushFrameBytes = 0;
+  private pushFrameBytesMax = 0;
+  /** 因超过单图单位硬顶被拒绝注册的敌人累计数（I2/I3；> 0 即缺陷/病态信号）。 */
+  private refusedUnitsTotal = 0;
   /**
    * 空闲会话回收阈值（ms）：`<= 0`（含 `0`）= 关闭回收（09 §7 回滚开关）。
    * 默认读 `SESSION_REAP_MS`；单测可直接改写本字段。
@@ -173,7 +217,6 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     // 推送合并策略：`world.tick` 累积事件 + 取最新单位快照 + 累加经验/金币。
     this.batcher.registerMerger(WORLD_CMD.cmd, WORLD_CMD.tick, mergeWorldTick);
     // `battle.loot` 在一个批次内累积成数组（前端做防御式处理；见交付报告"未闭合项"）。
-    this.batcher.registerMerger(BATTLE_CMD.cmd, BATTLE_CMD.loot, mergeLoot);
     // 面板域（item / character）改动了战斗相关状态 → 本 tick 重绑 hook。
     // 订阅而非被直接调用：解环后 item/character 不再 import battle（08 §2.3）。
     this.events.on('CombatHooksDirty', (event) => {
@@ -378,39 +421,91 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /** 推一帧 `(world, tick)`；返回本帧的战斗事件（供 run 结束原因判定）。 */
-  private emitTick(session: WorldSession, now: number): WorldTickDto['events'] {
-    const frame = session.collector.drain();
-    const units = session.world.units.map((unit) =>
-      unitStateDtoOf(unit, session.world.playerUnit),
-    );
+  /**
+   * 推一帧 `(world, tick)`。**P2 起：状态走净差分、日志与掉落并帧、无变化则不推。**
+   *
+   * 规则（与 `ai-docs/16` 一致）：
+   * - 200ms 是一个**累计窗口**：窗口内所有产出合并成一帧，因此每 200ms 至多 1 条消息；
+   * - 用 `diffUnitStates` 与 `lastSentUnits` 求**净差分**（不需要 pending 变更队列）；
+   * - `patch` / `log` / `loot` / `exp` / `gold` / `wave` **全部为空 ⇒ 整帧不入队**；
+   * - **入队失败（被 batcher 丢弃）⇒ 不前进任何基线、不清累计器** —— 下一个窗口会重新
+   *    把它们算进差分，客户端自动追平（不需要额外重同步信令）。
+   */
+  private emitTick(session: WorldSession, now: number): void {
+    // I2/I3：单图单位硬顶的拒绝次数换算成进程级累计量（世界实例会随会话销毁）。
+    const refused = session.world.refusedUnits;
+    if (refused > session.refusedSeen) {
+      this.refusedUnitsTotal += refused - session.refusedSeen;
+      session.refusedSeen = refused;
+      this.logger.warn(
+        `[OVERLOAD] 单位数达硬顶，拒绝注册敌人 userId=${session.userId} characterId=${session.characterId} total=${this.refusedUnitsTotal}`,
+      );
+    }
+    // ⚠️ 用 `snapshot()` 而不是 `drain()`：静默窗口**不能**清累计器，否则日志/经验会永久丢失。
+    const collected = session.collector.snapshot();
+    const units = session.world.units.map((unit) => unitStateDtoOf(unit, session.world.playerUnit));
+    const wave = session.world.enemyBorn?.wave ?? 0;
+    const loot = session.pendingLoot;
+
+    const patch: UnitPatchOpDto[] = session.needsReset
+      ? [{ op: 'reset', units }]
+      : diffUnitStates(session.lastSentUnits, units);
+
+    // 「本窗口要不要发」的**唯一判据**在 `worldFrameOf`（含单测），这里只负责接线。
+    const frame = worldFrameOf({
+      patch,
+      log: collected.events,
+      loot,
+      gainedExp: collected.gainedExp,
+      gainedGold: collected.gainedGold,
+      wave,
+      prevWave: session.lastSentWave,
+    });
+
+    if (frame === null) {
+      // 无变化 → 不产生任何消息（这就是「无变化不推送」）。累计器**不清**，留给下一窗口。
+      this.pushQuietSkips += 1;
+      return;
+    }
+
     const payload: WorldTickDto = {
       serverTime: now,
-      units,
-      events: frame.events,
+      // P2：以下两个字段**停止填充**，保留仅为不破坏冻结契约（见 dto.ts 的 @deprecated）。
+      units: [],
+      events: [],
       gainedExp: frame.gainedExp,
       gainedGold: frame.gainedGold,
-      // W4：波次随 tick 下发（`EnemyBorn` 尚未建立时按 0 波）。
-      wave: session.world.enemyBorn?.wave ?? 0,
+      wave: frame.wave,
       bossEvery: WORLD_BOSS_WAVE_INTERVAL,
+      seq: session.frameSeq + 1,
+      patch: frame.patch,
+      log: frame.log,
+      loot: frame.loot,
     };
-    this.batcher.enqueue(session.userId, {
+
+    const queued = this.batcher.enqueue(session.userId, {
       cmd: WORLD_CMD.cmd,
       subCmd: WORLD_CMD.tick,
       data: payload,
     });
-
-    if (session.pendingLoot.length > 0) {
-      const loots = session.pendingLoot.splice(0, session.pendingLoot.length);
-      for (const loot of loots) {
-        this.batcher.enqueue(session.userId, {
-          cmd: BATTLE_CMD.cmd,
-          subCmd: BATTLE_CMD.loot,
-          data: loot,
-        });
-      }
+    if (!queued) {
+      // 被 batcher 丢弃（路由数超限）：**不前进基线**，下一窗口重发，客户端自动追平。
+      this.pushDropped += 1;
+      return;
     }
-    return frame.events;
+
+    session.frameSeq += 1;
+    session.lastSentUnits = unitStateIndexOf(units);
+    session.lastSentWave = wave;
+    session.needsReset = false;
+    session.collector.drain();
+    loot.length = 0;
+
+    const bytes = frameByteLength(payload);
+    this.pushFrames += 1;
+    this.pushPatchOps += patch.length;
+    this.pushFrameBytes += bytes;
+    this.pushFrameBytesMax = Math.max(this.pushFrameBytesMax, bytes);
   }
 
   /**
@@ -530,6 +625,13 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       sessionIdleReapMs: Math.max(0, Math.trunc(this.sessionIdleReapMs)),
       callbackBudgetPerRound: WORLD_CONFIG.globalCallbackBudgetPerRound,
       maxRoundCpuMs: WORLD_CONFIG.maxRoundCpuMs,
+      pushFrames: this.pushFrames,
+      pushQuietSkips: this.pushQuietSkips,
+      pushDropped: this.pushDropped,
+      pushPatchOps: this.pushPatchOps,
+      pushFrameBytes: this.pushFrameBytes,
+      pushFrameBytesMax: this.pushFrameBytesMax,
+      refusedUnits: this.refusedUnitsTotal,
     };
   }
 
@@ -605,6 +707,11 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       advancedMs: 0,
       realMs: 0,
       lifecycle: createLifecycle(now),
+      lastSentUnits: new Map<string, UnitStateDto>(),
+      lastSentWave: 0,
+      frameSeq: 0,
+      needsReset: true,
+      refusedSeen: 0,
     };
 
     const built = buildBattleWorld({
@@ -900,13 +1007,19 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
   private async snapshotOf(session: WorldSession): Promise<WorldSnapshotDto> {
     const player = session.world.player as Player | null;
     const extras = await this.playerContext.extrasOf(session.userId);
+    const units = session.world.units.map((unit) => unitStateDtoOf(unit, session.world.playerUnit));
+    // P2：客户端拿到全量快照即等于拿到了差分基线 —— 同步推进服务端基线并撤销 reset，
+    // 避免紧接着又推一帧内容重复的 `reset`。
+    session.lastSentUnits = unitStateIndexOf(units);
+    session.lastSentWave = session.world.enemyBorn?.wave ?? 0;
+    session.needsReset = false;
     return {
       map: session.world.map,
-      units: session.world.units.map((unit) => unitStateDtoOf(unit, session.world.playerUnit)),
+      units,
       maps: player ? mapListDtoOf(this.tables, player, session.world.map) : [],
       updateRate: session.world.updateRate,
       paused: session.clock.isPaused(),
-      wave: session.world.enemyBorn?.wave ?? 0,
+      wave: session.lastSentWave,
       bossEvery: WORLD_BOSS_WAVE_INTERVAL,
     };
   }
@@ -914,7 +1027,13 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
 
 // ────────────────────────────── 模块级纯函数 ──────────────────────────────
 
-/** `world.tick` 合并器：累积事件 + 取最新快照 + 累加经验/金币。 */
+/**
+ * `world.tick` 合并器（P2）：**有序拼接补丁** + 累积日志/掉落/经验金币 + 取最新波数。
+ *
+ * 为什么 `patch` 是**简单拼接**而不是「按 id 合并」：`patch` 是**有序操作流**，
+ * 客户端按序应用；两个窗口的操作拼起来就等于「先应用 A 再应用 B」，
+ * 语义天然正确（含 `add` 后 `del` 这类抵消）。
+ */
 export function mergeWorldTick(prev: unknown, next: unknown): WorldTickDto {
   const a = asTick(prev);
   const b = asTick(next);
@@ -928,20 +1047,33 @@ export function mergeWorldTick(prev: unknown, next: unknown): WorldTickDto {
         gainedGold: 0,
         wave: 0,
         bossEvery: WORLD_BOSS_WAVE_INTERVAL,
+        seq: 0,
+        patch: [],
+        log: [],
+        loot: [],
       }
     );
   }
   if (!b) return a;
-  // 波次取**最新**帧（`b`）：同一批次内的旧帧不得把波数回退。
   return {
     serverTime: Math.max(a.serverTime, b.serverTime),
-    units: b.units,
-    events: [...a.events, ...b.events],
+    // P2：停止填充，固定为空数组（冻结契约保留字段）。
+    units: [],
+    events: [],
     gainedExp: a.gainedExp + b.gainedExp,
     gainedGold: a.gainedGold + b.gainedGold,
+    // 波次取**最新**帧（`b`）：同一批次内的旧帧不得把波数回退。
     wave: b.wave ?? a.wave ?? 0,
     bossEvery: b.bossEvery ?? a.bossEvery ?? WORLD_BOSS_WAVE_INTERVAL,
+    seq: Math.max(finiteOr0(a.seq), finiteOr0(b.seq)),
+    patch: [...(a.patch ?? []), ...(b.patch ?? [])],
+    log: [...(a.log ?? []), ...(b.log ?? [])],
+    loot: mergeLoot(a.loot, b.loot),
   };
+}
+
+function finiteOr0(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
 function asTick(value: unknown): WorldTickDto | null {
@@ -959,6 +1091,10 @@ function asTick(value: unknown): WorldTickDto | null {
   if (typeof record.bossEvery === 'number' && Number.isFinite(record.bossEvery)) {
     tick.bossEvery = record.bossEvery;
   }
+  if (typeof record.seq === 'number' && Number.isFinite(record.seq)) tick.seq = record.seq;
+  if (Array.isArray(record.patch)) tick.patch = record.patch;
+  if (Array.isArray(record.log)) tick.log = record.log;
+  if (Array.isArray(record.loot)) tick.loot = record.loot;
   return tick;
 }
 

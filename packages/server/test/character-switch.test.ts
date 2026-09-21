@@ -99,12 +99,21 @@ describe('角色会话归属（切人 / 当前角色 / 推送范围）', () => {
       .map((frame) => frame.data as WorldTickDto);
   }
 
-  /** tick 帧里玩家单位的 `typeKey` = 角色 key（服务端权威标识）。 */
+  /**
+   * tick 帧里玩家单位的 `typeKey` = 角色 key（服务端权威标识）。
+   *
+   * P2 起状态走 `patch`：`reset` / `add` 携带完整单位（含 `typeKey`），`chg` 只带变化字段。
+   * 这里遍历**所有**单位的出现记录，因此「旧角色混进过任何一帧」都能被抓到。
+   */
   function playerKeysInTicks(): string[] {
     const keys: string[] = [];
     for (const frame of tickFrames()) {
-      for (const unit of frame.units) {
-        if (unit.kind === 'player') keys.push(unit.typeKey);
+      for (const op of frame.patch ?? []) {
+        const units =
+          op.op === 'reset' ? (op.units ?? []) : op.op === 'add' ? [op.unit] : [];
+        for (const unit of units) {
+          if (unit.kind === 'player') keys.push(unit.typeKey);
+        }
       }
     }
     return keys;
@@ -209,7 +218,11 @@ describe('角色会话归属（切人 / 当前角色 / 推送范围）', () => {
     await players.select(1, Y);
     frames.length = 0;
     runTicks(2);
-    // 两次 tick → 两帧（同一批内同路由会合并，不存在「一个 tick 两帧」）
-    expect(tickFrames().length).toBe(2);
+    // P2：无变化的窗口**不发帧**，所以两次 tick 的帧数是 1（首帧 reset）~2（第二帧有变化），
+    // 绝不会出现「一个 tick 两帧」（同批内同路由合并）。
+    const count = tickFrames().length;
+    expect(count).toBeGreaterThan(0);
+    expect(count).toBeLessThanOrEqual(2);
+    expect(tickFrames()[0]?.patch?.[0]?.op).toBe('reset');
   });
 });

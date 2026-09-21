@@ -233,18 +233,40 @@ try {
     const snap = await call(ws, 30, 1, {});
     check('world.snapshot 返回 ActionResult<WorldSnapshotDto>', snap.ok && snap.action?.data !== undefined, JSON.stringify(snap.action?.data).slice(0, 160));
 
-    const enter = await call(ws, 30, 2, { map: state?.map ?? 'home' });
+    // ⚠️ P2 起「无变化不推送」：`home` 图没有战斗，可能**永远**收不到 tick 帧。
+    // 因此这里进战斗图（`world.1`，1 级可进），保证世界真的会发生变化。
+    const enter = await call(ws, 30, 2, { map: 'world.1' });
     check('world.enterMap 返回 ActionResult<WorldSnapshotDto>', enter.ok && enter.action?.data !== undefined, JSON.stringify(enter.action).slice(0, 200));
+    const baseUnits = enter.action?.data?.units;
+    check('进图响应的快照即差分基线（含玩家单位）', Array.isArray(baseUnits) && baseUnits.some((u) => u.kind === 'player'), JSON.stringify({ units: baseUnits?.length }));
 
-    // 9) world.tick 推送（**核心验收**）
+    // 9) world.tick 推送（**核心验收**；P2 形状：patch/log/loot/seq，units/events 停填）
     try {
-      const tick = await waitPush((f) => f.cmd === 30 && f.subCmd === 5, 12_000);
+      const tick = await waitPush((f) => f.cmd === 30 && f.subCmd === 5, 15_000);
       const tickData = tick.data;
-      check('收到 world.tick 推送（cmd=30, subCmd=5）且含 units/events/serverTime', Array.isArray(tickData?.units) && Array.isArray(tickData?.events) && typeof tickData?.serverTime === 'number', JSON.stringify({ units: tickData?.units?.length, events: tickData?.events?.length, serverTime: tickData?.serverTime }));
+      check(
+        '收到 world.tick 推送且为 P2 形状（patch/log/loot/seq 齐全，units/events 停填为空）',
+        Array.isArray(tickData?.patch) &&
+          Array.isArray(tickData?.log) &&
+          Array.isArray(tickData?.loot) &&
+          typeof tickData?.seq === 'number' &&
+          Array.isArray(tickData?.units) &&
+          tickData.units.length === 0 &&
+          Array.isArray(tickData?.events) &&
+          tickData.events.length === 0 &&
+          typeof tickData?.serverTime === 'number',
+        JSON.stringify({ patch: tickData?.patch?.length, log: tickData?.log?.length, seq: tickData?.seq }),
+      );
       check('推送帧带 kind=notification', tick.kind === 'notification');
     } catch (error) {
       check('收到 world.tick 推送（cmd=30, subCmd=5）', false, error.message);
     }
+    // 9b) 战斗图里静默窗口应当占多数（P2 的核心收益；只做宽松下界断言，避免时序抖动）
+    check(
+      'world.1 进图后**不会再产生** (battle, loot) 独立推送（掉落已并帧）',
+      pushed.every((f) => !(f.cmd === 40 && f.subCmd === 2)),
+      'ok',
+    );
 
     // 10) inventory.list（扁平数组契约）
     const inv = await call(ws, 50, 1, {});

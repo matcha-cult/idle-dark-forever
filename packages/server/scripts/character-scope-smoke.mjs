@@ -63,6 +63,28 @@ function connect(token) {
   return { ws, call, ticks, open: () => new Promise((r) => ws.on('open', r)) };
 }
 
+/**
+ * P2：把一串 `(world, tick)` 帧的 `patch` 按序应用，返回其中出现过的玩家角色 key。
+ * 独立实现一遍协议语义（不复用前端），顺带验证服务端补丁流可被还原。
+ */
+function playerKeysOf(ticks, seedUnits = []) {
+  // 采样窗口内通常只有 `chg`（`reset` 在采样开始前就发过了），
+  // 因此必须用快照里的单位做**基线**，否则折叠出空表。
+  const units = new Map();
+  for (const u of seedUnits) units.set(u.id, u);
+  for (const t of ticks) {
+    for (const op of t.patch ?? []) {
+      if (op.op === 'reset') { units.clear(); for (const u of op.units ?? []) units.set(u.id, u); }
+      else if (op.op === 'add') units.set(op.unit.id, op.unit);
+      else if (op.op === 'del') units.delete(op.id);
+      else if (units.has(op.id)) units.set(op.id, { ...units.get(op.id), ...op.fields });
+    }
+  }
+  const keys = new Set();
+  for (const u of units.values()) if (u.kind === 'player') keys.add(u.typeKey);
+  return keys;
+}
+
 const suffix = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
 const username = `scope_${suffix}`;
 const password = 'smoke-pass-123';
@@ -92,6 +114,11 @@ await A.call(20, 6, { key: keyX });
 await B.call(20, 6, { key: keyY });
 await new Promise((r) => setTimeout(r, 1200));
 
+// ⚠️ P2 起「无变化不推送」：`home` 图没有战斗，不会有任何 tick 帧。
+// 把**当前角色**（Y）送进战斗图，后面的推送断言才有意义。
+const entered = await A.call(30, 2, { map: 'world.1' });
+check('当前角色进入战斗图（P2 下才有推送可言）', entered.data?.success === true, JSON.stringify(entered.data).slice(0, 160));
+
 // 1) 显式 key 必须等于当前角色：A 再点名 X → 拒绝（fail-closed）
 const stale = await A.call(30, 1, { key: keyX });
 check(
@@ -109,10 +136,7 @@ check('不带 key 回退到「当前角色」（账号级唯一真相）', playe
 A.ticks.length = 0;
 B.ticks.length = 0;
 await new Promise((r) => setTimeout(r, 2500));
-const playerKeys = new Set();
-for (const t of [...A.ticks, ...B.ticks]) {
-  for (const u of t.units ?? []) if (u.kind === 'player') playerKeys.add(u.typeKey);
-}
+const playerKeys = playerKeysOf([...A.ticks, ...B.ticks], snap.data?.data?.units ?? []);
 check(
   '推送只属于当前角色（帧里只有 Y，没有旧角色 X）',
   playerKeys.size > 0 && [...playerKeys].every((k) => k === keyY),

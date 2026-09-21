@@ -4,7 +4,7 @@
  * 覆盖：
  * - tick 只在**在线**时推进与推送（离线不推）；
  * - `stepPaused` 驱动虚拟时间前进并产生战斗事件；
- * - 推送经 batcher（绝不逐伤害直推），帧里 units 至少含玩家；
+ * - 推送经 batcher（绝不逐伤害直推），P2 起状态走 `patch`（首帧为 `reset`，含玩家单位）；
  * - `enterMap` 的 ALREADY_IN_MAP / MAP_LOCKED 错误路径；
  * - `leave` 结束会话。
  */
@@ -23,6 +23,7 @@ import { InProcessEventBus } from '../src/modules/logic/shared/event-bus.js';
 import { WorldService } from '../src/modules/logic/world/world.service.js';
 import { WORLD_CONFIG } from '../src/modules/logic/world/world.config.js';
 import { FakeDatabase } from './helpers/fake-database.js';
+import { foldPatches } from './helpers/unit-patch.js';
 
 const tables: DataTables = createDefaultTables();
 
@@ -37,6 +38,7 @@ describe('WorldService', () => {
   let frames: CapturedFrame[];
   let online: boolean;
   let now: number;
+  let enqueueOk: boolean;
 
   beforeEach(() => {
     db = new FakeDatabase();
@@ -46,8 +48,10 @@ describe('WorldService', () => {
     context = new PlayerContextService(db.asService(), () => now, tables);
     frames = [];
     online = true;
+    enqueueOk = true;
     const batcher = {
       enqueue: (userId: number, frame: PushFrame) => {
+        if (!enqueueOk) return false;
         frames.push({ userId, ...frame });
         return true;
       },
@@ -102,9 +106,69 @@ describe('WorldService', () => {
     expect(ticks.length).toBeGreaterThan(0);
     const first = ticks[0];
     expect(typeof first?.serverTime).toBe('number');
-    expect(first?.units.some((unit) => unit.kind === 'player')).toBe(true);
-    // 30s 虚拟时间足够刷出怪物并产生事件。
-    expect(ticks.some((tick) => tick.events.length > 0)).toBe(true);
+    // P2：`units`/`events` 停填，状态走 `patch`；首帧必须是 `reset`（客户端基线）。
+    expect(first?.units).toEqual([]);
+    expect(first?.events).toEqual([]);
+    expect(first?.patch?.[0]?.op).toBe('reset');
+    expect(first?.seq).toBe(1);
+    // 独立折叠补丁流 → 单位表里必须有玩家单位。
+    expect([...foldPatches(ticks).values()].some((unit) => unit.kind === 'player')).toBe(true);
+    // 30s 虚拟时间足够刷出怪物并产生事件（P2：日志走 `log` 分区）。
+    expect(ticks.some((tick) => (tick.log ?? []).length > 0)).toBe(true);
+  });
+
+  it('P2：世界无变化的窗口**不推送任何消息**（静默抑制）', async () => {
+    await startInStreet();
+    now += 1000;
+    service.tick();
+    // 首帧必为 reset（客户端基线）。
+    expect(tickFrames().length).toBe(1);
+    expect(tickFrames()[0]?.patch?.[0]?.op).toBe('reset');
+
+    frames.length = 0;
+    // 时间不推进 ⇒ 世界无任何变化 ⇒ 整帧不入队。
+    service.tick();
+    expect(tickFrames().length).toBe(0);
+  });
+
+  it('P2：入队被丢弃时不前进基线，下一窗口重发（客户端自动追平）', async () => {
+    await startInStreet();
+    enqueueOk = false;
+    now += 1000;
+    service.tick();
+    expect(tickFrames().length).toBe(0);
+
+    enqueueOk = true;
+    now += 1;
+    service.tick();
+    // 基线未前进 ⇒ 仍然从 `reset` 开始，客户端不会漏掉第一帧。
+    expect(tickFrames()[0]?.patch?.[0]?.op).toBe('reset');
+    expect(tickFrames()[0]?.seq).toBe(1);
+  });
+
+  it('P2：帧形状 —— units/events 恒空、seq 递增、patch 非空且 log/loot 为数组', async () => {
+    await startInStreet();
+    // 30 个 tick：`tick()` 走 CPU 预算调度，全量并行跑门禁时单轮可能被切断，
+    // 因此这里与同文件的其它用例一样给足 tick 数，避免负载抖动造成假失败。
+    for (let i = 0; i < 30; i += 1) {
+      now += 1000;
+      service.tick();
+    }
+    const ticks = tickFrames();
+    expect(ticks.length).toBeGreaterThan(0);
+    for (const frame of ticks) {
+      expect(frame.units).toEqual([]);
+      expect(frame.events).toEqual([]);
+      expect(Array.isArray(frame.patch)).toBe(true);
+      expect(Array.isArray(frame.log)).toBe(true);
+      expect(Array.isArray(frame.loot)).toBe(true);
+      expect((frame.patch ?? []).length).toBeGreaterThan(0);
+    }
+    const seqs = ticks.map((frame) => frame.seq ?? 0);
+    expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
+    expect(new Set(seqs).size).toBe(seqs.length);
+    // P2：掉落并帧，不再产生 (battle, loot) 独立推送路由。
+    expect(frames.some((frame) => frame.cmd === 40 && frame.subCmd === 2)).toBe(false);
   });
 
   it('离线 tick 不推进、不推送', async () => {
@@ -381,11 +445,13 @@ describe('WorldService', () => {
 
     now += 1000;
     service.tick();
-    const last = tickFrames().at(-1);
+    const ticks = tickFrames();
+    const last = ticks.at(-1);
     expect(last?.wave).toBe(WORLD_BOSS_WAVE_INTERVAL);
-    expect(last?.units.some((unit) => unit.boss === true)).toBe(true);
+    const units = [...foldPatches(ticks).values()];
+    expect(units.some((unit) => unit.boss === true)).toBe(true);
     // `boss` 是可选字段：非 BOSS 单位一律省略（不为 false）。
-    expect(last?.units.every((unit) => unit.boss === undefined || unit.boss === true)).toBe(true);
+    expect(units.every((unit) => unit.boss === undefined || unit.boss === true)).toBe(true);
   });
 
   it('脏波数（NaN / Infinity / -1 / 非数字 / 0）一律解析为 0', async () => {

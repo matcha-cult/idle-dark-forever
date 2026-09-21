@@ -5,7 +5,7 @@
  * 全部算好。
  */
 import type { UnitStateDto } from '@idle-dark/protocol';
-import { EnemyUnit, PlayerUnit, Unit } from '@idle-dark/game-core';
+import { Camps, EnemyUnit, PlayerUnit, Unit } from '@idle-dark/game-core';
 
 function finite(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
@@ -72,7 +72,9 @@ export function unitStateDtoOf(unit: Unit, playerUnit: PlayerUnit | null): UnitS
     camp: String(unit.camp),
     level: finite(unit.level),
     quality: qualityOf(quality),
-    hp: finite(unit.hp),
+    // P2：`hp` 夹到 `>= 0`（`Unit.damage` 只做 `hp -= v`，阵亡瞬间可能为负），
+    // 并由服务端显式下发 `alive` —— 前端零推导，不再靠 `hp <= 0` 猜死亡。
+    hp: Math.max(0, finite(unit.hp)),
     maxHp: finite(unit.maxHp),
     mp: finite(unit.mp),
     maxMp: finite(unit.maxMp),
@@ -84,6 +86,9 @@ export function unitStateDtoOf(unit: Unit, playerUnit: PlayerUnit | null): UnitS
     targetId: unit.target ? unit.target.id : null,
     castingProgress: castingProgressOf(unit),
     buffs,
+    // ⚠️ 与 `MUTABLE_UNIT_FIELDS` 必须一致：`alive` 是 `camp === 'ghost'` 的派生量，
+    // 二者**同时**变化；差分靠 `camp` 就能捕捉死亡，`alive` 只是给前端的显式语义。
+    alive: unit.camp !== Camps.ghost,
   };
   // W4：守关 BOSS 显式标记（**不要用 key 比较**：同一敌人既可能是某图 BOSS 又是另一图普通怪）。
   if (unit instanceof EnemyUnit && unit.worldBoss) dto.boss = true;

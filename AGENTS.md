@@ -810,3 +810,148 @@ __IDLE_DARK__                   // 根 store（临时排查）
   W4 `b473692` 波次/BOSS → W5 `a0dde55` 钥石 → W6a `343e6d0` 删旧秘境 → W6b `514bc00` 混沌仪 →
   W7 文档收尾。
 
+
+---
+
+## 20. 战斗推送通道：200ms 累计制（P2 切流后的硬约定）
+
+> 来源：[`ai-docs/16-战斗推送通道-累计制.md`](ai-docs/16-战斗推送通道-累计制.md)。
+> 本节覆盖 §14 里「每 200ms 无条件推整份 `units` 快照」的旧描述 —— 那个行为**已废弃**。
+
+### 20.1 一句话模型
+
+> **状态是采样（净差分，5Hz 采样率），日志是全保真（逐条、有序、同帧送达）。**
+
+200ms 是一个**累计窗口**：窗口内所有产出（状态变化 + 日志 + 掉落 + 经验金币）合并，
+**窗口末无净变化 ⇒ 整帧不发送**（不是发空帧）。因此每 200ms **至多 1 条** `(world, tick)`。
+
+### 20.2 帧形状（`WorldTickDto`，`(world, tick)` = 30/5）
+
+`patch`（有序单位补丁）+ `log` + `loot` + `gainedExp/gainedGold` + `wave/bossEvery` + `seq`。
+
+- `patch: UnitPatchOpDto[]`：`reset`（清空重填，基线）/ `add`（**完整**单位，含标识字段）/
+  `chg`（**仅变化字段**）/ `del`（**从单位表移除**）。客户端**必须按序应用**；同批合并 = 数组直接拼接。
+- `units` / `events` 是**冻结契约里保留但停填**的字段：恒为 `[]`（历史包袱，20B/帧；
+  删除需显式批准）。
+- 掉落**并帧**（`loot` 分区），不再走 `(battle, loot)`(40/2)；`(battle, log)`(40/1) 从未被服务端使用。
+
+### 20.3 可变字段白名单是唯一真相
+
+唯一实现在 `packages/server/src/modules/logic/world/internal/unit-state-diff.ts` 的
+`MUTABLE_UNIT_FIELDS`（**9 个**）：
+
+```
+hp mp rp ep comboPoint targetId castingProgress buffs camp
+```
+
+其余字段（`id/kind/typeKey/name/level/quality/maxHp/maxMp/maxRp/maxEp/boss`）**出生即固定**，
+只在 `add`/`reset` 里出现一次 —— 这部分占单个单位 DTO 的 **64%**（170B/264B），是优化的主要来源。
+
+⚠️ **`camp` 必须在白名单里**：① 死亡 `enemy → ghost`（`unit.ts#kill()`）；
+② 中立怪被攻击参战 `neutral → enemy`（`enemy-unit.ts#setTarget`）。
+⚠️ `buffs` 必须**归一化后比较**（按 `key` 排序），否则数组顺序抖动会让静默率归零。
+
+### 20.4 死亡 ≠ 移除（最容易搞错的一条）
+
+引擎里对象死亡后**仍留在 `world.units`**：
+
+| 事件 | 表现 | 推送 |
+|---|---|---|
+| 死亡 | `Unit.kill()`：`camp → ghost`、`hp ≤ 0`、`targetId → null`、清 buff、清读条 | 一帧 `chg { alive:false, hp:0, camp:'ghost', … }` |
+| 清尸 | `EnemyUnit.clean()` → `world.removeUnit`（默认**死亡后 3000ms**；`willClean` 钩子为假时**可能永不触发**） | 一帧 `del` |
+
+- `alive?: boolean` 由服务端按 `camp === Camps.ghost` 派生（`unit-state.ts`），**前端零推导**；
+  前端判死唯一入口是 `world-store.ts#isDead()`（`alive` → 回落 `camp === 'ghost' || hp <= 0`）。
+- `hp` 在投影里**夹到 `>= 0`**（`Unit.damage` 只做 `hp -= v`，阵亡瞬间可为负）。
+- `aliveMonsterCount()` **排除 ghost**：尸体不占刷怪名额、不卡波次。
+- 差分协议**不得假设「每个 add 最终必有 del」**。
+
+### 20.5 静默抑制与丢帧自愈
+
+- **无变化不发帧**：判据唯一实现在 `unit-state-diff.ts#worldFrameOf()`（返回 `null` = 不发）。
+- **累计器只在真的入队成功后才清**（`collector.snapshot()` 取、`drain()` 清）——静默窗口若误清，
+  会**永久丢失日志与经验**。
+- **入队失败（batcher 丢弃）⇒ 不前进基线、不清累计器**：下一窗口重发，客户端自动追平。
+  这取代了「依赖 batcher `onResync` 补推」的方案（`NotificationBatcher.enqueue` 的返回值就是信号）。
+- 客户端**不需要 seq 断链检测**（WS 有序可靠 + 服务端自愈）；`seq` 只用于观测与调试。
+- 客户端若收到指向未知 id 的 `chg`（基线错位），由 `world-store#applyPatch` **主动重拉快照**自愈
+  （I3：不允许静默降级）。
+
+### 20.6 无变化 ⇒ 不推送 ⇒ 保活与对时
+
+**不发明心跳帧**（那会违反「无变化不推送」）。保活走 WS 协议层 ping + 应用层 `system.ping`(15s)；
+时钟对齐复用 `system.ping` 响应里既有的 `serverTime`。
+
+⚠️ `web/src/services/tick-rate.ts` 的探针语义已变：**帧率 ≤ 5/s 且可以为 0**，
+「窗口内 0 帧」不再是「连接已断」。判断服务端是否在跑要看 `/api/metrics` 的 `world_push_*`。
+
+### 20.7 观测（I3/I5）
+
+`/api/metrics` 新增：
+
+| 指标 | 含义 |
+|---|---|
+| `world_push_frames_total` | 实际入队成功的帧数 |
+| `world_push_quiet_skips_total` | **设计行为**：无变化而未发帧的窗口数（不是丢弃） |
+| `world_push_dropped_total` | 入队被 batcher 丢弃的帧数 —— **> 0 即缺陷信号** |
+| `world_push_patch_ops_total` | 补丁操作总数 |
+| `world_push_frame_bytes_total` / `_max` | 帧字节合计 / 历史峰值 |
+| `push_flushed_total` / `push_dropped_total` / `push_resync_total` / `push_pending_*` / `push_max_routes_per_user` / `push_flush_interval_ms` | 推送防线（此前只有 `batcher.stats`，没接进 metrics，违反 I5） |
+
+### 20.8 实测带宽（本机真实服务端，25s/张）
+
+| | P1 之前（全量快照） | P2（累计制差分） |
+|---|---|---|
+| 帧率 | 5.00/s | 1.6~1.8/s |
+| 静默窗口占比 | 0% | **62%~67%** |
+| 线字节/帧（含信封） | 1211B | 370~396B |
+| **单连接带宽** | **5.89 KB/s** | **0.63~0.67 KB/s** |
+| 降幅 | — | **8.9×~9.3×** |
+
+帧字节峰值实测 **699B data / ~776B 线**（没走到 20 波 BOSS 波，故不是最坏值）。
+
+### 20.9 禁止事项
+
+- ❌ 不要把 `units` / `events` 重新填起来（前端已不读）。
+- ❌ 不要为「一次状态变化」直推一条消息（会退化成消息爆炸）；变化必须经 200ms 窗口累计。
+- ❌ 不要在静默窗口 `collector.drain()`（会丢日志/经验）。
+- ❌ 不要让前端从 `hp <= 0` 之类别的地方判死 —— 用 `isDead()`。
+- ❌ 不要新增「无变化也发」的心跳帧。
+
+### 20.10 单位硬顶：`MAX_UNITS_PER_WORLD`（I2 的全局预算）
+
+- 常量：`packages/game-core/src/combat/battle-world.ts` 的 **`MAX_UNITS_PER_WORLD = 32`**。
+- **为什么需要**：自然刷新有闸门（`Born.atMonsterCap()`，本图 `max` = 4），但
+  **BOSS 与技能召唤物可以把它推过 `max` 且没有数量上限**（`contracts/data.ts` / `combat/**`
+  里既无 `maxSummon` 也无 `maxCount`），唯一边界是「召唤物随 `SkillState` 释放而清除」这条
+  **时间**上的边界。于是差分循环 `O(单位数 × 9)`、单帧字节、`lastSentUnits` 内存三者都无上界。
+- **超载行为**（`BattleWorld.addEnemy`）：达硬顶 ⇒ **不注册进 `units`**，但**仍返回一个有效对象**
+  并立刻置 `camp = ghost`（技能 / 读条 / Buff / 受击全部 early-return，数据层的
+  `unit.addBuff(...)` / `runAttrHooks(unit, 'summonedUnit')` 不会崩）；同时
+  `world.refusedUnits += 1` 并发 `general` 事件 `world.unitCap:<type>`（I3：不许静默降级）。
+  - ⚠️ **不要**改成 `unit.kill()`：那会挂 3s 清尸定时器，纯属多余（`removeUnit` 对不在表内的
+    单位虽是安全 no-op，但没必要）。
+- **刷怪器必须先查再刷**：`Born.onTimer` 的条件是 `atMonsterCap() || world.atUnitCap()`，
+  `trySpawnWorldBoss` 也先查 `atUnitCap()`。**否则** `addEnemy` 的拒绝会让
+  `Born.count/total` 记账失真、该波永远无法判定完成。被挡住时**保持定时轮询**，怪死后自动恢复。
+- 指标：`world_unit_cap_refused_total`（**正常恒为 0，> 0 即缺陷/病态信号**）。
+
+### 20.11 连续量（`remainMs` / `castingProgress`）：实测后**决定不做**
+
+按设计，这两个字段仍留在 `MUTABLE_UNIT_FIELDS` 里，因此「有 Buff 或正在读条时窗口不静默」。
+**实测结论：这一点在当前可构造的场景里收益为零，故不改绝对时间戳**（保留 `remainMs` 反而更贴合
+「前端零推导」，不需要给规则开豁免）。
+
+实测（`tmp/measure-buff.mjs`，按序回放真实补丁流分类）：
+
+| 场景 | 帧率 | 连续量造成的额外帧 | 出现过非空 `buffs` | 连续量字节占比 |
+|---|---|---|---|---|
+| `world.1`（Lv1，30s） | 1.8/s | **0%** | 否 | ~0% |
+| `world.9`（Lv90，30s） | 1.6/s | **0%** | 否 | ~0% |
+| `world.13`（Lv100，30s） | 1.8/s | **0%** | 否 | 0.2% |
+| `world.9`（Lv100，120s） | 0.5/s | **0%** | 否 | 0% |
+
+⚠️ **这个结论有明确前提**：上述样本用的是**导入的无装备角色**，构造不出「带 Buff 的战斗」
+（`game-core/src/data/skills.ts` 里确有 37 处 `addBuff`，但样本内一次都没触发；疑似因
+角色输出/生存极端、或 100 级阵亡惩罚 `10 + level×0.5 = 60s` 导致大量时间处于尸体状态）。
+若将来在**真实装备档**上观察到 Buff 常驻，再按本文 §20.3 的方案改绝对时间戳。

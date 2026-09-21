@@ -241,6 +241,16 @@ export interface UnitStateDto {
   buffs: Array<{ key: string; name: string; stack: number; remainMs: number }>;
   /** 该单位是否是本图守关 BOSS（供前端高亮；非 BOSS 省略）。 */
   boss?: boolean;
+  /**
+   * 是否存活（P2，服务端按 `camp === 'ghost'` 派生，前端**零推导**）。
+   *
+   * ⚠️ 引擎里「死亡」不等于「移除」：`Unit.kill()` 只把 `camp` 翻成 `ghost`，
+   * `EnemyUnit.clean()` 才真正 `removeUnit`（默认死亡后 3000ms）。因此：
+   * - 死亡 = 一帧 `chg { alive:false, hp:0, camp:'ghost', ... }`；
+   * - 清尸 = 一帧 `del`；
+   * - 缺省（字段未下发）按**存活**处理，兼容旧服务端。
+   */
+  alive?: boolean;
 }
 
 /** 地图展示态。 */
@@ -285,11 +295,32 @@ export type BattleEventDto =
   | { kind: 'exp'; amount: number; level: number }
   | { kind: 'general'; text: string };
 
+/**
+ * 单位补丁操作（P2；**有序**，客户端必须按序应用；同批多帧合并 = 数组直接拼接）。
+ *
+ * - `reset`：清空本地单位表并重填（进图 / 重连 / 丢帧补推的基线）；
+ * - `add`：新出现的单位，携带**全部**字段（含出生后不再变化的标识字段）；
+ * - `chg`：仅携带**变化字段**（`MUTABLE_UNIT_FIELDS`，见 `unit-state-diff.ts`）；
+ * - `del`：从世界单位表中**移除**（= 清尸，**不是死亡**；死亡是 `chg { alive:false }`）。
+ */
+export type UnitPatchOpDto =
+  | { op: 'reset'; units: UnitStateDto[] }
+  | { op: 'add'; unit: UnitStateDto }
+  | { op: 'chg'; id: string; fields: Partial<UnitStateDto> }
+  | { op: 'del'; id: string };
+
 /** (world, tick) 推送载荷：单位增量 + 可选事件。 */
 export interface WorldTickDto {
   /** 服务端时间戳（客户端据此做时间对齐，不用于本地推进）。 */
   serverTime: number;
+  /**
+   * @deprecated P2 起**停止填充**（恒为 `[]`），改走 `patch`。
+   * 字段保留以不破坏冻结契约；空数组的 20B 开销可在后续显式批准后删除。
+   */
   units: UnitStateDto[];
+  /**
+   * @deprecated P2 起**停止填充**（恒为 `[]`），改走 `log`。
+   */
   events: BattleEventDto[];
   /** 本次批次内的经验/金币增量，便于 HUD 累加显示。 */
   gainedExp: number;
@@ -298,6 +329,14 @@ export interface WorldTickDto {
   wave?: number;
   /** 守关 BOSS 的刷新间隔（波；缺省 20）。 */
   bossEvery?: number;
+  /** P2：本会话已发出的帧序号（单调递增；仅用于观测与调试，不参与一致性判定）。 */
+  seq?: number;
+  /** P2：本窗口的单位状态净差分（有序）。缺省 / 空数组 = 本窗口无单位变化。 */
+  patch?: UnitPatchOpDto[];
+  /** P2：本窗口的战斗日志（`events` 的继任者；已按发生顺序排列）。 */
+  log?: BattleEventDto[];
+  /** P2：本窗口的掉落（原 `(battle, loot)` 推送并帧；`handled:'lost'` 表示包裹已满被丢弃）。 */
+  loot?: LootDto[];
 }
 
 /** (battle, loot) 推送载荷。 */

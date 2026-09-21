@@ -263,13 +263,21 @@ describe('登录 → 选角 → 推送 → 面板更新', () => {
     expect(root.idle.shouldShowReport).toBe(true);
 
     // 3) 服务端推送世界 tick → store 只存帧（单位整体替换 + 日志追加 + 增量角标）
+    // P2：状态走 `patch`（有序补丁流），首帧为 `reset`；`units`/`events` 已停填。
     const tick: WorldTickDto = {
       serverTime: 1_700_000_000_000,
-      units: [
-        makeUnit({ id: 'u1', hp: 5 }),
-        makeUnit({ id: 'u2', camp: 'player', kind: 'player', name: '守夜人', hp: 100, maxHp: 100 }),
+      units: [],
+      events: [],
+      patch: [
+        {
+          op: 'reset',
+          units: [
+            makeUnit({ id: 'u1', hp: 5 }),
+            makeUnit({ id: 'u2', camp: 'player', kind: 'player', name: '守夜人', hp: 100, maxHp: 100 }),
+          ],
+        },
       ],
-      events: [
+      log: [
         { kind: 'damage', fromId: 'u2', toId: 'u1', damageType: 'physical', skill: '斩击', value: 25, crit: false, absorbed: 0 },
         { kind: 'death', unitId: 'u1', name: '夜蝠', camp: 'enemy' },
       ],
@@ -411,14 +419,21 @@ describe('中立（黄名）单位必须可被点选攻击', () => {
 
     server.pushRoute(WORLD_CMD.cmd, WORLD_CMD.tick, {
       serverTime: 1_700_000_000_100,
-      units: [
-        makeUnit({ id: 'p1', camp: 'player', kind: 'player', name: '守夜人', hp: 100, maxHp: 100 }),
-        makeUnit({ id: 'e1' }),
-        // 大史莱姆：中立（不会主动攻击，也不会被溅射打到）
-        makeUnit({ id: 'n1', camp: 'neutral', name: '大史莱姆', typeKey: 'slime.giant', level: 12 }),
-        makeUnit({ id: 'g1', camp: 'ghost', name: '尸体' }),
-      ],
+      units: [],
       events: [],
+      patch: [
+        {
+          op: 'reset',
+          units: [
+            makeUnit({ id: 'p1', camp: 'player', kind: 'player', name: '守夜人', hp: 100, maxHp: 100 }),
+            makeUnit({ id: 'e1' }),
+            // 大史莱姆：中立（不会主动攻击，也不会被溅射打到）
+            makeUnit({ id: 'n1', camp: 'neutral', name: '大史莱姆', typeKey: 'slime.giant', level: 12 }),
+            makeUnit({ id: 'g1', camp: 'ghost', name: '尸体' }),
+          ],
+        },
+      ],
+      log: [],
       gainedExp: 0,
       gainedGold: 0,
     });

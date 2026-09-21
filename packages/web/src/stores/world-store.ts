@@ -1,10 +1,13 @@
 /**
- * WorldStore —— 战斗世界（地图列表 / 单位快照 / 挑战队列 / 战斗日志）。
+ * WorldStore —— 战斗世界（地图列表 / 单位状态 / 战斗日志 / 掉落提示）。
  *
- * 推送纪律（硬约束）：`(world, tick)` 推送**只存帧**：
- * - 用服务端下发的 `units` 整体替换单位列表（不做插值、不本地推进）；
- * - `events` 原样追加到日志（渲染时才格式化文案）；
- * - `gainedExp` / `gainedGold` 只转给 `PlayerStore` 做增量角标，**不改**任何权威数值。
+ * 推送纪律（硬约束）：`(world, tick)` 推送**只存帧**，不做任何本地推进：
+ * - P2 起状态走 `patch`（**有序**的单位补丁流）：`reset` 重建、`add` 新增、
+ *   `chg` 只带变化字段、`del` 移除（= 清尸，不是死亡；死亡是 `alive:false`）；
+ * - `log` 原样追加到日志（渲染时才格式化文案）；`loot` 只弹提示 + 刷新背包；
+ * - `gainedExp` / `gainedGold` 只转给 `PlayerStore` 做增量角标，**不改**任何权威数值；
+ * - 服务端**无变化时不推送**，因此「长时间没有帧」是正常状态，不是卡死；
+ * - 若收到指向未知单位的 `chg`（说明基线不一致），主动重拉一次快照自愈。
  */
 import { makeAutoObservable, observable, runInAction } from 'mobx';
 import {
@@ -12,6 +15,8 @@ import {
   WORLD_CMD,
   type BattleEventDto,
   type LootDto,
+  type UnitPatchOpDto,
+  type UnitStateDto,
   type WorldSnapshotDto,
   type WorldTickDto,
 } from '@idle-dark/protocol';
@@ -44,6 +49,20 @@ export function isAttackableCamp(camp: string): boolean {
   return camp === 'enemy' || camp === 'neutral';
 }
 
+/**
+ * 单位是否已阵亡（唯一入口：不要在组件里各写一份）。
+ *
+ * ⚠️ 引擎里**死亡不等于移除**：`Unit.kill()` 只把 `camp` 翻成 `ghost`，
+ * `EnemyUnit.clean()` 才真正移除（默认 3s 后）。所以尸体仍会留在单位表里，
+ * 必须靠 `alive` 判定，而不是「从表里消失」。
+ * `alive` 缺失（旧服务端 / 旧帧）时才回落：`camp === 'ghost'` **或** `hp <= 0`
+ * （两者取或 —— 任何一条成立都按死亡渲染，宁可多判死也不要把尸体画成活的）。
+ */
+export function isDead(unit: Pick<UnitStateDto, 'alive' | 'camp' | 'hp'>): boolean {
+  if (typeof unit.alive === 'boolean') return !unit.alive;
+  return unit.camp === 'ghost' || unit.hp <= 0;
+}
+
 export class WorldStore {
   snapshot: WorldSnapshotDto | null = null;
   units: WorldSnapshotDto['units'] = [];
@@ -62,14 +81,20 @@ export class WorldStore {
 
   private readonly guard = new LoadGuard();
   private logSeq = 0;
+  /** 单位表（`id → 状态`）。对外仍以 `units` 数组暴露，避免下游大面积改动。 */
+  private readonly unitMap = new Map<string, UnitStateDto>();
+  /** 自愈重拉是否在进行中（避免基线不一致时反复重拉）。 */
+  private resyncPending = false;
 
   constructor(private readonly ctx: StoreContext) {
-    makeAutoObservable<this, 'ctx' | 'guard' | 'logSeq'>(
+    makeAutoObservable<this, 'ctx' | 'guard' | 'logSeq' | 'unitMap' | 'resyncPending'>(
       this,
       {
         ctx: false,
         guard: false,
         logSeq: false,
+        unitMap: false,
+        resyncPending: false,
         units: observable.shallow,
         maps: observable.shallow,
         log: observable.shallow,
@@ -249,43 +274,99 @@ export class WorldStore {
     const notification = frame as { cmd?: number; subCmd?: number; data?: unknown };
     if (notification.cmd === WORLD_CMD.cmd && notification.subCmd === WORLD_CMD.tick) {
       const tick = notification.data as WorldTickDto | undefined;
-      if (tick === undefined || !Array.isArray(tick.units)) return;
+      if (tick === undefined) return;
+      const serverTime = typeof tick.serverTime === 'number' ? tick.serverTime : 0;
       runInAction(() => {
-        this.units = tick.units;
-        this.log = appendEvents(this.log, tick.events ?? [], tick.serverTime, () => (this.logSeq += 1));
+        if (Array.isArray(tick.patch)) this.applyPatch(tick.patch);
+        if (Array.isArray(tick.log)) {
+          this.log = appendEvents(this.log, tick.log, serverTime, () => (this.logSeq += 1));
+        }
         this.applyWave(tick.wave, tick.bossEvery);
       });
-      this.ctx.root().player.noteTickGain(tick.gainedExp ?? 0, tick.gainedGold ?? 0, tick.serverTime);
+      if (Array.isArray(tick.loot)) {
+        for (const loot of tick.loot) this.applyLoot(loot);
+      }
+      this.ctx.root().player.noteTickGain(tick.gainedExp ?? 0, tick.gainedGold ?? 0, serverTime);
       return;
     }
+    // 以下两条是 P2 之前的旧推送路由：服务端已并帧，保留仅为兼容回滚期的旧服务端。
     if (notification.cmd === BATTLE_CMD.cmd && notification.subCmd === BATTLE_CMD.log) {
       const payload = notification.data as { serverTime?: number; events?: BattleEventDto[] } | undefined;
       const events = payload?.events;
       if (!Array.isArray(events)) return;
+      const serverTime = typeof payload?.serverTime === 'number' ? payload.serverTime : 0;
       runInAction(() => {
-        this.log = appendEvents(this.log, events, payload?.serverTime ?? Date.now(), () => (this.logSeq += 1));
+        this.log = appendEvents(this.log, events, serverTime, () => (this.logSeq += 1));
       });
       return;
     }
     if (notification.cmd === BATTLE_CMD.cmd && notification.subCmd === BATTLE_CMD.loot) {
-      const loot = notification.data as LootDto | undefined;
-      if (loot?.slot === undefined) return;
-      if (loot.handled === 'pickup') this.ctx.toast.info('获得战利品', loot.slot.name);
-      else if (loot.handled === 'sell') this.ctx.toast.info('自动出售', `${loot.slot.name} +${loot.gold ?? 0} 金币`);
-      else if (loot.handled === 'lost') {
-        // 包裹已满：服务端已丢弃，这里如实提示（不再谎报「获得战利品」）。
-        const count = loot.slot.count > 1 ? ` ×${loot.slot.count}` : '';
-        this.ctx.toast.error('包裹已满', `丢弃了 ${loot.slot.name}${count}`);
-        return;
-      } else this.ctx.toast.info('自动分解', loot.slot.name);
-      void this.ctx.root().inventory.load();
+      this.applyLoot(notification.data as LootDto | undefined);
     }
+  }
+
+  /**
+   * 按序应用一帧单位补丁。
+   *
+   * ⚠️ **必须按序**：`add` 之后可能紧跟同一 id 的 `chg`/`del`（服务端同批次合并过的帧）。
+   * ⚠️ 指向未知 id 的 `chg` 说明基线不一致（快照与差分错位）——此时**不能静默丢弃**，
+   * 主动重拉一次快照自愈（I3：不允许静默降级）。
+   */
+  private applyPatch(patch: readonly UnitPatchOpDto[]): void {
+    let desynced = false;
+    for (const op of patch) {
+      if (op.op === 'reset') {
+        this.unitMap.clear();
+        for (const unit of op.units ?? []) this.unitMap.set(unit.id, unit);
+        continue;
+      }
+      if (op.op === 'add') {
+        if (op.unit !== undefined && typeof op.unit.id === 'string') this.unitMap.set(op.unit.id, op.unit);
+        continue;
+      }
+      if (op.op === 'del') {
+        this.unitMap.delete(op.id);
+        continue;
+      }
+      const existing = this.unitMap.get(op.id);
+      if (existing === undefined) {
+        desynced = true;
+        continue;
+      }
+      this.unitMap.set(op.id, { ...existing, ...op.fields });
+    }
+    this.units = [...this.unitMap.values()];
+    if (desynced && !this.resyncPending) {
+      this.resyncPending = true;
+      void this.load().finally(() => {
+        runInAction(() => {
+          this.resyncPending = false;
+        });
+      });
+    }
+  }
+
+  /** 掉落提示（`loot` 分区与旧的 `(battle, loot)` 路由共用）。 */
+  private applyLoot(loot: LootDto | undefined): void {
+    if (loot?.slot === undefined) return;
+    if (loot.handled === 'pickup') this.ctx.toast.info('获得战利品', loot.slot.name);
+    else if (loot.handled === 'sell') this.ctx.toast.info('自动出售', `${loot.slot.name} +${loot.gold ?? 0} 金币`);
+    else if (loot.handled === 'lost') {
+      // 包裹已满：服务端已丢弃，这里如实提示（不再谎报「获得战利品」）。
+      const count = loot.slot.count > 1 ? ` ×${loot.slot.count}` : '';
+      this.ctx.toast.error('包裹已满', `丢弃了 ${loot.slot.name}${count}`);
+      return;
+    } else this.ctx.toast.info('自动分解', loot.slot.name);
+    void this.ctx.root().inventory.load();
   }
 
   /** 应用世界快照（同时接管单位列表与地图列表）。 */
   private applySnapshot(snapshot: WorldSnapshotDto): void {
     this.snapshot = snapshot;
-    this.units = snapshot.units;
+    // 快照 = 差分基线：重建单位表，后续补丁都相对它。
+    this.unitMap.clear();
+    for (const unit of snapshot.units ?? []) this.unitMap.set(unit.id, unit);
+    this.units = [...this.unitMap.values()];
     this.maps = snapshot.maps;
     this.updateRate = snapshot.updateRate;
     this.paused = snapshot.paused;

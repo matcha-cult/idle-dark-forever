@@ -1,8 +1,8 @@
 /**
  * 世界 tick 聚合与人机接口纯函数单测
  *
- * 覆盖：`world.tick` 合并器（累积事件 / 取最新快照 / 累加 exp·gold）、
- * `battle.loot` 合并器、以及 tick 预算配置的合理性上界。
+ * 覆盖：`world.tick` 合并器（**有序拼接补丁** / 累积日志 / 累积掉落 / 累加 exp·gold /
+ * 取最新波数）、`mergeLoot`、以及 tick 预算配置的合理性上界。
  */
 import { describe, expect, it } from 'vitest';
 import type { WorldTickDto } from '@idle-dark/protocol';
@@ -19,6 +19,10 @@ function tick(partial: Partial<WorldTickDto>): WorldTickDto {
   };
   if (partial.wave !== undefined) out.wave = partial.wave;
   if (partial.bossEvery !== undefined) out.bossEvery = partial.bossEvery;
+  if (partial.seq !== undefined) out.seq = partial.seq;
+  if (partial.patch !== undefined) out.patch = partial.patch;
+  if (partial.log !== undefined) out.log = partial.log;
+  if (partial.loot !== undefined) out.loot = partial.loot;
   return out;
 }
 
@@ -35,27 +39,56 @@ describe('mergeWorldTick', () => {
     expect(mergeWorldTick(prev, { hello: 1 })).toEqual(prev);
   });
 
-  it('事件累积、单位取最新、exp/gold 累加、serverTime 取最大', () => {
+  it('P2：补丁**有序拼接**、日志累积、exp/gold 累加、serverTime 取最大、units/events 恒空', () => {
     const a = tick({
       serverTime: 100,
       units: [{ id: 'u1' } as never],
       events: [{ kind: 'general', text: 'a' }],
+      patch: [{ op: 'add', unit: { id: 'u1' } as never }],
+      log: [{ kind: 'general', text: 'a' }],
       gainedExp: 1,
       gainedGold: 2,
+      seq: 7,
     });
     const b = tick({
       serverTime: 200,
       units: [{ id: 'u2' } as never],
       events: [{ kind: 'general', text: 'b' }],
+      patch: [{ op: 'del', id: 'u1' }],
+      log: [{ kind: 'general', text: 'b' }],
       gainedExp: 10,
       gainedGold: 20,
+      seq: 8,
     });
     const merged = mergeWorldTick(a, b);
     expect(merged.serverTime).toBe(200);
-    expect(merged.units).toEqual([{ id: 'u2' }]);
-    expect(merged.events).toHaveLength(2);
+    // ⚠️ 必须是**拼接**而不是「取最新」：`add u1` 之后紧跟 `del u1` 才有正确语义。
+    expect(merged.patch).toEqual([
+      { op: 'add', unit: { id: 'u1' } },
+      { op: 'del', id: 'u1' },
+    ]);
+    expect(merged.log).toHaveLength(2);
+    expect(merged.seq).toBe(8);
+    // P2：这两个字段停填，恒为空数组（保留仅为不破坏冻结契约）。
+    expect(merged.units).toEqual([]);
+    expect(merged.events).toEqual([]);
     expect(merged.gainedExp).toBe(11);
     expect(merged.gainedGold).toBe(22);
+  });
+
+  it('P2：掉落并帧累积（原 `(battle, loot)` 路由）', () => {
+    const a = tick({ loot: [{ handled: 'pickup' } as never] });
+    const b = tick({ loot: [{ handled: 'lost' } as never] });
+    expect(mergeWorldTick(a, b).loot).toEqual([{ handled: 'pickup' }, { handled: 'lost' }]);
+    // 一侧没有 loot：另一侧原样保留。
+    expect(mergeWorldTick(a, tick({})).loot).toEqual([{ handled: 'pickup' }]);
+  });
+
+  it('P2：seq 取最大，脏值（NaN / Infinity / 非数字）按 0 参与比较', () => {
+    expect(mergeWorldTick(tick({ seq: 3 }), tick({ seq: 9 })).seq).toBe(9);
+    expect(mergeWorldTick(tick({ seq: 9 }), tick({ seq: 3 })).seq).toBe(9);
+    expect(mergeWorldTick(tick({ seq: Number.NaN }), tick({ seq: 4 })).seq).toBe(4);
+    expect(mergeWorldTick(tick({ seq: Number.POSITIVE_INFINITY }), tick({})).seq).toBe(0);
   });
 
   it('两侧都非法时返回零帧（不抛错）', () => {
@@ -63,6 +96,10 @@ describe('mergeWorldTick', () => {
     expect(merged.units).toEqual([]);
     expect(merged.events).toEqual([]);
     expect(merged.gainedExp).toBe(0);
+    expect(merged.patch).toEqual([]);
+    expect(merged.log).toEqual([]);
+    expect(merged.loot).toEqual([]);
+    expect(merged.seq).toBe(0);
   });
 
   it('波次取最新帧（batcher 合并不得回退波数）；缺字段时回落上一帧', () => {

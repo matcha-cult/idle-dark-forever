@@ -1,22 +1,21 @@
 /**
  * `(world, tick)` 推送频率自检 —— **只在开发期安装**（`import.meta.env.DEV`）。
  *
- * ## 背景（为什么需要这个探针）
+ * ## 背景（P2 起语义已变，务必按新语义解读）
  *
- * 设计上推送是**双 200ms**：`WorldService` 每 200ms 心跳一次，`NotificationBatcher`
- * 每 200ms 合并投递一次（同一 `(userId, cmdMerge)` 在一批内只保留一帧）。
- * 因此**每个 WS 连接**应恰好收到 ~5 帧/秒，帧间隔中位数 200ms。
+ * P2 之前是「每 200ms 无条件推整份 `units` 快照」，所以 5 帧/秒是常态。
+ * **P2 之后改为「有变化才推」**：服务端每 200ms 只做一次**评估**，
+ * 完全无变化的窗口**不发任何消息**（`world_push_quiet_skips_total` 会 +1）。
  *
- * 若浏览器里看到明显更多，只有两种可能，肉眼数不清、必须量：
+ * 因此现在的正确解读是：
+ * - **帧率 ≤ 5/s 且可以是 0**：长时间没有帧 = 世界真的没有变化（站桩、波次间隙），
+ *   **不是**卡死、更不是断线（断线由 `system.ping` 与 WS 层判定）；
+ * - 帧率**仍然不能超过** 5/s（超出说明 `tickIntervalMs` 或 batcher 出了问题）；
+ * - **相同 `serverTime` 出现多次**仍然只可能是重复投递（多标签页 / 5273+5274 /
+ *   残留 socket）—— 框架 `sendNotification` 会发给该 userId 的**全部** OPEN 连接。
  *
- * 1. **同一帧被投递多次** —— 多标签页、5273 与 5274 各开一个、或残留 socket。
- *    特征是**相同的 `serverTime` 出现多次**（框架 `sendNotification` 会发给该 userId
- *    的**全部** OPEN 连接）。
- * 2. 服务端真的比设计快（`tickIntervalMs` 被改过）—— 特征是间隔中位数 < 200ms
- *    且 `serverTime` 不重复。
- *
- * 另外：帧里带整份 `units` 快照，`console.log` 5 次/秒也会显得"刷屏"，
- * 那是观感问题，不是频率问题。
+ * 想知道「有没有在推」要看是否有帧到来；想知道「服务端是否在跑」看
+ * `system.ping` 的响应与 `/api/metrics` 的 `world_push_*`。
  *
  * 用法（浏览器 Console）：
  * ```js
@@ -83,13 +82,15 @@ export function summarizeTickRate(samples: readonly TickSample[], windowMs: numb
 
   let verdict: string;
   if (frames === 0) {
-    verdict = '窗口内没有收到 (world, tick) 推送 —— 未进图 / 未选角 / 连接已断';
+    verdict =
+      '窗口内没有收到 (world, tick) 推送 —— P2 起这**可能完全正常**（世界无变化时不推送）；' +
+      '若 HUD 也在动却没有帧，才需要查未进图 / 未选角 / 连接';
   } else if (duplicatedFrames > 0) {
     verdict = `重复投递 ${duplicatedFrames} 帧（同一 serverTime 多次到达）—— 检查是否开了多个标签页 / 5273+5274 两个 dev server / 残留 socket`;
   } else if (perSecond > TOLERATED_PER_SECOND) {
     verdict = `服务端推送快于设计（${perSecond}/s > ${EXPECTED_PER_SECOND}/s）—— 检查 WORLD_CONFIG.tickIntervalMs 与 batcher flushIntervalMs`;
   } else {
-    verdict = `正常：单连接 ${perSecond}/s、间隔中位数 ${gapMs.p50}ms（设计 5Hz / 200ms）`;
+    verdict = `正常：单连接 ${perSecond}/s、间隔中位数 ${gapMs.p50}ms（P2 设计：评估 5Hz / 200ms，仅在有变化时推送，故帧率 ≤ 5 且可为 0）`;
   }
 
   return { frames, perSecond, gapMs, uniqueServerTimes, duplicatedFrames, verdict };

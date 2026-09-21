@@ -167,9 +167,17 @@ export class NotificationBatcher {
     return { users, frames };
   }
 
+  /**
+   * **生效的**限额（I5：每个限额都必须能在 `/api/metrics` 看到当前值）。
+   *
+   * 注意是实例的真实配置，不是默认常量 —— 工厂可以传 `options` 覆盖它们。
+   */
+  get limits(): { flushIntervalMs: number; maxRoutesPerUser: number } {
+    return { flushIntervalMs: this.flushIntervalMs, maxRoutesPerUser: this.maxRoutesPerUser };
+  }
+
   /** 运维 / 测试可见的累计指标。 */
-  get stats(): {
-    flushed: number;
+  get stats(): {    flushed: number;
     dropped: number;
     resyncs: number;
     pendingUsers: number;

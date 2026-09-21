@@ -10,6 +10,23 @@ import type { WorldService, WorldStats } from '../src/modules/logic/world/world.
 
 const FIXED_NOW = 1_700_000_000_000;
 
+interface PushStatsStub {
+  stats: {
+    flushed: number;
+    dropped: number;
+    resyncs: number;
+    pendingUsers: number;
+    pendingFrames: number;
+    pendingOverflow: number;
+  };
+  limits: { flushIntervalMs: number; maxRoutesPerUser: number };
+}
+
+const ZERO_PUSH: PushStatsStub = {
+  stats: { flushed: 0, dropped: 0, resyncs: 0, pendingUsers: 0, pendingFrames: 0, pendingOverflow: 0 },
+  limits: { flushIntervalMs: 200, maxRoutesPerUser: 32 },
+};
+
 function makeService(
   worldStats: Partial<WorldStats>,
   ctxStats: { loaded: number; dirty: number; accounts: number } = {
@@ -17,10 +34,11 @@ function makeService(
     dirty: 2,
     accounts: 3,
   },
+  batcher: PushStatsStub = ZERO_PUSH,
 ): MetricsService {
   const world = { stats: worldStats } as unknown as WorldService;
   const contexts = { stats: ctxStats } as unknown as PlayerContextService;
-  return new MetricsService(world, contexts, () => FIXED_NOW);
+  return new MetricsService(world, contexts, () => FIXED_NOW, batcher as never);
 }
 
 describe('MetricsService.snapshot', () => {
@@ -113,5 +131,62 @@ describe('MetricsService.snapshot', () => {
     expect(snapshot.metrics.world_sessions_total).toBe(0);
     expect(snapshot.metrics.world_time_ratio).toBe(1);
     expect(snapshot.metrics.context_loaded).toBe(0);
+  });
+
+  it('推送防线指标可见（I5）：计数与**生效的**限额都出现在快照里', () => {
+    const snapshot = makeService({}, undefined, {
+      stats: { flushed: 1200, dropped: 3, resyncs: 2, pendingUsers: 7, pendingFrames: 9, pendingOverflow: 1 },
+      limits: { flushIntervalMs: 200, maxRoutesPerUser: 32 },
+    }).snapshot();
+    expect(snapshot.metrics.push_flushed_total).toBe(1200);
+    expect(snapshot.metrics.push_dropped_total).toBe(3);
+    expect(snapshot.metrics.push_resync_total).toBe(2);
+    expect(snapshot.metrics.push_pending_users).toBe(7);
+    expect(snapshot.metrics.push_pending_frames).toBe(9);
+    expect(snapshot.metrics.push_pending_overflow).toBe(1);
+    expect(snapshot.metrics.push_max_routes_per_user).toBe(32);
+    expect(snapshot.metrics.push_flush_interval_ms).toBe(200);
+  });
+
+  it('P2 推送实际量可见；未注入 batcher 时也不得抛错（缺省 0）', () => {
+    const snapshot = makeService(
+      {
+        pushFrames: 1000,
+        pushQuietSkips: 660,
+        pushDropped: 0,
+        pushPatchOps: 410,
+        pushFrameBytes: 204_000,
+        pushFrameBytesMax: 407,
+      },
+      undefined,
+      // 显式传 `null`（不是 `undefined`）才能绕过默认参数，验证「未注入 batcher」的兜底
+      null as never,
+    ).snapshot();
+    expect(snapshot.metrics.world_push_frames_total).toBe(1000);
+    expect(snapshot.metrics.world_push_quiet_skips_total).toBe(660);
+    expect(snapshot.metrics.world_push_dropped_total).toBe(0);
+    expect(snapshot.metrics.world_push_patch_ops_total).toBe(410);
+    expect(snapshot.metrics.world_push_frame_bytes_total).toBe(204_000);
+    expect(snapshot.metrics.world_push_frame_bytes_max).toBe(407);
+    // 未注入 batcher：所有 push_* 退化为 0，而不是 NaN/undefined
+    expect(snapshot.metrics.push_flushed_total).toBe(0);
+    expect(snapshot.metrics.push_max_routes_per_user).toBe(0);
+  });
+
+  it('推送实量脏输入同样归一（NaN / 负数 / Infinity → 0）', () => {
+    const snapshot = makeService({
+      pushFrames: Number.NaN,
+      pushQuietSkips: -1,
+      pushDropped: Number.POSITIVE_INFINITY,
+      pushPatchOps: Number.NEGATIVE_INFINITY,
+      pushFrameBytes: Number.NaN,
+      pushFrameBytesMax: -5,
+    }).snapshot();
+    expect(snapshot.metrics.world_push_frames_total).toBe(0);
+    expect(snapshot.metrics.world_push_quiet_skips_total).toBe(0);
+    expect(snapshot.metrics.world_push_dropped_total).toBe(0);
+    expect(snapshot.metrics.world_push_patch_ops_total).toBe(0);
+    expect(snapshot.metrics.world_push_frame_bytes_total).toBe(0);
+    expect(snapshot.metrics.world_push_frame_bytes_max).toBe(0);
   });
 });

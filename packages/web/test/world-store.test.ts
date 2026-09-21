@@ -142,3 +142,86 @@ describe('WorldStore 波次（W4）', () => {
     expect(store.wave).toBe(4);
   });
 });
+
+describe('WorldStore 单位补丁（P2）', () => {
+  function unit(id: string, extra: Partial<{ hp: number; camp: string; alive: boolean }> = {}) {
+    return {
+      id,
+      kind: 'enemy',
+      typeKey: 'slime.minimal',
+      name: '小史莱姆',
+      camp: extra.camp ?? 'enemy',
+      level: 1,
+      quality: 0,
+      hp: extra.hp ?? 25,
+      maxHp: 25,
+      mp: 0,
+      maxMp: 0,
+      rp: 0,
+      maxRp: 0,
+      ep: 0,
+      maxEp: 0,
+      comboPoint: 0,
+      targetId: null,
+      castingProgress: null,
+      buffs: [],
+      ...(extra.alive !== undefined ? { alive: extra.alive } : {}),
+    };
+  }
+
+  it('reset 重建单位表；chg 只改指定字段；del 移除；add 追加', () => {
+    const { store } = makeHarness();
+    pushTick(store, tick({ patch: [{ op: 'reset', units: [unit('a'), unit('b')] }] }));
+    expect(store.units.map((u) => u.id)).toEqual(['a', 'b']);
+
+    pushTick(store, tick({ patch: [{ op: 'chg', id: 'a', fields: { hp: 3 } }] }));
+    expect(store.units.find((u) => u.id === 'a')?.hp).toBe(3);
+    // 未提及的字段必须保留（补丁是「部分字段」而不是整对象）
+    expect(store.units.find((u) => u.id === 'a')?.name).toBe('小史莱姆');
+    expect(store.units).toHaveLength(2);
+
+    pushTick(store, tick({ patch: [{ op: 'add', unit: unit('c') }, { op: 'del', id: 'b' }] }));
+    expect(store.units.map((u) => u.id)).toEqual(['a', 'c']);
+  });
+
+  it('同一帧内 add 后紧跟 del（生了又死）→ 按序应用后不存在', () => {
+    const { store } = makeHarness();
+    pushTick(store, tick({ patch: [{ op: 'reset', units: [] }] }));
+    pushTick(store, tick({ patch: [{ op: 'add', unit: unit('tmp') }, { op: 'del', id: 'tmp' }] }));
+    expect(store.units).toHaveLength(0);
+  });
+
+  it('死亡 = alive:false 的 chg（尸体仍在表里），清尸才是 del', () => {
+    const { store } = makeHarness();
+    pushTick(store, tick({ patch: [{ op: 'reset', units: [unit('e1', { hp: 30 })] }] }));
+    pushTick(store, tick({ patch: [{ op: 'chg', id: 'e1', fields: { hp: 0, camp: 'ghost', alive: false } }] }));
+    expect(store.units).toHaveLength(1);
+    expect(store.units[0]?.alive).toBe(false);
+    pushTick(store, tick({ patch: [{ op: 'del', id: 'e1' }] }));
+    expect(store.units).toHaveLength(0);
+  });
+
+  it('旧格式（只带 units / events）不再被采信 —— 停填字段不得清空或污染状态', () => {
+    const { store } = makeHarness();
+    pushTick(store, tick({ patch: [{ op: 'reset', units: [unit('a')] }] }));
+    pushTick(store, tick({ units: [unit('legacy')], events: [{ kind: 'general', text: 'x' }] }));
+    expect(store.units.map((u) => u.id)).toEqual(['a']);
+    expect(store.log).toHaveLength(0);
+  });
+
+  it('指向未知 id 的 chg（基线不一致）→ 主动重拉快照自愈，而不是静默丢弃', async () => {
+    const { store } = makeHarness(snapshot({ units: [unit('fresh')] }));
+    pushTick(store, tick({ patch: [{ op: 'chg', id: 'nobody', fields: { hp: 1 } }] }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(store.units.map((u) => u.id)).toEqual(['fresh']);
+  });
+
+  it('isDead：优先服务端 alive，其次 camp，最后回落 hp', async () => {
+    const { isDead } = await import('../src/stores/world-store.js');
+    expect(isDead({ alive: false, camp: 'enemy', hp: 10 })).toBe(true);
+    expect(isDead({ alive: true, camp: 'ghost', hp: 0 })).toBe(false);
+    expect(isDead({ camp: 'ghost', hp: 10 })).toBe(true);
+    expect(isDead({ camp: 'enemy', hp: 0 })).toBe(true);
+    expect(isDead({ camp: 'enemy', hp: 5 })).toBe(false);
+  });
+});

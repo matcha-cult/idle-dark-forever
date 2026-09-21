@@ -11,6 +11,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { GAME_CLOCK, PlayerContextService, type NowSource } from '../logic/shared/index.js';
 import { WorldService, type WorldStats } from '../logic/world/world.service.js';
+import { NOTIFICATION_BATCHER } from '../game/notification-batcher.provider.js';
+import type { NotificationBatcher } from '../game/notification-batcher.js';
 
 /** 非有限数字 → 0；负数 → 0（计数器语义；07 §2.1「不得输出 NaN/Infinity/负数」）。 */
 function safeInt(value: unknown): number {
@@ -45,11 +47,14 @@ export class MetricsService {
     private readonly world: WorldService,
     private readonly contexts: PlayerContextService,
     @Inject(GAME_CLOCK) private readonly now: NowSource,
+    @Inject(NOTIFICATION_BATCHER) private readonly batcher: NotificationBatcher,
   ) {}
 
   snapshot(): MetricsSnapshot {
     const world: WorldStats = this.world.stats;
     const ctx = this.contexts.stats;
+    const push = this.batcher?.stats ?? ZERO_PUSH_STATS;
+    const limits = this.batcher?.limits ?? ZERO_PUSH_LIMITS;
     const mem = process.memoryUsage();
     return {
       service: 'idle-dark-forever',
@@ -88,7 +93,36 @@ export class MetricsService {
         context_loaded: safeInt(ctx.loaded),
         context_dirty: safeInt(ctx.dirty),
         context_accounts: safeInt(ctx.accounts),
+        // 推送防线（I5：每个限额都要能看到当前值；I3：丢弃/重同步必须可见）
+        push_flushed_total: safeInt(push.flushed),
+        push_dropped_total: safeInt(push.dropped),
+        push_resync_total: safeInt(push.resyncs),
+        push_pending_users: safeInt(push.pendingUsers),
+        push_pending_frames: safeInt(push.pendingFrames),
+        push_pending_overflow: safeInt(push.pendingOverflow),
+        push_max_routes_per_user: safeInt(limits.maxRoutesPerUser),
+        push_flush_interval_ms: safeInt(limits.flushIntervalMs),
+        // P2 推送实际量（静默跳过是设计行为；丢帧 > 0 即缺陷信号）
+        world_push_frames_total: safeInt(world.pushFrames),
+        world_push_quiet_skips_total: safeInt(world.pushQuietSkips),
+        world_push_dropped_total: safeInt(world.pushDropped),
+        world_push_patch_ops_total: safeInt(world.pushPatchOps),
+        world_push_frame_bytes_total: safeInt(world.pushFrameBytes),
+        world_push_frame_bytes_max: safeInt(world.pushFrameBytesMax),
+        // I2/I3：单图单位硬顶的拒绝次数 —— 正常恒为 0，> 0 即缺陷/病态信号
+        world_unit_cap_refused_total: safeInt(world.refusedUnits),
       },
     };
   }
 }
+
+const ZERO_PUSH_STATS = {
+  flushed: 0,
+  dropped: 0,
+  resyncs: 0,
+  pendingUsers: 0,
+  pendingFrames: 0,
+  pendingOverflow: 0,
+} as const;
+
+const ZERO_PUSH_LIMITS = { flushIntervalMs: 0, maxRoutesPerUser: 0 } as const;
