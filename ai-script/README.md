@@ -49,7 +49,7 @@ PID namespace 里本会话够不到也杀不掉（AGENTS §7），也不该另�
 |---|---|
 | `check-boss-respawn.mjs` | 会话重启后 `wave` 已过 20 但 BOSS 未击杀，BOSS 会在后续波次重刷吗？（结论：单位不入档 ⇒ 丢失，下一次要等 wave 40） |
 | `check-world2-unlock.mjs` | `world.2` 挂到 20 波，守关 BOSS 会不会刷、击杀后 `world.3` 会不会解锁 |
-| `check-exp-rate.mjs` | 13 级角色在 `world.2`（地图等级 5）的经验速率，判断「13 → 15 级」门槛是否现实可达 |
+| `check-exp-rate.mjs` | 指定等级/地图的经验速率（`MAP` / `LEVEL` / `MINUTES` 可调）。**原用途**是判定「13 级在 `world.2` 升到 15 级是否现实可达」（结论：不可达）。⚠️ W10 已移除经验等级差惩罚，`expPerKill` 不再随等级差变化 —— 本脚本现定位为**调经验曲线时的速率测量工具**，也是「经验效率估算脚本」的雏形（见 `ai-docs/05` §5） |
 | `bench-offline-tick.mjs` | 若让**离线角色**也在服务端实时 tick，成本是多少（为「离线实时战斗」方案给量化依据） |
 | `check-gains.mjs` | 仅靠时钟推进（不走 `WorldService.isOnline` 判断）角色是否真的涨经验/金币/掉落 |
 
