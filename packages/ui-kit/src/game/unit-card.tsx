@@ -1,10 +1,10 @@
 /**
- * UnitCard —— 战斗单位卡（名字 + 等级 + 品质 + 血条 + 施法条 + Buff 图标行）。
+ * UnitCard —— 战斗单位卡（名字 + 等级 + **怪物稀有度** + 血条 + 施法条 + Buff 图标行）。
  *
  * 数据来自 `UnitStateDto`（**type-only** import）：服务端权威快照，前端只渲染，
  * 不做任何数值推导（`hp/maxHp`、`castingProgress` 均为服务端算好的值）。
  *
- * 颜色纪律：全体走 antd token；品质色复用 `RarityTag`。
+ * 颜色纪律：全体走 antd token；档位色走 `UnitRarityTag`（应用层注入的设计色 + `token.purple`）。
  * 边界：`buffs` 缺省/超长安全；`castingProgress` 为 `null` 时不渲染施法条；
  *       `hp` 超过 `maxHp` 时血条夹取到 100%（数值文案仍显示真实值）。
  */
@@ -12,8 +12,8 @@ import { Avatar, Flex, Tooltip, Typography, theme } from 'antd';
 import type { ReactNode } from 'react';
 import type { UnitStateDto } from '@idle-dark/protocol';
 import { formatDuration } from '../format/duration.js';
-import { RarityTag } from './rarity-tag.js';
 import { ResourceBar } from './resource-bar.js';
+import { UnitRarityTag } from './unit-rarity-tag.js';
 
 export interface UnitCardProps {
   unit: UnitStateDto;
@@ -76,7 +76,12 @@ export function UnitCard(props: UnitCardProps) {
           <Typography.Text style={{ fontSize: token.fontSizeSM, color: token.colorTextTertiary }}>
             {`Lv.${unit.level}`}
           </Typography.Text>
-          <RarityTag quality={unit.quality} />
+          {/* W11：**怪物稀有度四阶**（服务端派生 `unit.rarity`）—— 唯一一个档位徽标。
+              ⚠️ 这里曾经渲染 `<RarityTag quality={unit.quality} />`：那是把**敌人词缀条数**
+              当装备品质用（同名不同义），会把「两条词缀的精英怪」画成**传奇**、与真正的守关 BOSS
+              撞色，于是同一只怪身上出现「传奇 + 精英」两个互相矛盾的标签（用户截图报的就是这个）。
+              `rarity` 缺省（玩家单位 / 旧服务端）时**不贴标**，**不要**退回 `quality` 那条轴。 */}
+          {unit.rarity === undefined ? null : <UnitRarityTag rarity={unit.rarity} />}
         </Flex>
         {extra}
       </Flex>

@@ -1,19 +1,50 @@
 /**
- * UnitCard 渲染测试（无 jsdom）：名字/等级/品质、血量与法力条、施法条、buff 行、阵亡态。
+ * UnitCard 渲染测试（无 jsdom）：名字/等级/**怪物稀有度**、血量与法力条、施法条、buff 行、阵亡态。
  */
 import { describe, expect, it } from 'vitest';
 import { htmlToText, makeUnit, renderToHtml } from '../testing/index.js';
 import { UnitCard } from './unit-card.js';
 
 describe('UnitCard', () => {
-  it('基础信息：名字 / 等级 / 品质 / 血条', () => {
+  it('基础信息：名字 / 等级 / 血条', () => {
     const html = renderToHtml(<UnitCard unit={makeUnit()} />);
     expect(htmlToText(html)).toContain('无名剑士');
     expect(htmlToText(html)).toContain('Lv.12');
-    expect(htmlToText(html)).toContain('传奇');
     expect(html).toContain('data-unit-id');
     expect(html).toContain('resource-bar-hp');
     expect(htmlToText(html)).toContain('800/1,000');
+  });
+
+  it('**不**把 `quality`（敌人词缀条数）当品质渲染（W11 回归）', () => {
+    // fixture 的 `quality` 是 2、且没有 `rarity`（玩家单位就是这样）。
+    // 旧实现会在这里渲染出「传奇」—— 那是把词缀条数当成装备品质，
+    // 正是用户截图里「传奇 + 精英」两个矛盾标签的来源。
+    const html = renderToHtml(<UnitCard unit={makeUnit({ quality: 2 })} />);
+    expect(html).not.toContain('unit-rarity');
+    expect(htmlToText(html)).not.toContain('传奇');
+  });
+
+  it('有 `rarity` 时渲染档位徽标（普通档不贴标）', () => {
+    expect(renderToHtml(<UnitCard unit={makeUnit({ rarity: 0 })} />)).not.toContain('unit-rarity');
+
+    const rare = renderToHtml(<UnitCard unit={makeUnit({ rarity: 1 })} />);
+    expect(rare).toContain('data-rarity="1"');
+    expect(htmlToText(rare)).toContain('稀有');
+
+    const elite = renderToHtml(<UnitCard unit={makeUnit({ rarity: 2 })} />);
+    expect(elite).toContain('data-rarity="2"');
+    expect(htmlToText(elite)).toContain('精英');
+
+    const legend = renderToHtml(<UnitCard unit={makeUnit({ rarity: 3 })} />);
+    expect(legend).toContain('data-rarity="3"');
+    expect(htmlToText(legend)).toContain('传奇');
+  });
+
+  it('一只单位**最多只有一个**档位徽标（不会既传奇又精英）', () => {
+    const html = renderToHtml(<UnitCard unit={makeUnit({ rarity: 3, quality: 2 })} />);
+    expect(html.match(/data-testid="unit-rarity"/g) ?? []).toHaveLength(1);
+    expect(htmlToText(html)).toContain('传奇');
+    expect(htmlToText(html)).not.toContain('精英');
   });
 
   it('maxMp=0 时不渲染法力条（showMana 无效）', () => {

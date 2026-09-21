@@ -22,6 +22,16 @@ export {
 } from './rarity-palette.js';
 export { RarityTag, type RarityTagProps } from './rarity-tag.js';
 export {
+  clampUnitRarity,
+  COMMON_UNIT_RARITY,
+  MAX_UNIT_RARITY,
+  UNIT_RARITY_LABELS,
+  unitRarityLabel,
+  unitRarityToneOf,
+  type UnitRarityTone,
+} from './unit-rarity.js';
+export { UnitRarityTag, type UnitRarityTagProps } from './unit-rarity-tag.js';
+export {
   RESOURCE_COLOR_TOKEN_NAMES,
   RESOURCE_LABELS,
   ResourceBar,

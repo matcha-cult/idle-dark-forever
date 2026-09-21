@@ -400,6 +400,12 @@ cmd 段唯一归属、每个 `*LogicServer` 里不得出现 `@ActionMethod`。
   **禁止前端拿 `boss`/`elite`/`quality` 自己拼档位** —— 用服务端下发的 `UnitStateDto.rarity`
   （与 `alive` 同一先例）。`quality` 入构造器前会做安全化（`Infinity` 曾导致词缀循环
   一路 push 到 `RangeError`）。
+  **展示唯一渲染处是 ui-kit 的 `UnitCard`**（用 `UnitRarityTag`，文案表 `UNIT_RARITY_LABELS`
+  与协议逐字比对）：
+  ⚠️ **一只单位只允许一个档位徽标**。`UnitCard` 曾经渲染 `<RarityTag quality={unit.quality} />` ——
+  那是把词缀条数当装备品质，会把「两条词缀的精英怪」画成**传奇**、与真 BOSS 撞色，
+  于是同一只怪身上同时出现「传奇 + 精英」（用户截图报的就是这个）。**不要**在
+  `UnitCard` 之外再贴一遍档位标签，也**不要**给守关 BOSS 另贴「守关 BOSS」—— 它的档位就是传奇。
 - **通关清算（W11）**：击杀本图守关 BOSS **首次**时一次性发放 `MapEntry.exp`（原版秘境口径，
   此前是死字段）。**必须先读 `hasWorldBossKilled` 再 `markWorldBossKilled`** 才不会重复发奖；
   混沌图不发（可重复刷，不属于 `worldBossKilled` 链）。`expRate` / `expInc` / `expMul` 照常生效。

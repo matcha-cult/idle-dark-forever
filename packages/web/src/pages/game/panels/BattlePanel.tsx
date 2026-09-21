@@ -25,7 +25,6 @@ import {
 } from '@idle-dark/ui-kit';
 import { useRootStore } from '../../../app/root-context.js';
 import { isAttackableCamp, isDead } from '../../../stores/world-store.js';
-import { UnitRarityTag } from './UnitRarityTag.js';
 
 /**
  * 伤害类型的中文名（**照抄原版** `dark-forever-memorize/src/logics/renderMessage.js`
@@ -400,14 +399,14 @@ export const BattlePanel = observer(function BattlePanel() {
                   onClick={focus}
                   extra={
                     <Flex gap={4}>
-                      {/* W11：怪物稀有度四阶（服务端派生 `rarity`；普通档不贴标）。
-                          精英（每 10 波保底）与守关 BOSS 因此一眼可辨。 */}
-                      <UnitRarityTag rarity={unit.rarity} />
                       {/* 黄名中立怪：不主动攻击、也不会被溅射打到，必须玩家手动点它才会开战
                           （原版「单位」面板语义）。 */}
                       {unit.camp === 'neutral' ? <Tag color="gold">中立</Tag> : null}
-                      {/* W4：守关 BOSS（服务端 `UnitStateDto.boss` 显式标记）。 */}
-                      {unit.boss ? <Tag color="volcano">守关 BOSS</Tag> : null}
+                      {/* ⚠️ W11：守关 BOSS **不再**单独贴标 —— 它的稀有度档位就是「传奇」，
+                          档位徽标已经由 `UnitCard` 内部渲染。此处曾经同时出现
+                          「传奇 + 守关 BOSS」两个同义标签（标签贴多了）。
+                          同理，档位徽标**不在这里**渲染：`UnitCard` 是唯一渲染处，
+                          在外面再贴一个会得到两个「稀有」。 */}
                       {world.allies.some((ally) => ally.targetId === unit.id) ? (
                         <Tag color="red">被锁定</Tag>
                       ) : null}
