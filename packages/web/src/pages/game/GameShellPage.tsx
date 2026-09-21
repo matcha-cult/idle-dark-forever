@@ -15,7 +15,7 @@ import { Button, Flex, Modal, Space, Tag, Typography, theme } from 'antd';
 import { ConnectionBadge, HudBar, SideNav, AppShell, ThemeToggle, formatAmount, formatDurationCn } from '@idle-dark/ui-kit';
 import type { ConnectionStatus } from '@idle-dark/ui-kit';
 import { useRootStore } from '../../app/root-context.js';
-import { createPanelNavItems, listPanelKeys, renderPanelContent } from './panel-registry.js';
+import { DEFAULT_PANEL_KEY, createPanelNavItems, renderPanelContent } from './panel-registry.js';
 
 /** transport 的连接态 → 徽标语义（`offline/closed` 归入「未连接」）。 */
 function badgeStatusOf(state: string): ConnectionStatus {
@@ -39,8 +39,9 @@ export const GameShellPage = observer(function GameShellPage() {
   const { player, world, idle, connection } = root;
   const navItems = useMemo(() => createPanelNavItems(), []);
   // 面板 key 是 Store 状态（不是局部 state）：推送驱动的跳转必须能从域 Store 侧发起，
-  // 见 `stores/ui-store.ts`。
-  const activeKey = root.ui.activePanelKey ?? (listPanelKeys()[0] ?? 'battle');
+  // 见 `stores/ui-store.ts`。落地页取 `DEFAULT_PANEL_KEY`（**不是** `listPanelKeys()[0]`：
+  // 那个位置是「导航优先级」，改导航顺序不该顺带改落地页）。
+  const activeKey = root.ui.activePanelKey ?? DEFAULT_PANEL_KEY;
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {

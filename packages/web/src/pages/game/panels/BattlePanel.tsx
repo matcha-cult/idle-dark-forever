@@ -17,7 +17,6 @@ import {
   ActionBar,
   EmptyState,
   LogPanel,
-  PlayerAttributesPanel,
   SectionCard,
   UnitCard,
   formatAmount,
@@ -221,14 +220,6 @@ export const BattlePanel = observer(function BattlePanel() {
   const visibleMaps = showLocked ? world.maps : unlockedMaps;
   const unlockedCount = unlockedMaps.length;
 
-  /**
-   * 本账号的玩家单位（属性面板的数据源）。
-   *
-   * 按服务端下发的 `kind === 'player'` 筛（**不要**用阵营或名字猜）：`kind` 由
-   * `unit-state.unitKindOf()` 判定，是「是不是我」的唯一权威标记。
-   */
-  const playerUnit = world.allies.find((unit) => unit.kind === 'player');
-
   const entries: LogEntry[] = world.log.map((entry) => {
     const formatted = formatBattleEvent(entry.event, {
       nameOf: (id) => world.nameOf(id),
@@ -378,30 +369,6 @@ export const BattlePanel = observer(function BattlePanel() {
             </>
           )}
         </Flex>
-      </SectionCard>
-
-      {/*
-        角色属性（原版「战斗」页里玩家那张 PlayerPanel）。
-        放在地图卡片之后、战场单位之前：地图是动作区，属性是「我现在的状态」，
-        再往下才是「场上有什么」。数值**全部来自服务端**（`UnitStateDto.attributes`
-        + `exp/maxExp`，见 `PlayerAttributesPanel` 的文件头），本面板不做任何推导。
-      */}
-      <SectionCard
-        title="角色属性"
-        extra={
-          playerUnit === undefined ? null : (
-            <Typography.Text type="secondary">{`Lv.${playerUnit.level}`}</Typography.Text>
-          )
-        }
-      >
-        {playerUnit === undefined ? (
-          <EmptyState
-            description="暂无角色属性"
-            hint="选中角色后服务端会随单位快照下发属性（`player.select` 即进入世界）"
-          />
-        ) : (
-          <PlayerAttributesPanel unit={playerUnit} />
-        )}
       </SectionCard>
 
       <SectionCard

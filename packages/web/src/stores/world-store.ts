@@ -129,6 +129,19 @@ export class WorldStore {
     return this.units.filter((unit) => unit.camp === 'player' || unit.camp === 'ally');
   }
 
+  /**
+   * 本账号的玩家单位（属性面板的数据源）。
+   *
+   * 判定用服务端下发的 `kind === 'player'` —— 「是不是我」的唯一权威标记
+   * （`unit-state.unitKindOf()` 按 `unit === world.playerUnit` 判定）。
+   * ⚠️ **不要**用阵营或名字猜：`camp === 'player'` 的还可能是联军单位，
+   * 而联军单位的 `kind` 是 `'enemy'`（`unitKindOf` 只认身份不认阵营）。
+   * 没有活跃世界会话（未进图 / 已「离开地图」）时为 `undefined`。
+   */
+  get playerUnit(): UnitStateDto | undefined {
+    return this.units.find((unit) => unit.kind === 'player');
+  }
+
   /** 敌方单位（会自动攻击玩家）。 */
   get enemies(): WorldSnapshotDto['units'] {
     return this.units.filter((unit) => unit.camp === 'enemy');

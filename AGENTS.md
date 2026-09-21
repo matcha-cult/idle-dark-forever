@@ -153,6 +153,10 @@ pnpm run test        # 仅本仓 packages/*，不含 vendor
 6. `packages/web/src/stores/<domain>-store.ts` + `packages/web/src/pages/game/panel-registry.tsx` —— 注册面板
 7. 单测：纯规则放 `game-core`，编排放 `server`（用内存端口替身）
 
+**纯前端域**（如「角色属性」）只走第 6 步 + 一个面板组件，不碰协议与服务端。
+⚠️ **导航顺序 ≠ 默认落地页**：`DOMAINS` 的顺序是信息优先级，落地页由 `DEFAULT_PANEL_KEY`
+显式给出 —— **不要**写成 `listPanelKeys()[0]`，否则「把某个域排到最前面」会顺手改掉默认面板。
+
 ---
 
 ## 9. 环境变量（`packages/server/.env`）

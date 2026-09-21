@@ -294,6 +294,30 @@ describe('WorldStore 单位补丁（P2）', () => {
     expect(player?.attributes).toEqual({ careerName: '战士', maxLevel: 60, str: 2, atk: 12 });
   });
 
+  it('playerUnit 只认 `kind === player`：同阵营的召唤物 / 联军不算「我」', () => {
+    const { store } = makeHarness();
+    pushTick(store, tick({
+      patch: [{
+        op: 'reset',
+        units: [
+          { ...unit('ally-summon'), kind: 'summon', camp: 'player', name: '骷髅兵' },
+          { ...unit('ally-npc'), kind: 'enemy', camp: 'ally', name: '友方佣兵' },
+          { ...unit('me'), kind: 'player', camp: 'player', name: '艾尔' },
+        ],
+      }],
+    }));
+    // 三个都在 allies（camp 是 player/ally），但只有一个是玩家自己
+    expect(store.allies.map((u) => u.id).sort()).toEqual(['ally-npc', 'ally-summon', 'me']);
+    expect(store.playerUnit?.id).toBe('me');
+  });
+
+  it('playerUnit：没有单位时是 undefined（未进图 / 已离开地图）', () => {
+    const { store } = makeHarness();
+    expect(store.playerUnit).toBeUndefined();
+    pushTick(store, tick({ patch: [{ op: 'reset', units: [unit('e1')] }] }));
+    expect(store.playerUnit).toBeUndefined();
+  });
+
   it('isDead：优先服务端 alive，其次 camp，最后回落 hp', async () => {
     const { isDead } = await import('../src/stores/world-store.js');
     expect(isDead({ alive: false, camp: 'enemy', hp: 10 })).toBe(true);

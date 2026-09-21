@@ -18,7 +18,12 @@ import { LoginPage } from '../src/pages/login/LoginPage.js';
 import { CharacterCreatePage } from '../src/pages/character/CharacterCreatePage.js';
 import { CharacterSelectPage } from '../src/pages/character/CharacterSelectPage.js';
 import { GameShellPage } from '../src/pages/game/GameShellPage.js';
-import { listPanelKeys, renderPanelContent } from '../src/pages/game/panel-registry.js';
+import {
+  DEFAULT_PANEL_KEY,
+  createPanelNavItems,
+  listPanelKeys,
+  renderPanelContent,
+} from '../src/pages/game/panel-registry.js';
 import { createMemoryStorage } from '../src/services/storage.js';
 
 const opened: RootStore[] = [];
@@ -225,12 +230,13 @@ describe('页面渲染冒烟（有数据，防空分支假绿）', () => {
     maxExp: 30720,
   };
 
-  it('角色属性：玩家单位在场 → 面板按服务端数值渲染（百分数不再乘 100）', () => {
+  it('角色属性域：玩家单位在场 → 面板按服务端数值渲染（百分数不再乘 100）', () => {
     const root = seed([HOME, STREET]);
     pushTick(root, { serverTime: 1, patch: [{ op: 'add', unit: PLAYER_UNIT }] });
-    const html = render(<>{renderPanelContent('battle')}</>, root);
+    const html = render(<>{renderPanelContent('attributes')}</>, root);
     const text = htmlToText(html);
 
+    expect(html).toContain('data-testid="attributes-panel"');
     expect(html).toContain('data-testid="player-attributes-panel"');
     expect(text).toContain('艾尔');
     expect(text).toContain('等级100');
@@ -239,9 +245,9 @@ describe('页面渲染冒烟（有数据，防空分支假绿）', () => {
     expect(text).toContain('3,602 / 30,720');
   });
 
-  it('角色属性：没有玩家单位 → 空态提示，不是空白、也不是 NaN', () => {
+  it('角色属性域：没有玩家单位 → 空态提示，不是空白、也不是 NaN', () => {
     const root = seed([HOME, STREET]);
-    const html = render(<>{renderPanelContent('battle')}</>, root);
+    const html = render(<>{renderPanelContent('attributes')}</>, root);
     const text = htmlToText(html);
 
     expect(text).toContain('暂无角色属性');
@@ -249,17 +255,50 @@ describe('页面渲染冒烟（有数据，防空分支假绿）', () => {
     expect(html).not.toContain('NaN');
   });
 
-  it('角色属性：只认 `kind === player`（敌方单位不带属性，也不会被误当成本角色）', () => {
+  it('角色属性域：只认 `kind === player`（敌方单位不带属性，也不会被误当成本角色）', () => {
     const root = seed([HOME, STREET]);
     pushTick(root, {
       serverTime: 1,
       patch: [{ op: 'add', unit: { ...PLAYER_UNIT, id: 'u-enemy', kind: 'enemy', camp: 'enemy', name: '大史莱姆', attributes: undefined } }],
     });
-    const html = render(<>{renderPanelContent('battle')}</>, root);
+    const html = render(<>{renderPanelContent('attributes')}</>, root);
     const text = htmlToText(html);
 
     expect(html).not.toContain('data-testid="player-attributes-panel"');
     expect(text).toContain('暂无角色属性');
+  });
+
+  it('属性已移出战斗页：战斗面板不再渲染属性表（有玩家单位时也不渲染）', () => {
+    const root = seed([HOME, STREET]);
+    pushTick(root, { serverTime: 1, patch: [{ op: 'add', unit: PLAYER_UNIT }] });
+    const html = render(<>{renderPanelContent('battle')}</>, root);
+
+    expect(html).not.toContain('data-testid="player-attributes-panel"');
+    expect(html).not.toContain('data-testid="attributes-panel"');
+    // 地图与战场单位仍在（别把整块删了）
+    expect(html).toContain('data-testid="battle-allies"');
+  });
+});
+
+describe('域注册表：角色属性排在战斗之前，落地页仍是战斗', () => {
+  it('导航顺序 = 角色属性 → 战斗 → 包裹 → 技能 → 生产 → 混沌仪', () => {
+    const keys = listPanelKeys();
+    expect(keys).toEqual(['attributes', 'battle', 'inventory', 'skills', 'produce', 'chaos']);
+  });
+
+  it('角色属性落在「征伐」组，且是导航第一项', () => {
+    const items = createPanelNavItems();
+    expect(items[0]?.key).toBe('attributes');
+    expect(items[0]?.label).toBe('角色属性');
+    expect(items[0]?.group).toBe('征伐');
+    expect(items[1]?.key).toBe('battle');
+  });
+
+  it('⚠️ 落地页是显式的 `DEFAULT_PANEL_KEY`，不跟着导航顺序跑', () => {
+    // 曾经的实现是 `listPanelKeys()[0]`：把角色属性排到最前面就会让默认落地页
+    // 从「战斗」悄悄变成「属性页」—— 导航优先级与动作入口不是同一个排序目标。
+    expect(DEFAULT_PANEL_KEY).toBe('battle');
+    expect(listPanelKeys()[0]).not.toBe(DEFAULT_PANEL_KEY);
   });
 });
 

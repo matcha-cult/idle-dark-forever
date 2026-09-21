@@ -11,23 +11,39 @@
  *
  * 域划分沿用原版底部 Tab 的核心四项（战斗 / 包裹 / 技能 / 生产）：
  * 包裹域内含「背包 / 装备 / 储藏箱 / 拾取规则 / 神力商店」，生产域内含四个子页。
+ * 「角色属性」是本仓新增的独立域（原版是战斗页里的一个 Tab，本仓没有 Tab）——
+ * 它回答「我有多强」，与战斗页的「在哪打、打成什么样」不同，故不塞进战斗页。
+ *
+ * ⚠️ **导航顺序 ≠ 默认落地页**：默认落地页由 `DEFAULT_PANEL_KEY` 显式给定，
+ * 不要再用 `listPanelKeys()[0]` —— 那会让「把某个域排到最前面」意外改掉落地页
+ * （角色属性排到战斗前面时，默认落地面板会变成属性页）。
  */
 import {
   DeploymentUnitOutlined,
   ExperimentOutlined,
+  IdcardOutlined,
   ShoppingOutlined,
   ThunderboltOutlined,
   ToolOutlined,
 } from '@ant-design/icons';
 import { ErrorBoundary, type SideNavItem } from '@idle-dark/ui-kit';
 import type { ReactNode } from 'react';
+import { AttributesPanel } from './panels/AttributesPanel.js';
 import { BattlePanel } from './panels/BattlePanel.js';
 import { ChaosPanel } from './panels/ChaosPanel.js';
 import { InventoryPanel } from './panels/InventoryPanel.js';
 import { ProducePanel } from './panels/ProducePanel.js';
 import { SkillsPanel } from './panels/SkillsPanel.js';
 
-export type PanelKey = 'battle' | 'inventory' | 'skills' | 'produce' | 'chaos';
+export type PanelKey = 'attributes' | 'battle' | 'inventory' | 'skills' | 'produce' | 'chaos';
+
+/**
+ * 默认落地面板（未手动切过域时显示哪个）。
+ *
+ * 显式写死，**不用** `DOMAINS[0]`：导航顺序是「信息优先级」，落地页是「动作入口」，
+ * 两者不是同一个排序目标。
+ */
+export const DEFAULT_PANEL_KEY = 'battle' satisfies PanelKey;
 
 /** 导航分组（顺序即展示顺序）。 */
 export const PANEL_GROUPS: ReadonlyArray<{ key: string; label: string }> = [
@@ -44,10 +60,12 @@ export interface PanelDomainEntry {
 }
 
 /**
- * 域列表。顺序 = 玩法因果链：
- * 战斗（在哪打、打成什么样）→ 包裹（拿到了什么）→ 技能（怎么变强）→ 生产（把材料变成战力）。
+ * 域列表。顺序 = 导航展示顺序（也是「先看自己、再看出征」的阅读顺序）：
+ * 角色属性（我是谁 / 我有多强）→ 战斗（在哪打、打成什么样）→ 包裹（拿到了什么）
+ * → 技能（怎么变强）→ 生产（把材料变成战力）→ 混沌仪（终局玩法）。
  */
 const DOMAINS: readonly PanelDomainEntry[] = [
+  { key: 'attributes', label: '角色属性', icon: <IdcardOutlined />, group: 'war', panel: <AttributesPanel /> },
   { key: 'battle', label: '战斗', icon: <ThunderboltOutlined />, group: 'war', panel: <BattlePanel /> },
   { key: 'inventory', label: '包裹', icon: <ShoppingOutlined />, group: 'war', panel: <InventoryPanel /> },
   { key: 'skills', label: '技能', icon: <ToolOutlined />, group: 'growth', panel: <SkillsPanel /> },
@@ -60,7 +78,7 @@ export function listPanelDomains(): readonly PanelDomainEntry[] {
   return DOMAINS;
 }
 
-/** 全部域的 key（测试与默认选中）。 */
+/** 全部域的 key（**按导航顺序**；落地页用 `DEFAULT_PANEL_KEY`，不要取 `[0]`）。 */
 export function listPanelKeys(): PanelKey[] {
   return DOMAINS.map((domain) => domain.key);
 }
