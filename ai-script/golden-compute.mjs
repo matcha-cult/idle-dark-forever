@@ -1,0 +1,11 @@
+import { makeTestWorld, makePlayer, hashString } from '../packages/game-core/dist/combat/test-support.js';
+const GOLDEN_SEED = 20240919, GOLDEN_MS = 30000;
+const t = makeTestWorld({ seed: GOLDEN_SEED, map: 'field' });
+t.world.addPlayer(makePlayer());
+t.world.onMapChanged();
+t.clock.advanceBy(GOLDEN_MS);
+const eventsJson = JSON.stringify(t.sink.events);
+const stateJson = JSON.stringify(t.world.dumpState());
+console.log('eventCount', t.sink.events.length);
+console.log('eventHash', hashString(eventsJson), '0x'+hashString(eventsJson).toString(16));
+console.log('stateHash', hashString(stateJson), '0x'+hashString(stateJson).toString(16));

@@ -27,6 +27,7 @@
 **词缀池与掉落生成（27/3/24 条逐条清单 + 品质→条数 / 部位职业过滤规则）见 [`ai-docs/11-词缀池与掉落生成.md`](ai-docs/11-词缀池与掉落生成.md)**，
 **战斗推送报文现状实录（消息地图 / 敌方单位下发链路 / 逐情况真实报文 / 频次与字节）见
 [`ai-docs/25-战斗推送报文梳理.md`](ai-docs/25-战斗推送报文梳理.md)**。
+**可复用脚本（容量基准 / 金样哈希 / 探针 / 环境工具 / 探究）见 [`ai-script/README.md`](ai-script/README.md)**。
 
 ---
 
@@ -139,6 +140,7 @@ pnpm run test        # 仅本仓 packages/*，不含 vendor
 | workspace 包报 `Cannot find module` | 必须在 `package.json` 声明 `workspace:*`；**不许软链绕过**，改完重跑 install |
 | 浏览器看不到新代码 | Vite 会缓存工作区外旧版 → 先 `curl` dev server 的模块 + grep 新符号（§7.5） |
 | 端口疑似被占 | **自己 bind 一次判定**，别信 `ss`；`/tmp` 每次调用都是新 tmpfs，日志写工作区 `tmp/` |
+| 想复用脚本 | `tmp/` **只放临时产物**（日志 / 抓包 JSON）；可复用脚本一律进 [`ai-script/`](ai-script/README.md) 或 `packages/server/scripts/`（后者给需要 `ws`/`pg`/`@idle-dark/*` 的脚本，见该 README「为什么分两处」） |
 | 端口默认值 | `dev.config.json` 是唯一真相（后端 3100 / 前端 5273）；前端 `strictPort: true` |
 | 数据库 | 沙箱内装不了 PG，但外部实例可用（见 §10 与 `ai-docs/17` §7.7） |
 
