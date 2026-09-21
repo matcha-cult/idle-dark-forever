@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import { EnemyUnit } from './enemy-unit.js';
 import { PlayerUnit } from './player-unit.js';
-import { makePlayer, makeTables, makeTestWorld } from './test-support.js';
+import { makePlayer, makeTestWorld } from './test-support.js';
 import { VirtualClock } from '../sim/clocks.js';
 
 describe('边界：资源与属性', () => {
@@ -96,10 +96,9 @@ describe('边界：伤害', () => {
     expect(to.hp).toBe(30);
   });
 
-  it('NaN / ±Infinity 伤害被收敛为 0（原版不校验，会让 hp 变 NaN 报废整场战斗）', () => {
-    // ⚠️ 这是相对原版的**收紧**：`roundCombatValue` 把非有限值收敛成 0。
-    // 原版（以及本次变更前）会把 NaN 一路经 `hp -= v` 写进血量，之后所有伤害/治疗
-    // 都是 NaN，整场战斗报废；既然本次已在结算处取整，就顺手把这条边界收干净。
+  it('NaN 伤害传播为 NaN（原版同样不校验；记录为已知边界）', () => {
+    // ⚠️ 引擎**不做取整与校验**（与原版一致）：调用方不应传 NaN。
+    // 「不出现小数伤害」是展示层的事（`Math.round`），不要拿运行期数值去兜。
     const t = makeTestWorld({ seed: 1 });
     const from = new EnemyUnit(t.world, 'dummy', 0);
     const to = new EnemyUnit(t.world, 'dummy', 0);
@@ -107,48 +106,10 @@ describe('边界：伤害', () => {
     t.world.addUnit(to);
     from.camp = 'enemy';
     to.camp = 'enemy';
-
-    for (const dirty of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-      const before = to.hp;
-      const ret = t.world.sendDamage('melee', from, to, from.skills[0]!, dirty, false);
-      expect(ret).toBe(0);
-      expect(Number.isFinite(to.hp)).toBe(true);
-      expect(to.hp).toBe(before);
-    }
-  });
-
-  it('小数伤害被取整，且**正的至少 1**（产品要求：日志与血条都不出现小数伤害）', () => {
-    const t = makeTestWorld({ seed: 1, tables: makeTables() });
-    const from = new EnemyUnit(t.world, 'dummy', 0);
-    const to = new EnemyUnit(t.world, 'dummy', 0);
-    t.world.addUnit(from);
-    t.world.addUnit(to);
-    from.camp = 'enemy';
-    to.camp = 'enemy';
-    from.addAttrHook('def', (() => 0) as never);
-    to.addAttrHook('def', (() => 0) as never);
-    t.world.sink.dodge = () => undefined; // 不走闪避分支的干扰
-    from.addAttrHook('noDodgeRate', (() => 1) as never);
-    to.addAttrHook('noDodgeRate', (() => 1) as never);
-
-    const cases: Array<[number, number]> = [
-      [0, 0],
-      [0.1, 1], // 正伤害保底 1：否则日志出现 melee 0，且「打不死的怪」会卡波次
-      [0.4, 1],
-      [0.5, 1],
-      [1.4, 1],
-      [1.5, 2],
-      [26.7, 27],
-      [-0.4, -1], // 负伤害 = 治疗（原版语义保留），同样整数化
-      [-30.5, -31],
-    ];
-    for (const [input, expected] of cases) {
-      const before = to.hp;
-      const ret = t.world.sendDamage('melee', from, to, from.skills[0]!, input, false);
-      expect(ret).toBe(expected);
-      expect(Number.isInteger(to.hp)).toBe(true);
-      expect(to.hp).toBe(before - expected);
-    }
+    const ret = t.world.sendDamage('melee', from, to, from.skills[0]!, NaN, false);
+    expect(Number.isNaN(ret)).toBe(true);
+    // hp setter 的 Math.min/max 会把 NaN 规整为 NaN → 说明调用方不应传 NaN。
+    expect(Number.isNaN(to.hp)).toBe(true);
   });
 });
 

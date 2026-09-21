@@ -304,7 +304,7 @@ export type BattleEventDto =
   | { kind: 'dodge'; fromId: string; toId: string; skill: string; skillName?: string }
   | { kind: 'death'; unitId: string; name: string; camp: string }
   | { kind: 'buff'; unitId: string; buffKey: string; name: string; on: boolean }
-  | { kind: 'exp'; amount: number; level: number }
+  | { kind: 'exp'; amount: number; level: number; /** 获得经验者的单位 id（日志显示用）。 */ whoId?: string }
   | { kind: 'general'; text: string };
 
 /**

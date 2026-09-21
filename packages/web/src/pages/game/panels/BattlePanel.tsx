@@ -27,61 +27,100 @@ import { useRootStore } from '../../../app/root-context.js';
 import { isAttackableCamp, isDead } from '../../../stores/world-store.js';
 
 /**
- * 战斗数值文案（伤害 / 治疗 / 吸收）。
- *
- * ⚠️ **不能直接用 `formatAmount`**：它是**整数截断**（面向金币 / 数量），而战斗数值是
- * 浮点，怪物一击常常 < 1 —— 截断后日志会满屏 `melee 0`，看着像「没造成伤害」。
- * 这里对小于 100 的小数保留 1 位，其余仍走 `formatAmount`（千分位、整数）。
+ * 伤害类型的中文名（**照抄原版** `dark-forever-memorize/src/logics/renderMessage.js`
+ * 的 `DAMAGE_TYPES`，并按本仓 `rules/damage.ts` 的类型表补齐原版后加的四系）。
  */
-export function formatBattleValue(value: unknown): string {
+const DAMAGE_TYPE_NAMES: Record<string, string> = {
+  melee: '物理',
+  magic: '魔法',
+  fire: '火焰',
+  cold: '寒冷',
+  lightning: '闪电',
+  chaos: '混沌',
+  holy: '神圣',
+  real: '真实',
+  water: '水',
+  poison: '毒素',
+};
+
+/**
+ * 日志里的数值文案：**一律取整**，与原版 `renderMessage.js` 的 `Math.round(value)` 一致。
+ *
+ * ⚠️ 取整在**展示层**，不在引擎：原版的伤害与 HP 全程浮点，只有渲染才 `Math.round`。
+ * 在结算处取整会改平衡（`0.4 → 0` 让弱怪打高防玩家彻底无效；保底 1 又抬高 <1 伤害），
+ * 因此保持「引擎浮点 + 展示取整」这条原版路线。
+ * 非有限值回落 0（原版会直接渲染出 `NaN`；这是纯防御，正常路径不会走到）。
+ */
+export function formatLogValue(value: unknown): string {
   const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return '0';
-  if (Math.abs(numeric) >= 100 || Number.isInteger(numeric)) return formatAmount(numeric);
-  const rounded = Math.round(numeric * 10) / 10;
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  return String(Number.isFinite(numeric) ? Math.round(numeric) : 0);
 }
+
+/** 技能展示名：优先服务端下发的中文名，缺失才回落数据表键（缺失可见）。 */
+const skillLabelOf = (event: { skill: string; skillName?: string }): string =>
+  typeof event.skillName === 'string' && event.skillName !== '' ? event.skillName : event.skill;
 
 /**
  * 战斗事件 → 日志条目（纯展示映射，不改变任何数值）。
  *
+ * 文案**逐句对齐原版** `renderMessage.js`（`battle.damage` / `battle.heal` /
+ * `battle.dodge` / `battle.death` / `battle.buff(Off)` / `player.got.exp` /
+ * `map.enter` / `enemy.appear` / `player.death`），不要自行改写语序。
+ *
  * `nameOf` 必须是**能查到历史单位**的查表函数（`world.nameOf`）——日志是历史，
  * 单位表是当下，用当下查历史必然有名字缺失。
- *
- * 技能名同理：`skill` 是数据表键（`thumpHead` / `meleeForRage`），**不能直接展示**；
- * 展示名由服务端随事件下发（`skillName`），缺失时才回落键本身（可见的缺失）。
  */
-const skillLabelOf = (event: { skill: string; skillName?: string }): string =>
-  typeof event.skillName === 'string' && event.skillName !== ''
-    ? event.skillName
-    : event.skill === ''
-      ? '攻击'
-      : event.skill;
-
-export function skillTextOf(event: { skill: string; skillName?: string }): string {
-  return skillLabelOf(event);
-}
 export function formatBattleEvent(
   event: BattleEventDto,
   nameOf: (id: string) => string,
 ): { text: string; level: LogLevel } {
   switch (event.kind) {
-    case 'damage':
-      return {
-        text: `${nameOf(event.fromId)} → ${nameOf(event.toId)} ${skillLabelOf(event)} ${formatBattleValue(event.value)}${
-          event.absorbed > 0 ? `（吸收 ${formatBattleValue(event.absorbed)}）` : ''
-        }${event.crit ? ' 暴击' : ''}`,
-        level: 'damage',
-      };
+    case 'damage': {
+      const target = nameOf(event.toId);
+      const amount = formatLogValue(event.value);
+      const type = DAMAGE_TYPE_NAMES[event.damageType] ?? event.damageType;
+      const crit = event.crit ? '暴击！' : '';
+      const absorbed = event.absorbed > 0 ? `(${formatLogValue(event.absorbed)}点已吸收)` : '';
+      // 原版按 `!from` 分两支：无来源（环境/持续伤害）不点名攻击者。
+      // 服务端在 `!skill` 时不发事件，所以 `fromId !== ''` 一支必然有技能。
+      const text =
+        event.fromId === ''
+          ? `${crit}${target}受到了${amount}点${type}伤害。${absorbed}`
+          : `${crit}${nameOf(event.fromId)}的${skillLabelOf(event)}对${target}造成了${amount}点${type}伤害。${absorbed}`;
+      return { text, level: 'damage' };
+    }
     case 'heal':
-      return { text: `${nameOf(event.fromId)} 治疗 ${nameOf(event.toId)} ${formatBattleValue(event.value)}`, level: 'heal' };
-    case 'dodge':
-      return { text: `${nameOf(event.toId)} 闪避了 ${skillLabelOf(event)}`, level: 'warning' };
+      return {
+        text: `${nameOf(event.fromId)}的${skillLabelOf(event)}为${nameOf(event.toId)}回复了${formatLogValue(
+          event.value,
+        )}点生命。`,
+        level: 'heal',
+      };
+    case 'dodge': {
+      const from = nameOf(event.fromId);
+      const to = nameOf(event.toId);
+      // 原版：无技能时退化成「造成的伤害被躲闪了」。
+      if (event.skill === '' && (event.skillName === undefined || event.skillName === '')) {
+        return { text: `${from}造成的伤害被${to}躲闪了。`, level: 'warning' };
+      }
+      return { text: `${from}的${skillLabelOf(event)}被${to}躲闪了。`, level: 'warning' };
+    }
     case 'death':
-      return { text: `${event.name} 阵亡`, level: 'warning' };
+      return { text: `${event.name}死亡了。`, level: 'warning' };
     case 'buff':
-      return { text: `${nameOf(event.unitId)} ${event.on ? '获得' : '失去'} ${event.name}`, level: 'system' };
+      return {
+        text: event.on
+          ? `${nameOf(event.unitId)}受到了${event.name}效果的影响。`
+          : `${nameOf(event.unitId)}的${event.name}效果消失了。`,
+        level: 'system',
+      };
     case 'exp':
-      return { text: `经验 +${formatBattleValue(event.amount)} → Lv.${event.level}`, level: 'loot' };
+      return {
+        text: `${event.whoId === undefined ? '你' : nameOf(event.whoId)}获得了${formatLogValue(
+          event.amount,
+        )}点经验。`,
+        level: 'loot',
+      };
     default:
       return { text: formatGeneralText(event.text), level: 'info' };
   }
@@ -92,30 +131,30 @@ export function formatBattleEvent(
  *
  * 内核用 `general` 承载「没有专门契约事件」的提示（见 `battle-world.ts` 的出站路径），
  * 文案是 `key:参数...` 形式。**这里只做展示映射**，未知前缀原样透出（不吞、不猜），
- * 以免新前缀静默消失。
+ * 以免新前缀静默消失。已知前缀的文案同样对齐原版 `renderMessage.js`。
  */
 export function formatGeneralText(text: string): string {
   if (typeof text !== 'string' || text === '') return '';
   const parts = text.split(':');
-  const key = parts[0];
-  switch (key) {
-    case 'enemy.appear': {
-      const name = parts[1];
-      return name === undefined || name === '' ? '敌人出现' : `遭遇 ${name}`;
-    }
+  switch (parts[0]) {
     case 'map.enter': {
       // 形如 `map.enter:<mapKey>:<地图名>`；地图名可能自身含冒号，取剩余部分。
       const name = parts.slice(2).join(':');
-      return name === '' ? '进入地图' : `进入 ${name}`;
+      return name === '' ? '来到了新的地图。' : `来到了${name}。`;
+    }
+    case 'enemy.appear': {
+      const name = parts[1];
+      return name === undefined || name === '' ? '遭遇了敌人。' : `遭遇了一只${name}。`;
     }
     case 'player.death': {
       // 形如 `player.death:<角色名>:<复活秒数>`
       const name = parts[1] ?? '';
       const seconds = parts[2];
-      const suffix = seconds === undefined || seconds === '' ? '' : `（${seconds}s 后复活）`;
-      return `${name === '' ? '你' : name} 阵亡${suffix}`;
+      const suffix = seconds === undefined || seconds === '' ? '' : `，将在${formatLogValue(seconds)}秒后恢复`;
+      return `${name === '' ? '你' : name}陷入了昏迷${suffix}。`;
     }
     case 'world.unitCap':
+      // 原版没有对应文案（本仓 I2 硬顶新增），保留明确提示而非静默。
       return '场上单位已达上限，未能召唤更多敌人';
     default:
       return text;

@@ -16,12 +16,16 @@ import { hashString, makePlayer, makeTestWorld, type RecordingSink } from './tes
 /** 金样参数：改动战斗逻辑时这里必须显式更新并解释原因。 */
 const GOLDEN_SEED = 20240919;
 const GOLDEN_MS = 30000;
-// 取整变更重录：伤害/治疗在 `sendDamage` / `sendHeal` 处整数化（正的至少 1，见 `roundCombatValue`）。
-// 事件里的数值变了，战斗时序随之**分叉**（拿掉取整做对照：玩家会在 30s 内阵亡并产生 death/exp；
-// 开启取整则存活、无击杀）。因此三个金样常数必须一起更新。
-const GOLDEN_EVENT_HASH = 0x255e00d0; // = 626917584，取整变更重录
-const GOLDEN_STATE_HASH = 0x248e509e; // = 613306526，取整变更重录
-const GOLDEN_EVENT_COUNT = 20; // 取整变更后的事件条数（原 27）
+// 事件哈希重录：`damage`/`heal`/`dodge` 新增可选 `skillName`，`exp` 新增可选 `whoId`
+// （都只是给日志用的展示信息，见 §21）。**只改事件载荷，不影响战斗推演** ——
+// 状态哈希仍是 0xf7d493b3、事件条数仍是 27、同种子两次运行仍逐字节一致。
+const GOLDEN_EVENT_HASH = 0x1dd67f6b; // = 500596587
+const GOLDEN_STATE_HASH = 0xf7d493b3; // = 4157903795，W12 重录：同屏上限改「全图存活敌对怪总数」（Born 被挡住时保持轮询，dumpState 的 timer 剩余时间随之变化）；事件流不变
+const GOLDEN_EVENT_COUNT = 27; // 首次运行记录，见交付报告
+// ⚠️ 曾有一次「结算处取整」的改动重录过这三个常数，但随后撤销：取整改的是**平衡**
+// （0.4→0 让弱怪打高防玩家彻底无效；保底 1 又抬高 <1 伤害），而原版只在**展示层**
+// `Math.round`、引擎全程浮点（`dark-forever-memorize/src/logics/renderMessage.js`）。
+// 因此取整回到展示层，战斗逻辑与金样保持原样。
 
 interface GoldenRun {
   sink: RecordingSink;

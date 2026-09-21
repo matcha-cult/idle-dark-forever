@@ -831,7 +831,7 @@ export class PlayerUnit extends Unit {
     }
     value *= this.runAttrHooks(1, 'expInc');
     value *= this.runAttrHooks(1, 'expMul');
-    this.world.sink.exp({ amount: value, level: player.level });
+    this.world.sink.exp({ amount: value, level: player.level, whoId: this.id });
 
     // 满级后经验溢出直接丢弃（Q8：等级上限 100，无巅峰）。
     if (player.level >= player.maxLevel) {

@@ -98,6 +98,7 @@ export class BattleCollector implements BattleSink {
       kind: 'exp',
       amount: finite(e.amount),
       level: finite(e.level),
+      ...(typeof e.whoId === 'string' && e.whoId !== '' ? { whoId: e.whoId } : {}),
     });
   }
 

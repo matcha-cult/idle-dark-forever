@@ -963,14 +963,14 @@ hp mp rp ep comboPoint targetId castingProgress buffs camp
 
 ## 21. 战斗日志与战斗数值（细节见 [`ai-docs/16`](ai-docs/16-战斗推送通道-累计制.md) §7/§8）
 
-- **`entries` 新在最前**（`appendEvents` 插队首）⇒ `<LogPanel>` 必须**截断丢尾部** +
-  **`scrollTop = 0`**；两处同时正确，否则「倒叙 + 滚到底」永远看不到新条目。
-- **名字查历史注册表**（`world.nameOf`），别用 `world.units` 现建映射 —— 日志是历史、
-  单位表是当下（尸体 3s 后被清），实测 41% 的引用查不到名字。
-- **技能名**用事件里的 `skillName`（内核 `battle-world#skillNameOf()` 从 `tables.skills` 解析）；
-  `skill` 是表键（`thumpHead`/`meleeForRage`），**不能直接展示**。
-- **伤害/治疗必须是整数**：唯一入口 `battle-world#roundCombatValue()`；正数**保底 1**
-  （只 round 会出现 `melee 0` 与打不死的怪卡波次）、非有限→0、负数对称取整。
-  这是**相对原版的主动变更**（原版全程浮点），会改平衡与三个金样常数。
-- `general` 的 `key:参数` 走 `formatGeneralText()`（未知前缀原样透出）；战斗数值走
-  `formatBattleValue()`（**别用** `formatAmount`，它整数截断）。
+- **文案逐句对齐原版** `dark-forever-memorize/src/logics/renderMessage.js`：伤害 =
+  `{from}的{技能}对{to}造成了{N}点{类型}伤害。`（无来源 = `{to}受到了…`）；治疗 / 躲闪 /
+  死亡 / Buff / 经验 / 进图 / 遭遇 / 昏迷 各有措辞。**不要自创语序**。伤害类型中文名照抄
+  原版 `DAMAGE_TYPES` + 本仓新增 `lightning`/`chaos`/`holy`/`water`/`poison`。
+- **数值取整在展示层**（`formatLogValue` = `Math.round`，同原版）；**引擎保持浮点**。
+  不要在结算处取整：`0.4→0` 让弱怪打高防玩家完全无效、保底 1 又抬高 <1 伤害，两者都改平衡
+  （曾试过已撤销；金样状态哈希 `0xf7d493b3` 未变可证推演未动）。
+- **`entries` 新在最前** ⇒ `<LogPanel>` 必须**截断丢尾部** + **`scrollTop = 0`**。
+- **名字查历史注册表**（`world.nameOf`），别用 `world.units`（日志是历史、单位表是当下）；
+  **技能名**用 `event.skillName`，经验用 `exp.whoId`。
+- `general` 的 `key:参数` 走 `formatGeneralText()`（未知前缀原样透出）。

@@ -137,6 +137,8 @@ export interface BuffEvent {
 export interface ExpEvent {
   amount: number;
   level: number;
+  /** 获得经验者的单位 id（供日志显示「{谁}获得了 N 点经验」）。 */
+  whoId?: string;
 }
 export interface GeneralEvent {
   text: string;

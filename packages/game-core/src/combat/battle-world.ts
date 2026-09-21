@@ -195,39 +195,6 @@ export class SkillScheduler {
  * 取值 32 是**安全阀而不是平衡旋钮**：正常玩法（4 自然怪 + 1 BOSS + 少量召唤）
  * 约 10 个单位，离它很远；它只在病态情况下兜底。超出后的行为见 `addEnemy`。
  */
-/**
- * 战斗数值**取整**（伤害 / 治疗）：整数化，且**正的数值至少为 1**。
- *
- * ## 为什么要有这一步
- *
- * 原版（`dark-forever-memorize/src/logics/world.js#sendDamage`）的伤害是**浮点**：
- * `value = (value - absorbed) / (1 + def / 200)`，全程不取整，移植也忠实保留了这一点。
- * 因此小数伤害是**原版行为**。本函数是**主动的设计变更**：产品要求「不允许小数位伤害」。
- *
- * ## 取整口径（唯一入口，改这里就改全局）
- *
- * - 非有限（`NaN` / `±Infinity`）→ **0**。这是**防御性收敛**（原版不校验，`NaN` 会经
- *   `hp -= v` 把血量污染成 `NaN`，整场战斗报废）；属于本次变更顺带收紧的边界。
- * - `value > 0` → `max(1, round(value))`；
- * - `value < 0` → 对称取整 `-max(1, round(-value))`：原版「负伤害 = 治疗」的语义**保留**，
- *   只把它整数化（见 `boundaries.test.ts`）。
- * - `value === 0` → 0（被护盾完全吸收的真实 0 伤害，不能被抬成 1）。
- *
- * ⚠️ **为什么正伤害要保底 1**：只做 `round` 的话 `0.4 → 0`，日志会出现 `melee 0`、
- * 世界会出现「打不死的怪」（挂机卡波次）。保底 1 保证「命中就一定掉血」，
- * 代价是 < 1 的伤害被抬高（实测怪物打高防玩家常在 0.4~1.5 → 变成 1~2）。
- *
- * ⚠️ **只作用于经 `sendDamage` / `sendHeal` 的伤害与治疗**。数据层里还有直接改 HP 的
- * 百分比/回复效果（`unit.hp -= unit.maxHp * 0.3`、`hpRecovery * RECOVERY_RATE` 等），
- * 它们不是「伤害数值」，保持原样（也因此 HP 仍可能带小数尾巴，这不影响日志）。
- */
-export function roundCombatValue(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
-  if (value === 0) return 0;
-  const magnitude = Math.max(1, Math.round(Math.abs(value)));
-  return value < 0 ? -magnitude : magnitude;
-}
-
 export const MAX_UNITS_PER_WORLD = 32;
 
 export class BattleWorld {
@@ -694,8 +661,10 @@ export class BattleWorld {
     value = realValue;
 
     value = to.runAttrHooks<number>(value, 'damaged', from);
-    // 取整：**事件里的值与实际扣除的 HP 必须是同一个整数**（否则日志与血条对不上）。
-    value = roundCombatValue(value);
+    // ⚠️ 引擎**不做取整**（与原版一致）：伤害与 HP 全程浮点。
+    // 「日志不出现小数」由**展示层** `Math.round` 负责（原版 `renderMessage.js` 就是这么做的）。
+    // 原因：在这里取整会改平衡 —— 0.4 会被 round 成 0（弱怪打高防玩家彻底无效），
+    // 而保底 1 又会抬高 <1 的伤害。两侧都偏离原版，故不在此处动手。
     // 原版 `message.sendDamage` 在 `!skill` 时直接 return（不发事件）。
     if (skill) {
       const skillName = this.skillNameOf(skill);
@@ -707,16 +676,14 @@ export class BattleWorld {
         ...(skillName !== undefined ? { skillName } : {}),
         value,
         crit: isCrit,
-        absorbed: Math.max(0, Math.round(Number.isFinite(absorbed) ? absorbed : 0)),
+        absorbed,
       });
     }
     to.damage(damageType, from, value);
     return value;
   }
 
-  sendHeal(from: Unit | null, to: Unit, skill: SkillState | null, rawValue: number): void {
-    // 治疗同样整数化（同一口径），事件与落地值一致。
-    const value = roundCombatValue(rawValue);
+  sendHeal(from: Unit | null, to: Unit, skill: SkillState | null, value: number): void {
     const skillName = this.skillNameOf(skill);
     this.sink.heal({
       fromId: from ? from.id : '',
