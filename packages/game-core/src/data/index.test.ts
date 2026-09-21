@@ -537,7 +537,8 @@ describe('E6/P11 + 工艺通货：掉落门禁与实装清单', () => {
     const start = tables.maps['world.1'];
     expect(start).toBeDefined();
     expect(start?.level).toBe(1);
-    expect(start?.requirement?.level).toBe(1);
+    // W11：解锁链**只用 `bossKilled`** —— 起始图没有任何进入条件（`level` 不再是门槛）。
+    expect(start?.requirement).toBeUndefined();
   });
 
   it('DEFAULT_LEVEL 的每个底材 key 都存在于 goods（W3 旧引用清理审计）', () => {

@@ -899,6 +899,11 @@ export class PlayerUnit extends Unit {
     this.world.enemyBorn?.onPlayerDeath();
     // W6：混沌图中阵亡 = 本 run 结算为 `death`（上层据此走失败分支）。
     this.world.noteChaosPlayerDeath();
+    // W11 / 决策 4：野外战斗图阵亡 = 本图 run 作废，自动重开（`wave = 0`、清场、里程碑复位）。
+    // 内核这里只**置位**，由服务端 tick 调 `resetOpenWorldRun()` 落实 ——
+    // 与 `chaosOutcome` 完全同一模式（内核不直接做会话级操作）。
+    // ⚠️ 不加任何护栏：不做「连续死亡 N 次停止回退」、不自动退回上一张图。
+    this.world.noteOpenWorldPlayerDeath();
     const rebornIn = 10 + this.level * 0.5;
     // 原版 `message.sendPlayerDeath` 没有对应契约事件，用 general 承载（见差异清单）。
     this.world.sink.general({ text: `player.death:${this.displayName}:${rebornIn}` });

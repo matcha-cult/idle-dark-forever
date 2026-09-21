@@ -44,7 +44,9 @@ export function mapListDtoOf(
       key,
       name: map.name,
       level: typeof map.level === 'number' && Number.isFinite(map.level) ? map.level : 0,
-      lockedReason: unlocked ? null : '尚未满足进入条件',
+      // R4 / W11：锁定原因**区分缺失条件**（此前恒为一句「尚未满足进入条件」，
+      // 玩家无法判断自己差的是等级还是 BOSS —— 那正是"怀疑判定有误"的来源）。
+      lockedReason: unlocked ? null : lockedReasonOf(map.requirement, context, tables),
     };
     if (map.hint) dto.hint = map.hint;
     dto.unlocked = unlocked;
@@ -58,6 +60,109 @@ export function mapListDtoOf(
     if (a.key === b.key) return 0;
     return a.key < b.key ? -1 : 1;
   });
+}
+
+/**
+ * 把「未满足的进入条件」翻译成**玩家可读的**锁定原因（R4 / W11）。
+ *
+ * 为什么需要：此前 `lockedReason` 恒为一句「尚未满足进入条件」，玩家无法判断自己差的是
+ * **等级**还是**守关 BOSS** —— 用户报「挂机 25 波仍未解锁」时，根本不知道自己在等什么。
+ *
+ * 规则：
+ * - 只**描述实际缺失**的条件（已满足的一律不提）；
+ * - 多个条件同时缺失 → 用「；」串起来；
+ * - BOSS 条件优先用人话 + 地图名（「需先击杀「迷雾林间」的守关 BOSS」）；
+ * - `$and` 递归取子条件；`$or` 各分支都不满足时列出「需满足其一：…」；
+ * - **一个字都分析不出来**（如 `debug` 之类的未支持字段）→ 回落通用文案，
+ *   绝不返回空串（前端会把它当作"没有原因"）。
+ *
+ * ⚠️ 本函数只做**展示**，绝不参与放行判定 —— 判定唯一入口仍是 `checkRequirement`
+ * （fail-closed）。两者不一致时以判定为准。
+ */
+export function lockedReasonOf(
+  requirement: Requirement | null | undefined,
+  context: RequirementContext,
+  tables: DataTables,
+): string {
+  const reasons = missingReasonTexts(requirement, context, tables, 0);
+  return reasons.length > 0 ? reasons.join('；') : '尚未满足进入条件';
+}
+
+/** 递归收集缺失条件（深度上限防循环条件爆炸）。 */
+function missingReasonTexts(
+  requirement: Requirement | null | undefined,
+  context: RequirementContext,
+  tables: DataTables,
+  depth: number,
+): string[] {
+  if (depth > MAX_REASON_DEPTH) return ['尚未满足进入条件'];
+  const req = requirement ?? {};
+  const player = context.player;
+  const out: string[] = [];
+
+  const role = textOrNull(req.role);
+  if (role && (!player || player.role !== role)) {
+    out.push(`需要职业 ${role}`);
+  }
+  const career = textOrNull(req.career);
+  if (career && (!player || player.currentCareer !== career)) {
+    out.push(`需要转职 ${career}`);
+  }
+  const level = numberOrNull(req.level);
+  if (level !== null && (!player || player.level < level)) {
+    out.push(`需要等级 ${level}（当前 ${player ? player.level : '未知'}）`);
+  }
+  const atLeastMaxLevel = numberOrNull(req.atLeastMaxLevel);
+  if (atLeastMaxLevel !== null && (!player || player.maxLevel < atLeastMaxLevel)) {
+    out.push(`需要等级上限 ≥ ${atLeastMaxLevel}`);
+  }
+  const atMostMaxLevel = numberOrNull(req.atMostMaxLevel);
+  if (atMostMaxLevel !== null && (!player || player.maxLevel > atMostMaxLevel)) {
+    out.push(`需要等级上限 ≤ ${atMostMaxLevel}`);
+  }
+  const map = textOrNull(req.map);
+  if (map && context.map !== map) {
+    out.push(`需要在「${tables.maps[map]?.name ?? map}」`);
+  }
+  const bossKilled = textOrNull(req.bossKilled);
+  if (bossKilled && !context.bossKilled?.has(bossKilled)) {
+    const name = tables.maps[bossKilled]?.name;
+    out.push(name ? `需先击杀「${name}」的守关 BOSS` : `需先击杀「${bossKilled}」的守关 BOSS`);
+  }
+
+  if (Array.isArray(req.$and)) {
+    for (const child of req.$and) {
+      out.push(...missingReasonTexts(child, context, tables, depth + 1));
+    }
+  }
+  if (Array.isArray(req.$or)) {
+    const branches = req.$or;
+    const anyOk = branches.some((child) => {
+      try {
+        return checkRequirement(child, context);
+      } catch {
+        return false;
+      }
+    });
+    if (!anyOk) {
+      const texts = branches
+        .map((child) => missingReasonTexts(child, context, tables, depth + 1).join('且'))
+        .filter((t) => t !== '');
+      if (texts.length > 0) out.push(`需满足其一：${texts.join('，或 ')}`);
+    }
+  }
+  return [...new Set(out)];
+}
+
+/** `$or` / `$and` 递归深度上限（与 `check.ts` 的判定上限同量级，防循环条件）。 */
+const MAX_REASON_DEPTH = 8;
+
+function textOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 /** `PlayerStateDto` 里 `map` 由 world 运行时提供。 */

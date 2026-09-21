@@ -5,7 +5,7 @@
  * 全部算好。
  */
 import type { UnitStateDto } from '@idle-dark/protocol';
-import { Camps, EnemyUnit, PlayerUnit, Unit } from '@idle-dark/game-core';
+import { Camps, EnemyUnit, PlayerUnit, Unit, enemyRarityOf } from '@idle-dark/game-core';
 import { playerAttributesOf } from './player-attributes.js';
 
 function finite(value: unknown, fallback = 0): number {
@@ -93,6 +93,14 @@ export function unitStateDtoOf(unit: Unit, playerUnit: PlayerUnit | null): UnitS
   };
   // W4：守关 BOSS 显式标记（**不要用 key 比较**：同一敌人既可能是某图 BOSS 又是另一图普通怪）。
   if (unit instanceof EnemyUnit && unit.worldBoss) dto.boss = true;
+  // W11：怪物稀有度四阶（0 普通 / 1 稀有 / 2 精英 / 3 传奇）—— **服务端派生、前端零推导**，
+  // 与 `alive` 同一个先例。派生逻辑唯一实现在 `game-core` 的 `enemyRarityOf`
+  // （`boss(3) > elite(2) > quality 夹到 0..2`）；这里只做序列化，**不要**在服务端或前端
+  // 复制一遍档位判断 —— `quality` 是「敌人词缀条数」，随手拼就会拼错。
+  if (unit instanceof EnemyUnit) {
+    if (unit.elite) dto.elite = true;
+    dto.rarity = enemyRarityOf(unit);
+  }
   // 属性面板 + 经验只属于**玩家单位**（原版 `PlayerPanel` 是每张玩家卡的属性表）。
   // 用 `instanceof` 而不是 `unit === playerUnit`：即使调用方没传 playerUnit（离线结算等），
   // 玩家单位也照样带上属性；反之敌方单位无论如何都拿不到这两个字段。

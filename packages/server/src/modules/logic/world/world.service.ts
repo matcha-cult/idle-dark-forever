@@ -50,6 +50,7 @@ import {
   type NowSource,
   slotDtoOf,
   worldWaveOf,
+  writeWorldMapState,
 } from '../shared/index.js';
 import { PanelCharacterService } from '../shared/panel-character.service.js';
 import { BattleCollector } from '../shared/battle-collector.js';
@@ -382,6 +383,10 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       session.carryMs = 0;
     }
 
+    // W11 / 决策 4：本 tick 内野外阵亡 ⇒ **先重开本图 run，再出帧**，
+    // 这样清场 + 「进入地图」日志能与同一帧一起下发，而不是延后 200ms。
+    this.handleOpenWorldDeath(session);
+
     this.emitTick(session, now);
     this.publishChaosOutcome(session);
 
@@ -677,16 +682,22 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     const extras = await this.playerContext.extrasOf(userId);
     const storedPosition = extras.worldMaps[characterId];
     const position = resolveWorldPosition(this.tables, storedPosition);
-    // W4：会话重启（刷新 / 断线重连 / 空闲回收）时恢复本图**已完成的波数**。
-    // 存档漂移（未知 mapKey → `home`）视为换图，波数归 0；`wave` 只在 > 0 时携带。
-    const restoredWave =
-      storedPosition !== undefined && storedPosition.map === position.map
-        ? worldWaveOf(storedPosition.wave)
-        : 0;
+    // W4/W11：会话重启（刷新 / 断线重连 / 空闲回收）时恢复本图**已完成的波数 + 里程碑**。
+    // 存档漂移（未知 mapKey → `home`）视为换图，进度归 0；各字段只在 > 0 时携带。
+    const sameMap = storedPosition !== undefined && storedPosition.map === position.map;
+    const restoredWave = sameMap ? worldWaveOf(storedPosition?.wave) : 0;
+    const restoredEliteWave = sameMap ? worldWaveOf(storedPosition?.lastEliteWave) : 0;
+    const restoredBossWave = sameMap ? worldWaveOf(storedPosition?.lastBossWave) : 0;
     // 持久化位置是「当前地图」的**唯一权威**（08 §2.3 / 09 §4.3）。
     // 会话启动即写入，保证从未进过图的角色也有位置。
-    extras.worldMaps[characterId] =
-      restoredWave > 0 ? { map: position.map, wave: restoredWave } : { map: position.map };
+    // ⚠️ 走**唯一写入口**（C6）：离线结算曾在这里之外另拼一份对象字面量、少写 `wave`，
+    // 导致每次登录波数归零。
+    writeWorldMapState(extras.worldMaps, characterId, {
+      map: position.map,
+      wave: restoredWave,
+      lastEliteWave: restoredEliteWave,
+      lastBossWave: restoredBossWave,
+    });
     this.playerContext.markAccountDirty(userId);
     const storedSeed = extras.worldSeeds[characterId];
     let seed = typeof storedSeed === 'number' && Number.isFinite(storedSeed) ? storedSeed : 0;
@@ -733,7 +744,15 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       updateRate: 1,
       expRate: EXP_RATE,
       medicineLevel: (type) => extras.medicineLevel[type] ?? 0,
-      ...(restoredWave > 0 ? { enemyBornState: { wave: restoredWave } } : {}),
+      ...(restoredWave > 0
+        ? {
+            enemyBornState: {
+              wave: restoredWave,
+              lastEliteWave: restoredEliteWave,
+              lastBossWave: restoredBossWave,
+            },
+          }
+        : {}),
       lootRecorder: {
         record: (slot, handled) => {
           session.pendingLoot.push(toLootDto(slot, handled));
@@ -741,6 +760,11 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       },
     });
     session.world = built.world;
+
+    // W11 / R3：会话恢复后**立刻补齐**当前波窗口的里程碑。
+    // 「已刷出但未入档」的守关 BOSS / 精英会在这里当波补刷，而不再等到下一个 20 / 10 波窗口
+    // —— 旧实现用 `wave % 20 === 0` 当闸门，恢复到第 20 波时首次再出要等到第 40 波。
+    session.world.enemyBorn?.ensureMilestones();
 
     clock.pause();
     player.timestamp = now;
@@ -866,13 +890,47 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * W11 / 决策 4：野外战斗图阵亡 ⇒ **重开本图 run**（波数归 0、里程碑复位、清场重刷）。
+   *
+   * 产品口径（用户原话）：*"连续死肯定是玩家问题，正常人应该是回去提升装备，或者回到上一个
+   * 能打过的图，系统不为玩家做选择"* —— 所以这里**不加任何护栏**：不做「连续死亡 N 次停手」、
+   * 不自动退回上一张图、不弹确认。
+   *
+   * 实现上**有意不销毁 / 不重建会话**（那会牵进离线时间锚点 `player.timestamp`、`opId` 幂等、
+   * 跨服命令与会话回收竞态），而是复用「重复进入当前地图 = 重置本图」的同一条路径
+   * （`BattleWorld.resetOpenWorldRun` → `onMapChanged`），可观测效果一致：波次归零、怪物重刷、
+   * 且会发一条 `mapEnter` 日志。
+   *
+   * 幂等：`resetOpenWorldRun()` 会把标志清零，因此每次阵亡只重开一次；
+   * 未置位时本函数是 no-op（安全）。
+   */
+  private handleOpenWorldDeath(session: WorldSession): void {
+    if (!session.world.openWorldDeath) return;
+    const map = session.world.map;
+    session.world.resetOpenWorldRun();
+    this.logger.log(
+      `[W11] 野外阵亡 → 重开本图 run userId=${session.userId} characterId=${session.characterId} map=${map}`,
+    );
+    // 立刻把「波数 0 / 里程碑复位」落进侧车：否则紧接着的刷新会读回旧波数。
+    void this.persistPosition(session).catch((error: unknown) => {
+      this.logger.warn(`阵亡重开后落库失败：${session.characterId}`, {
+        reason: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }
+
   private async persistPosition(session: WorldSession): Promise<void> {
     const extras = await this.playerContext.extrasOf(session.userId);
-    // W4：连同波数一起落库（世界侧车状态；`wave: 0` 由 `cloneWorldMaps` 归一为不落）。
-    extras.worldMaps[session.characterId] = {
+    // W4/W11：连同波数与里程碑一起落库（世界侧车状态；`0` 一律不落，由 `writeWorldMapState` 归一）。
+    // ⚠️ **唯一写入口** —— 曾经离线结算（`IdleLogicService.settle`）在这里之外另拼一份
+    // `{ map }`，把 `wave` 抹掉，于是每次登录波数都归零。
+    writeWorldMapState(extras.worldMaps, session.characterId, {
       map: session.world.map,
       wave: session.world.enemyBorn?.wave ?? 0,
-    };
+      lastEliteWave: session.world.enemyBorn?.lastEliteWave ?? 0,
+      lastBossWave: session.world.enemyBorn?.lastBossWave ?? 0,
+    });
     this.playerContext.markAccountDirty(session.userId);
   }
 

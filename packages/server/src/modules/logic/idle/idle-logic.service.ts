@@ -44,7 +44,13 @@ import {
 } from '../shared/index.js';
 import { BattleCollector } from '../shared/battle-collector.js';
 import { buildBattleWorld, nextWorldSeed } from '../shared/headless.js';
-import { EXP_RATE, OFFLINE_MAX_MS, OFFLINE_PAUSE_AFTER_MS } from '../shared/index.js';
+import {
+  EXP_RATE,
+  OFFLINE_MAX_MS,
+  OFFLINE_PAUSE_AFTER_MS,
+  writeWorldMapKeepingProgress,
+  type WorldMapState,
+} from '../shared/index.js';
 import { countsOf, nextChaosStep } from '../chaos/internal/chaos-ops.js';
 
 /** 离线结算硬上限（保持原版 72h 语义）。 */
@@ -172,6 +178,7 @@ export class IdleService {
         player,
         extras,
         currentMap,
+        characterId,
         seed,
         Math.min(cappedMs, SIM_BUDGET_MS),
       );
@@ -180,7 +187,8 @@ export class IdleService {
       for (const material of chaos.materials) {
         addMaterial(player, this.tables, material.key, material.count);
       }
-      extras.worldMaps[characterId] = { map: chaos.map };
+      // W11 / C6：**唯一写入口** —— 同图保留波数与里程碑，换图才归零。
+      writeWorldMapKeepingProgress(extras.worldMaps, characterId, chaos.map);
       player.chaosActive = chaos.active;
       player.chaosIndex = chaos.index;
       player.chaosRetry = chaos.retry;
@@ -212,6 +220,8 @@ export class IdleService {
       map: currentMap,
       seed,
       budget: Math.min(cappedMs, SIM_BUDGET_MS),
+      // W11：把已交付的里程碑带上，避免离线快进把第 10 波精英 / 第 20 波 BOSS 重复交付。
+      bornState: this.bornStateOf(extras, characterId, currentMap),
     });
 
     // C2：对模拟预算之外的剩余时长做速率外推（稳定在战斗图时才允许）。
@@ -229,7 +239,9 @@ export class IdleService {
     }
 
     // 落库：位置（离线不换图，保持当前地图）。
-    extras.worldMaps[characterId] = { map: currentMap };
+    // ⚠️ W11 / C6：**唯一写入口**，且必须**保留波数与里程碑** —— 离线结算不推演波次，
+    // 之前这里手拼 `{ map }` 把 `wave` 抹掉，导致每次登录波数归零（R0）。
+    writeWorldMapKeepingProgress(extras.worldMaps, characterId, currentMap);
     player.timestamp = now;
     this.playerContext.markDirty(userId, characterId);
     this.playerContext.markAccountDirty(userId);
@@ -261,6 +273,22 @@ export class IdleService {
   }
 
   /**
+   * 本图**已交付**的里程碑（仅当侧车记录的就是这张图时才返回）。
+   *
+   * ⚠️ 必须比对 map：混沌仪一次 run 会连续推过多张 `chaos.tNN`，
+   * 而侧车里只有「当前所在图」这一条记录 —— 直接把别的图的波数喂进去
+   * 会让新图一开局就以为里程碑已交付（精英 / BOSS 再也不刷）。
+   */
+  private bornStateOf(
+    extras: AccountExtras,
+    characterId: string,
+    map: string,
+  ): WorldMapState | undefined {
+    const stored = extras.worldMaps[characterId];
+    return stored !== undefined && stored.map === map ? stored : undefined;
+  }
+
+  /**
    * 在当前图上做有界快进模拟（在线 tick 的离线镜像）。
    *
    * 全程 `VirtualClock`，无宿主定时器、无 await。
@@ -271,6 +299,14 @@ export class IdleService {
     map: string;
     seed: number;
     budget: number;
+    /**
+     * W11：本图已交付的里程碑（`wave` / `lastEliteWave` / `lastBossWave`）。
+     *
+     * 离线结算**不推演波次**（进度照留），但必须把已交付的里程碑喂给内核 ——
+     * 否则每次离线快进都会从 `wave = 0` 重来，把第 10 波精英 / 第 20 波 BOSS
+     * **重复交付**一遍。
+     */
+    bornState?: WorldMapState;
   }): MapSimResult {
     const { player, extras, map } = params;
     const clock = new VirtualClock();
@@ -287,6 +323,7 @@ export class IdleService {
         updateRate: 1,
         expRate: EXP_RATE,
         medicineLevel: (type) => extras.medicineLevel[type] ?? 0,
+        ...(params.bornState !== undefined ? { enemyBornState: params.bornState } : {}),
       }).world;
 
       let remaining = params.budget;
@@ -358,6 +395,7 @@ export class IdleService {
     player: Player,
     extras: AccountExtras,
     map: string,
+    characterId: string,
     seed: number,
     budget: number,
   ): ChaosSimResult {
@@ -383,6 +421,7 @@ export class IdleService {
         map: currentMap,
         seed,
         budget: remaining,
+        bornState: this.bornStateOf(extras, characterId, currentMap),
       });
       exp += sim.gainedExp;
       gold += sim.gainedGold;

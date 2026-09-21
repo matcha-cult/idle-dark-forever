@@ -17,14 +17,38 @@ import type { BattleWorld } from './battle-world.js';
 import { EnemyUnit } from './enemy-unit.js';
 
 /**
- * 野外守关 BOSS 的刷新间隔：每完成这么多波出一次（W4）。
+ * 野外守关 BOSS 的节拍基数（W4 / W11）：**每 20 波**。
  *
- * `wave % 20 === 0` 时尝试刷新（第 20 / 40 / 60 … 波）。
+ * ⚠️ W11 起不再用 `wave % 20 === 0` 当闸门 —— 那个写法在**会话恢复**后必然错过窗口
+ * （恢复到第 20 波时 `wave 21 % 20 !== 0`，要一直等到第 40 波才再出；实测见
+ * `ai-script/explore/check-boss-respawn.mjs`）。现在改用「目标波 + 已交付记录」的幂等判据，
+ * 见 {@link EnemyBorn.ensureMilestones}。
+ *
+ * 语义分两态（野外图）：
+ * - **开荒**（`bossPending === true`）：第 {@link ELITE_WAVE_INTERVAL} 波精英、第 20 波守关 BOSS，各一次；
+ * - **挂机**（野外图已通关）：不再出 BOSS，改为每 {@link ELITE_WAVE_INTERVAL} 波一只精英；
+ * - **混沌图**：维持 W6 行为（每 20 波 BOSS、可重复刷、**不出精英**）。
  */
 export const WORLD_BOSS_WAVE_INTERVAL = 20;
 
-/** BOSS 相对地图等级的加成（W4：普通 +0 / 稀有 +1 / BOSS +2）。 */
+/** 精英节拍（W11）：每完成这么多波出一只。开荒期只有第 10 波那一只。 */
+export const ELITE_WAVE_INTERVAL = 10;
+
+/**
+ * 精英的敌人品质（W11）：`quality = 2` ⇒ 两条词缀 + `maxHp` / `exp` ×4。
+ *
+ * ⚠️ **不要**改成 1：`quality 1` 就是自然刷怪 9% 概率掷到的「稀有」档，精英会因此
+ * 完全无法与普通稀有怪区分（那正是「四阶稀有度」要解决的问题）。
+ */
+export const ELITE_QUALITY = 2;
+
+/** 相对地图等级的加成（W4 / W11：普通 +0 / 稀有 +1 / 精英 +2 / BOSS +2）。 */
 export const WORLD_BOSS_LEVEL_OFFSET = 2;
+
+/** 存档里的波数归一：非有限 / 非正 / 非数字一律 0（脏存档防御）。 */
+function waveOf(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
+}
 
 /** 原版 `randomType(types)`：按权重抽取（`Math.random()` → `rng.next()`）。 */
 export function randomType(types: Record<string, number>, rng: Rng): string {
@@ -250,11 +274,28 @@ export class EnemyBorn {
    */
   wave = 0;
 
+  /**
+   * 最近一次**已交付**的精英波 / BOSS 波（W11 里程碑幂等，随会话落库）。
+   *
+   * 为什么要记「已交付」而不是继续用 `wave % N === 0`：
+   * 1. **会话恢复**（刷新 / 断线重连 / 空闲回收）会把 `wave` 恢复到中间值，取模必然错过窗口
+   *    —— 旧实现实测「恢复到第 20 波后首次再出 BOSS = 第 40 波」（R3）；
+   * 2. 交付失败（全局单位硬顶 I2）时**不记录**，下一波自动重试，不会永久丢失；
+   * 3. 开荒 → 挂机切换时，两者共用同一套判据，不会各自漂移。
+   */
+  lastEliteWave = 0;
+  lastBossWave = 0;
+
   constructor(
     world: BattleWorld,
     clock: Clock,
     map: string,
-    savedState?: { borns?: BornSavedState[]; wave?: number } | null,
+    savedState?: {
+      borns?: BornSavedState[];
+      wave?: number;
+      lastEliteWave?: number;
+      lastBossWave?: number;
+    } | null,
   ) {
     this.world = world;
     this.clock = clock;
@@ -268,8 +309,14 @@ export class EnemyBorn {
           );
         })
       : null;
-    const savedWave = savedState?.wave;
-    this.wave = typeof savedWave === 'number' && Number.isFinite(savedWave) && savedWave > 0 ? Math.trunc(savedWave) : 0;
+    this.wave = waveOf(savedState?.wave);
+    if (savedState !== undefined && savedState !== null) {
+      // 里程碑恢复：**不能**晚于 `wave`（脏存档防御），且只在 > 0 时采纳。
+      const elite = waveOf(savedState.lastEliteWave);
+      const boss = waveOf(savedState.lastBossWave);
+      this.lastEliteWave = elite <= this.wave ? elite : 0;
+      this.lastBossWave = boss <= this.wave ? boss : 0;
+    }
     // 显式接线：任一 Born 刷满清空 → 检查整波是否完成（open-world）。
     this.borns?.forEach((born) => {
       if (born) {
@@ -293,6 +340,8 @@ export class EnemyBorn {
     return {
       borns: this.borns && this.borns.map((v) => v && v.dumpState()),
       wave: this.wave,
+      lastEliteWave: this.lastEliteWave,
+      lastBossWave: this.lastBossWave,
     };
   }
 
@@ -319,7 +368,7 @@ export class EnemyBorn {
   }
 
   /**
-   * 完成一波：波数 +1，重置全部刷怪器，并在每 {@link WORLD_BOSS_WAVE_INTERVAL} 波尝试刷新守关 BOSS。
+   * 完成一波：波数 +1，重置全部刷怪器，然后**幂等地交付本波窗口的里程碑**。
    *
    * 全程由注入的 `Clock` 驱动（重置只重新武装定时器），不使用 `Date.now()`。
    */
@@ -328,13 +377,142 @@ export class EnemyBorn {
     for (const born of this.borns ?? []) {
       born?.reset();
     }
-    if (this.wave % WORLD_BOSS_WAVE_INTERVAL === 0) {
-      this.trySpawnWorldBoss();
+    this.ensureMilestones();
+  }
+
+  // ────────────────────────────── 里程碑（W11） ──────────────────────────────
+
+  /** 本图刷怪池（取第一条加权 `types`；退化为单一 `type`）。无刷怪池 → `null`。 */
+  private spawnTypes(): Record<string, number> | null {
+    const monsters = this.mapData?.monsters;
+    if (!Array.isArray(monsters) || monsters.length === 0) {
+      return null;
+    }
+    for (const config of monsters) {
+      if (!config) continue;
+      const types = config.types;
+      if (types && Object.keys(types).length > 0) {
+        return types;
+      }
+      if (typeof config.type === 'string' && config.type !== '') {
+        return { [config.type]: 1 };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 精英的**目标交付波**（`null` = 本图不刷精英）。
+   *
+   * - 混沌图：`null`（维持 W6：只出 BOSS）；
+   * - 开荒（`bossPending === true`）：固定第 {@link ELITE_WAVE_INTERVAL} 波，**只此一次**；
+   * - 挂机（已通关）：每 {@link ELITE_WAVE_INTERVAL} 波一只，即取当前 10 波窗口的起点。
+   */
+  eliteWaveTarget(): number | null {
+    if (this.world.isChaosMap) return null;
+    if (this.spawnTypes() === null) return null;
+    if (this.world.bossPending) return ELITE_WAVE_INTERVAL;
+    return Math.max(
+      ELITE_WAVE_INTERVAL,
+      Math.floor(this.wave / ELITE_WAVE_INTERVAL) * ELITE_WAVE_INTERVAL,
+    );
+  }
+
+  /**
+   * 守关 BOSS 的**目标交付波**（`null` = 本图不再出 BOSS）。
+   *
+   * - 混沌图：每 {@link WORLD_BOSS_WAVE_INTERVAL} 波（当前窗口起点），可重复刷；
+   * - 开荒：固定第 {@link WORLD_BOSS_WAVE_INTERVAL} 波；
+   * - 挂机（已通关）：`null` —— 这与 `BattleWorld.bossPending === false` 同源，
+   *   所以 UI 的「距守关 BOSS N 波」不会给出一个永远不来的倒计时。
+   */
+  bossWaveTarget(): number | null {
+    if (this.world.isChaosMap) {
+      return Math.max(
+        WORLD_BOSS_WAVE_INTERVAL,
+        Math.floor(this.wave / WORLD_BOSS_WAVE_INTERVAL) * WORLD_BOSS_WAVE_INTERVAL,
+      );
+    }
+    return this.world.bossPending ? WORLD_BOSS_WAVE_INTERVAL : null;
+  }
+
+  /** 场上是否已有存活的精英（避免恢复 / 连刷时出现两只）。 */
+  hasLiveElite(): boolean {
+    return this.world.units.some((u) => u instanceof EnemyUnit && u.elite);
+  }
+
+  /**
+   * **幂等地**交付当前波窗口的里程碑（精英 + 守关 BOSS）。
+   *
+   * `completeWave()` 与会话恢复（`WorldService.start` → `buildBattleWorld` 之后）都调用它，
+   * 因此「恢复到第 20 波」也能立刻补刷 —— 这正是 R3 的结构性修法：
+   * **不再可能出现「UI 说 BOSS 还会出、但要等到第 40 波」**。
+   *
+   * 幂等靠 `lastEliteWave` / `lastBossWave`：`wave >= 目标 && 未交付过` 才刷，交付成功才记录。
+   * 交付被全局单位硬顶（I2）挡住时不记录 ⇒ 下一波自动重试，**不会永久丢失**。
+   */
+  ensureMilestones(): void {
+    const eliteTarget = this.eliteWaveTarget();
+    if (
+      eliteTarget !== null &&
+      this.wave >= eliteTarget &&
+      this.lastEliteWave !== eliteTarget &&
+      !this.hasLiveElite()
+    ) {
+      if (this.spawnElite()) {
+        this.lastEliteWave = eliteTarget;
+      }
+    }
+    const bossTarget = this.bossWaveTarget();
+    if (bossTarget !== null && this.wave >= bossTarget) {
+      if (this.world.isChaosMap) {
+        // 混沌图：可重复刷 ⇒ 必须按**窗口**记「已交付」，否则杀掉后会每一波都重刷。
+        if (this.lastBossWave !== bossTarget) {
+          if (this.trySpawnWorldBoss()) {
+            this.lastBossWave = bossTarget;
+          }
+        }
+      } else {
+        // 野外图：**一次性**，且判据不能只看 `lastBossWave` ——
+        // 会话恢复会丢掉「已刷出但尚未击杀」的 BOSS 单位（R3），此时
+        // `bossPending` 仍为 true、场上却没有 BOSS，必须**立刻补刷**。
+        // 所以这里只用 `trySpawnWorldBoss()` 自身的闸门：
+        // 已击杀 → `bossPending === false` 永不再刷；场上已有 → 不重复刷。
+        // 若再叠一层 `lastBossWave !== bossTarget`，就会把 R3 从「等到第 40 波」
+        // 变成「永远不再出」—— 比原缺陷更糟。
+        if (this.trySpawnWorldBoss()) {
+          this.lastBossWave = bossTarget;
+        }
+      }
     }
   }
 
   /**
-   * 尝试刷新该图守关 BOSS（每 20 波）。
+   * 刷新一只**精英**（W11 / 决策 3）：强制 `quality = {@link ELITE_QUALITY}` 的普通怪。
+   *
+   * 为什么复用 `addEnemy(..., quality)` 而不是新造字段与倍率：
+   * `quality` 现成就有完整链路 —— `maxHp *= 2 ** quality`、`exp *= 2 ** quality`、
+   * `displayName` 会拼上两条词缀名（可见）、`applyOpenWorldLevelOverride` 给 +2 级、
+   * 稀有度第 2 档（`enemyRarityOf`）。**不新增随机源、不新增等级公式、不新增数据字段**。
+   *
+   * 刷出位置与普通怪一致（`borner = null` ⇒ 不推进波次计数，与守关 BOSS 同处理）。
+   *
+   * @returns 是否真的刷出。`false` = 本图没有刷怪池 / 池里全是未知敌人 / 已达全局单位硬顶。
+   */
+  spawnElite(): boolean {
+    const types = this.spawnTypes();
+    if (types === null) return false;
+    // I2：全图单位已达硬顶 → 本次不刷（调用方不记录里程碑，下一波重试）。
+    if (this.world.atUnitCap()) return false;
+    const key = randomType(types, this.world.rng.spawn);
+    if (!this.world.tables.enemies[key]) return false;
+    const unit = this.world.addEnemy(key, null, ELITE_QUALITY);
+    unit.elite = true;
+    return true;
+  }
+
+  /**
+   * 尝试刷新该图守关 BOSS。
    *
    * - 一次性：角色已击杀该图 BOSS → 不再刷新（普通怪照旧，图仍可 farm）；
    * - 同一时刻只允许一只 BOSS 存活（上一只未死则本次跳过）；
@@ -342,28 +520,31 @@ export class EnemyBorn {
    *
    * ⚠️ 「还会不会出」的判据是 `BattleWorld.bossPending`（**唯一真相**，UI 读同一个 getter）：
    * 混沌图可重复刷、野外图一次性、无 `boss` 数据的图根本不刷。
+   *
+   * @returns 是否真的刷出（供 {@link ensureMilestones} 决定要不要记 `lastBossWave`）。
    */
-  trySpawnWorldBoss(): void {
+  trySpawnWorldBoss(): boolean {
     const mapData = this.mapData;
     const bossKey = mapData?.boss;
     if (!bossKey || !this.world.tables.enemies[bossKey]) {
-      return;
+      return false;
     }
     if (!this.world.bossPending) {
-      return;
+      return false;
     }
     if (this.world.units.some((u) => u instanceof EnemyUnit && u.worldBoss)) {
-      return;
+      return false;
     }
     // I2：全图单位已达硬顶 → 本次不刷 BOSS（下一波还会再试，不会永久丢失）。
     if (this.world.atUnitCap()) {
-      return;
+      return false;
     }
     const unit = this.world.addEnemy(bossKey, null, 0);
     unit.worldBoss = true;
     const mapLevel =
       typeof mapData?.level === 'number' && Number.isFinite(mapData.level) ? mapData.level : 0;
     unit.levelOverride = mapLevel + WORLD_BOSS_LEVEL_OFFSET;
+    return true;
   }
 
   onPlayerDeath(): void {

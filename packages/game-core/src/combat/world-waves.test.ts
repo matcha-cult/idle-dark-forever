@@ -114,7 +114,7 @@ describe('W4 野外波次计数', () => {
 });
 
 describe('W4 一次性野外 BOSS', () => {
-  it('恰好第 20 波刷 BOSS，19 / 21 波不额外刷（同一时刻只允许一只）', () => {
+  it('恰好第 20 波刷 BOSS，19 波不刷；同一时刻只允许一只', () => {
     const { t, spawner } = setup();
     for (let i = 0; i < WORLD_BOSS_WAVE_INTERVAL - 1; i += 1) spawner.completeWave();
     expect(spawner.wave).toBe(19);
@@ -124,19 +124,41 @@ describe('W4 一次性野外 BOSS', () => {
     expect(spawner.wave).toBe(20);
     expect(bossUnits(t)).toHaveLength(1);
 
-    spawner.completeWave(); // 第 21 波：上一只仍存活 → 不刷第二只
-    expect(bossUnits(t)).toHaveLength(1);
-
-    // 干掉上一只后，第 22~39 波不再刷；第 40 波再刷。
-    const first = bossUnits(t)[0]!;
-    t.world.removeUnit(first);
-    for (let w = 21; w < 2 * WORLD_BOSS_WAVE_INTERVAL - 1; w += 1) spawner.completeWave();
-    expect(spawner.wave).toBe(39);
-    expect(bossUnits(t)).toHaveLength(0);
-
-    spawner.completeWave(); // 第 40 波
+    // 上一只仍存活 → 后续波次不会刷出第二只（推满一整个 20 波窗口）。
+    for (let w = WORLD_BOSS_WAVE_INTERVAL; w < 2 * WORLD_BOSS_WAVE_INTERVAL; w += 1) {
+      spawner.completeWave();
+    }
     expect(spawner.wave).toBe(40);
     expect(bossUnits(t)).toHaveLength(1);
+  });
+
+  it('R3 回归：BOSS 因会话重启丢失后**恢复即补刷**（旧实现取模错过窗口，要等到第 40 波）', () => {
+    const { t, spawner } = setup();
+    for (let i = 0; i < WORLD_BOSS_WAVE_INTERVAL; i += 1) spawner.completeWave();
+    expect(spawner.wave).toBe(20);
+    expect(bossUnits(t)).toHaveLength(1);
+
+    // 模拟刷新 / 断线重连：BOSS 单位不入档 ⇒ 新会话里 wave=20、场上却没有 BOSS。
+    t.world.removeUnit(bossUnits(t)[0]!);
+    expect(bossUnits(t)).toHaveLength(0);
+
+    const restored = new EnemyBorn(t.world, t.clock, WORLD_MAP, { wave: 20 });
+    t.world.enemyBorn = restored;
+    expect(restored.wave).toBe(20);
+    // 关键断言：不是「等到第 40 波」，而是**当波就补上**。
+    restored.ensureMilestones();
+    expect(bossUnits(t)).toHaveLength(1);
+    expect(bossUnits(t)[0]!.level).toBe(WORLD_MAP_LEVEL + 2);
+  });
+
+  it('R3 回归：BOSS 仍存活时恢复不会刷出第二只', () => {
+    const { t, spawner } = setup();
+    for (let i = 0; i < WORLD_BOSS_WAVE_INTERVAL; i += 1) spawner.completeWave();
+    const restored = new EnemyBorn(t.world, t.clock, WORLD_MAP, { wave: 20 });
+    t.world.enemyBorn = restored;
+    restored.ensureMilestones();
+    expect(bossUnits(t)).toHaveLength(1);
+    expect(spawner.wave).toBe(20);
   });
 
   it('没有 boss 配置的图永远不刷 BOSS', () => {
@@ -286,14 +308,40 @@ describe('W4 守关 BOSS 是否还会出现（bossPending，UI 与刷怪闸门�
 });
 
 describe('W4 怪物等级规则', () => {
-  it('野外：普通 = 地图等级 / 稀有（quality>=1）= +1', () => {
+  it('野外：普通 = 地图等级 / 稀有 +1 / 精英（quality 2）+2', () => {
     const { t } = setup();
     const normal = t.world.addEnemy('dummy', null, 0);
     const rare = t.world.addEnemy('dummy', null, 1);
-    const legendary = t.world.addEnemy('dummy', null, 2);
+    const elite = t.world.addEnemy('dummy', null, 2);
     expect(normal.level).toBe(WORLD_MAP_LEVEL);
     expect(rare.level).toBe(WORLD_MAP_LEVEL + 1);
-    expect(legendary.level).toBe(WORLD_MAP_LEVEL + 1);
+    // W11：稀有度四阶后，`quality` 夹到 0..2 逐级 +1 —— 精英（第 10 波保底）比稀有更硬。
+    expect(elite.level).toBe(WORLD_MAP_LEVEL + 2);
+  });
+
+  it('野外：`quality` 脏值被安全化，且等级不会被推到天上（W11 夹取）', () => {
+    const { t } = setup();
+    for (const [bad, expectedQuality] of [
+      [3, 3],
+      [99, 8], // 夹到 MAX_ENEMY_QUALITY
+      [1e9, 8],
+      [Number.NaN, 0],
+      [Infinity, 0],
+      [-Infinity, 0],
+      [-5, 0],
+      [1.7, 1],
+    ] as const) {
+      const unit = t.world.addEnemy('dummy', null, bad);
+      // 字段级安全化：词缀条数一定是有限非负整数（否则构造器会 push 到 RangeError）。
+      expect(Number.isInteger(unit.quality), `quality=${bad}`).toBe(true);
+      expect(unit.quality, `quality=${bad}`).toBe(expectedQuality);
+      expect(unit.affixes.length, `quality=${bad}`).toBe(expectedQuality);
+      // 等级口径夹到 0..2：`mapLevel + min(quality, 2)`。
+      expect(unit.level, `quality=${bad}`).toBe(
+        WORLD_MAP_LEVEL + Math.min(expectedQuality, 2),
+      );
+      expect(Number.isFinite(unit.maxHp), `quality=${bad}`).toBe(true);
+    }
   });
 
   it('野外 BOSS = 地图等级 +2（第 20 波）', () => {

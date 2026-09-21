@@ -4,8 +4,8 @@
  * 覆盖：
  *  - 9 个等级段（1/5/15/25/35/45/55/65/75）各恰好 1 张图，85+ 恰好 4 张；
  *  - `home` 精确保留（安全区：无怪、无进入条件）；
- *  - 每张战斗图：`requirement` = `{level}`（world.1）或 `{level, bossKilled: 上一段}`（W4 解锁链）、
- *    有 `boss`、刷怪条目合法且带一波的 `total`；
+ *  - 每张战斗图：`requirement` = **只用 `bossKilled` 的通关链**（W11：`world.1` 无门槛，
+ *    `world.N` 需先击杀上一段守关 BOSS；85+ 四张统一接 `world.9`）—— `level` 只作内容/建议等级；
  *  - 不残留旧秘境字段（`isDungeon` / `phases` / `group` / `isEndless`）；
  *  - 所有普通怪与 BOSS 的 enemy key 都真实存在且有掉落表。
  */
@@ -47,20 +47,28 @@ describe('maps-world 新地图种子', () => {
     expect(high).toHaveLength(HIGH_SEGMENT_COUNT);
   });
 
-  it('每张战斗图：等级 = 段下界；requirement = level + W4 解锁链 bossKilled', () => {
+  it('每张战斗图：等级 = 段下界；requirement = **只用 bossKilled 的通关链**（W11 去掉 level）', () => {
     for (const [key, map] of worldMaps) {
       expect(typeof map.level, key).toBe('number');
-      expect(map.requirement, key).toBeDefined();
       const segment = Number(key.slice(WORLD_PREFIX.length));
-      // world.1 无前置；world.N 需先击杀 world.(N-1) 的野外 BOSS（85+ 多图统一接 world.9）。
+      // world.1 无前置（requirement 缺省 = 解锁）；world.N 需先击杀 world.(N-1) 的野外 BOSS
+      // （85+ 多图统一接 world.9）。
+      // ⚠️ `level` 是内容/建议等级，**不得**出现在解锁条件里 —— 它同时是怪物等级覆写来源，
+      // 一旦它又是门槛，解锁线就正好落在经验衰减零点上（历史上因此整条推进链不可达）。
       const expected =
         segment <= 1
-          ? { level: map.level }
-          : { level: map.level, bossKilled: segment >= 10 ? 'world.9' : `world.${segment - 1}` };
+          ? undefined
+          : { bossKilled: segment >= 10 ? 'world.9' : `world.${segment - 1}` };
       expect(map.requirement, key).toEqual(expected);
+      // 解锁链必须诚实：能查到前置图的 key（防止笔误指向不存在的图）。
+      if (expected) {
+        expect(tables.maps[expected.bossKilled], `${key} 的前置图`).toBeDefined();
+      }
       expect(typeof map.name, key).toBe('string');
       expect((map.hint ?? '').length, key).toBeGreaterThan(0);
       expect(Number.isFinite(map.exp), key).toBe(true);
+      // 决策 2：通关清算要消费 `map.exp`，所以每张战斗图的 `exp` 必须是**正的有限数**。
+      expect(map.exp, `${key} exp 应为正`).toBeGreaterThan(0);
     }
   });
 

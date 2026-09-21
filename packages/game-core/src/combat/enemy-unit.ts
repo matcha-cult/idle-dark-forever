@@ -14,6 +14,7 @@
 import type { TimerHandle } from '../contracts/ports.js';
 import type { EnemyData } from '../contracts/data.js';
 import { Camps } from './camps.js';
+import { normalizeEnemyQuality } from './enemy-rarity.js';
 import type { BattleWorld } from './battle-world.js';
 import { SkillState } from './skill-state.js';
 import type { Born } from './spawner.js';
@@ -59,8 +60,21 @@ export class EnemyUnit extends Unit {
   worldBoss = false;
 
   /**
+   * 精英怪标记（W11，由 `EnemyBorn.spawnElite` 显式置位）。
+   *
+   * 精英 = 每 10 波定时刷出的一只 **`quality = 2`** 普通怪（两条词缀 ⇒ `maxHp` / `exp` ×4），
+   * 并且**清尸时额外必掉一条通货/精华**（见 `BattleWorld.lootEliteGuaranteed`）。
+   *
+   * ⚠️ 与 `worldBoss` 一样**不要**用「`quality >= 2`」代替本标记：那是自然刷怪 1% 概率
+   * 就能掷到的稀有度（档位 2），而「精英」是**定时保底**，两者语义不同。
+   * 展示档位由 `enemyRarityOf()` 统一派生，不要在前端或别处自己拼。
+   */
+  elite = false;
+
+  /**
    * 等级覆写（W4）。置为有限数时 `level` 直接返回它（野外：普通 = 地图等级 /
-   * 稀有 +1 / BOSS +2）；未置位时回落到原版公式 `enemyData.level + quality * 4`（秘境沿用）。
+   * 稀有 +1 / 精英 +2 / BOSS +2）；未置位时回落到原版公式
+   * `enemyData.level + quality * 4`（秘境沿用）。
    */
   levelOverride?: number;
 
@@ -70,6 +84,15 @@ export class EnemyUnit extends Unit {
   constructor(world: BattleWorld, type: string, quality = 0, savedState?: EnemySavedState | null) {
     super(world, savedState);
     this.type = type;
+    // W11：字段级安全化（`Infinity` / `NaN` / 负数 / 超大值 → 0 / 夹到上限）。
+    // 不这么做的话，下面的词缀循环会因 `i < Infinity` 一直 push 到
+    // `RangeError: Invalid array length`（实测单测挂 14 秒后抛错），
+    // 而 `2 ** quality` 也会把 `maxHp` 变成 `Infinity`。
+    //
+    // ⚠️ 必须**重新赋值给形参**（而不只是 `this.quality`）：下面的词缀循环读的是形参
+    // `quality`，只改字段会让 `quality = 99` 时 `affixes.length` 仍是 99 —— 那正是
+    // 「字段已安全化、数组却照样撑爆」的假修复。
+    quality = normalizeEnemyQuality(quality);
     this.quality = quality;
 
     const skills = savedState && savedState.skills;
@@ -462,7 +485,13 @@ export class EnemyUnit extends Unit {
       if (this.world.isChaosMap) {
         this.world.noteChaosBossKilled();
       } else {
+        // W11 / 决策 2：**首通**清算 `map.exp`。必须先读 `hasWorldBossKilled` 再登记，
+        // 否则第二次击杀（理论上不该发生，但重连 / 补刷路径下要防御）会重复发奖。
+        const firstClear = this.world.player?.hasWorldBossKilled?.(this.world.map) !== true;
         this.world.player?.markWorldBossKilled?.(this.world.map);
+        if (firstClear) {
+          this.world.grantWorldClearReward();
+        }
       }
     }
   }
@@ -471,6 +500,10 @@ export class EnemyUnit extends Unit {
     if (this.enemyData.loots) {
       this.world.loots(this.enemyData.loots, this.level, this.quality);
       // TODO: 包裹已满丢弃物品
+      // W11 / 决策 3：精英**必掉**一条通货/精华（`quality` 对掉落已无影响，必须显式补）。
+      if (this.elite) {
+        this.world.lootEliteGuaranteed(this.enemyData.loots, this.level, this.quality);
+      }
     }
     // W5：85+ 区域掉落混沌钥石（与掉落表无关，独立判定；只用 W4 覆写后的 `this.level`）。
     this.world.rollKeystoneDrop(this.level);

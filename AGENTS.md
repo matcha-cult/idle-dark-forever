@@ -374,13 +374,45 @@ cmd 段唯一归属、每个 `*LogicServer` 里不得出现 `@ActionMethod`。
 
 - **钱包（R1）**：`GoodData.wallet` 标记的通货 / 精华**不占背包格**、无容量上限、永不 `handled:'lost'`；
   普通材料仍占背包；**混沌钥石不进钱包**。DTO 带 `wallet?`，**前端零推导**。
-- **新地图（R2）**：`world.1`…`world.13`（等级 1/5/15/25/35/45/55/65/75 + 85×4 张）；
-  `Requirement` 只保留 `level` + 可选 `bossKilled`（缺失即 fail-closed）。上限 **100 级，巅峰已删**。
-  统一 `total = 4` / `max = 4`；**刷怪闸门是 `Born.aliveMonsterCount()`（全图存活敌对怪，排除 ghost、
-  排除玩家/联军召唤物）**，不是 `this.count`；到达上限**保持轮询**，有怪死自动恢复（绝不永久停刷）。
-- **守关 BOSS**：每 20 波尝试刷新，**一次性**（记 `Player.worldBossKilled`）；用显式 `worldBoss` 标记，
-  **不要用 key 比较**（`slime.queen` 既可能是某图 BOSS 又是另一图普通怪）。怪物等级 = 地图等级 /
-  稀有（`quality>=1`）+1 / BOSS +2。
+- **新地图（R2 / W11）**：`world.1`…`world.13`（等级 1/5/15/25/35/45/55/65/75 + 85×4 张）；
+  ⚠️ **解锁链只用 `bossKilled`**（`world.1` 无门槛，`world.N` 需先击杀上一段守关 BOSS，
+  85+ 四张统一接 `world.9`）。**不要把 `level` 放回解锁条件** —— `MapEntry.level` 同时是
+  怪物等级覆写来源，一旦它又是门槛，解锁线就正好落在经验衰减零点上（历史上因此整条推进链
+  不可达：`world.2` 实测 13→14 需 21228 次击杀）。`level` 只作**内容/建议等级**。
+  上限 **100 级，巅峰已删**。统一 `total = 4` / `max = 4`；**刷怪闸门是
+  `Born.aliveMonsterCount()`（全图存活敌对怪，排除 ghost、排除玩家/联军召唤物）**，
+  不是 `this.count`；到达上限**保持轮询**，有怪死自动恢复（绝不永久停刷）。
+- **波次里程碑（W11）**：**开荒**（`bossPending`）= 第 10 波精英 + 第 20 波守关 BOSS，各一次；
+  **挂机**（已通关）= 每 10 波一只精英、**不再出 BOSS**；**混沌图** = 每 20 波 BOSS（可重复刷）、
+  **不出精英**。守关 BOSS 用显式 `worldBoss` 标记，**不要用 key 比较**（`slime.queen` 既可能是
+  某图 BOSS 又是另一图普通怪）。
+  ⚠️ **闸门是「目标波 + 已交付记录」（`EnemyBorn.ensureMilestones`），不是 `wave % N === 0`** ——
+  取模在会话恢复后必然错过窗口（旧实现恢复到第 20 波要等到第 40 波）。野外 BOSS 的判据是
+  「`bossPending` 且场上没有 BOSS」⇒ **恢复到第 20 波会当波补刷**；混沌 BOSS 按 20 波窗口记
+  `lastBossWave`（否则杀掉后每波重刷）。`completeWave()` 与会话恢复都要调 `ensureMilestones()`。
+- **怪物稀有度四阶（W11）**：`普通 / 稀有 / 精英 / 传奇` = `quality 0/1/2` + 守关 BOSS。
+  唯一实现 `combat/enemy-rarity.ts`（`enemyRarityOf` / `clampEnemyQuality`）；服务端只序列化。
+  **等级偏移 = `mapLevel + min(quality, 2)`**（普通 +0 / 稀有 +1 / 精英 +2 / BOSS +2）。
+  第 10 波精英 = 强制 `quality = 2`（两条词缀 ⇒ `maxHp`/`exp` ×4），并**额外必掉一条通货/精华**
+  （`BattleWorld.lootEliteGuaranteed`：从该怪 `loots` 里筛 `wallet === true` 的 `key` 条目，
+  按 `rate` 加权抽一条并强制 `rate = 1`；钱包物品**不占格、永不丢失**，所以"必掉"是真保证）。
+  ⚠️ `quality` 是**敌人词缀条数**，与装备 `Quality`（3 档）**同名不同义**；
+  **禁止前端拿 `boss`/`elite`/`quality` 自己拼档位** —— 用服务端下发的 `UnitStateDto.rarity`
+  （与 `alive` 同一先例）。`quality` 入构造器前会做安全化（`Infinity` 曾导致词缀循环
+  一路 push 到 `RangeError`）。
+- **通关清算（W11）**：击杀本图守关 BOSS **首次**时一次性发放 `MapEntry.exp`（原版秘境口径，
+  此前是死字段）。**必须先读 `hasWorldBossKilled` 再 `markWorldBossKilled`** 才不会重复发奖；
+  混沌图不发（可重复刷，不属于 `worldBossKilled` 链）。`expRate` / `expInc` / `expMul` 照常生效。
+- **野外阵亡即重开（W11）**：任意波次阵亡 → 本图 run 重开（`wave = 0`、里程碑复位、清场），
+  **不加任何护栏**（产品拍板：系统不为玩家做选择）。`PlayerUnit.kill()` 只置位
+  `openWorldDeath`，由 `WorldService.tick` 调 `resetOpenWorldRun()` 落实（复用「重复进图 = 重置本图」
+  同一条路径，**不销毁会话**）。混沌图走 `chaosOutcome = 'death'` 分支，不置位。
+- **世界侧车（W11 / C6）**：`account_state.data.worldMaps[charId]` =
+  `{ map, wave?, lastEliteWave?, lastBossWave? }`。**读写只能走
+  `shared/world-map-state.ts`**（`parseWorldMapState` / `writeWorldMapState` /
+  `writeWorldMapKeepingProgress`）—— 曾经 `WorldService` 与 `IdleLogicService` 各拼一份对象字面量，
+  后者少写 `wave` ⇒ **每次登录波数归零**。离线结算**不推演波次**，只保留进度
+  （并把已交付里程碑喂给离线模拟，避免重复交付精英/BOSS）。
 - **`bossPending`（BOSS 还会不会出）是唯一判据**：`BattleWorld.bossPending`
   （无 `boss` 数据的图 / 野外图已通关 → `false`；混沌图可重复刷 → `true`）。
   刷怪闸门 `EnemyBorn.trySpawnWorldBoss` 与 UI 的「距守关 BOSS N 波」**读同一个 getter**，
@@ -443,8 +475,9 @@ hp mp rp ep comboPoint targetId castingProgress buffs camp
 level maxHp maxMp maxRp maxEp exp maxExp attributes
 ```
 
-其余字段（`id/kind/typeKey/name/quality/boss`）**出生即固定**，只在 `add`/`reset` 里出现一次
+其余字段（`id/kind/typeKey/name/quality/boss/elite/rarity`）**出生即固定**，只在 `add`/`reset` 里出现一次
 —— 这部分占单个单位 DTO 的 **64%**（170B/264B），是优化的主要来源。
+（`elite` / `rarity` 是 W11 新增的怪物稀有度字段，见 §19；二者都是出生字段，**不进白名单**。）
 
 ⚠️ **`camp` 必须在白名单里**：① 死亡 `enemy → ghost`（`unit.ts#kill()`）；
 ② 中立怪被攻击参战 `neutral → enemy`（`enemy-unit.ts#setTarget`）。
@@ -535,7 +568,9 @@ level maxHp maxMp maxRp maxEp exp maxExp attributes
   玩家打出 `colorError`(红) / 其它 `colorInfo`(蓝)；治疗 `colorSuccess`；暴击前缀加粗。
   片段模型 `LogSegment{tone,bold}`；**禁止整行着色**（会吞掉数字的红蓝）。
 - **数值取整在展示层**（`formatLogValue` = `Math.round`，同原版）；**引擎保持浮点** ——
-  在结算处取整会改平衡；金样状态哈希 `0xf7d493b3` 未变即证推演未动。
+  在结算处取整会改平衡。金样判据看**事件哈希 `0x1dd67f6b` / 事件条数 27**（这两项只随推演变化）；
+  状态哈希在 W11 因 `EnemyBorn.dumpState()` 新增两个里程碑字段而重录为 `0x3af5fd2f`
+  （**快照形状变化、非推演变化**，见 `combat/golden.test.ts` 的留痕注释）。
 - **`entries` 新在最前** ⇒ `<LogPanel>` 必须**截断丢尾部** + **`scrollTop = 0`**。
 - **名字/阵营查历史注册表**（`nameOf`/`campOf`），别用 `world.units`；**技能名**用
   `event.skillName`，经验用 `exp.whoId`。

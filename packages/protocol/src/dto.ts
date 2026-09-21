@@ -24,6 +24,18 @@ export type Quality = 0 | 1 | 2;
 
 export const QUALITY_NAMES: readonly string[] = ['普通', '稀有', '传奇'];
 
+/**
+ * **怪物**稀有度档位的展示文案（W11）。
+ *
+ * ⚠️ 与装备的 `Quality`（3 档：普通/稀有/传奇）是**两条不同的轴**：
+ * 这里多出「精英」一档，且第 3 档是**守关 BOSS**（而不是更好的装备品质）。
+ * 索引即 {@link UnitStateDto.rarity}。
+ */
+export const UNIT_RARITY_NAMES: readonly string[] = ['普通', '稀有', '精英', '传奇'];
+
+/** 怪物稀有度档位数（`UNIT_RARITY_NAMES.length`）。 */
+export const UNIT_RARITY_MAX = 3;
+
 /** 物品大类。 */
 export type GoodType = 'equip' | 'material' | 'junk' | 'package';
 
@@ -325,6 +337,32 @@ export interface UnitStateDto {
   buffs: Array<{ key: string; name: string; stack: number; remainMs: number }>;
   /** 该单位是否是本图守关 BOSS（供前端高亮；非 BOSS 省略）。 */
   boss?: boolean;
+  /**
+   * 该单位是否是**精英怪**（W11；非精英省略）。
+   *
+   * 精英 = 每 10 波定时刷新的一只 **`quality = 2`（两条敌人词缀）** 的普通怪，
+   * 并且在清尸时**额外必掉一条通货/精华实例**。
+   *
+   * ⚠️ 与 `boss` 一样是**出生即固定**的字段：只出现在 `add` / `reset`，不进
+   * `MUTABLE_UNIT_FIELDS`。展示用的档位请看 {@link UnitStateDto.rarity}。
+   */
+  elite?: boolean;
+  /**
+   * 怪物稀有度档位（W11；**服务端派生**，前端零推导）。
+   *
+   * ```
+   * 0 = 普通   1 = 稀有   2 = 精英   3 = 传奇（守关 BOSS）
+   * ```
+   *
+   * 派生优先级：`boss(3) > elite(2) > clampEnemyQuality(quality)`（`quality` 本身夹到 `0..2`
+   * 逐级对应 普通/稀有/精英）。唯一实现见 `game-core` 的 `combat/enemy-rarity.ts`
+   * （`enemyRarityOf`），服务端只做序列化。
+   *
+   * ⚠️ **不要在前端用 `boss` / `elite` / `quality` 自己拼档位** —— `quality` 在本协议里是
+   * 「敌人词缀条数」（可 > 2），与装备品质 `Quality` **同名不同义**，正是最容易拼错的地方。
+   * 这与 `alive` 同属「服务端派生、前端只渲染」的字段。
+   */
+  rarity?: number;
   /**
    * 是否存活（P2，服务端按 `camp === 'ghost'` 派生，前端**零推导**）。
    *

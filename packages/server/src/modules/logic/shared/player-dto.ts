@@ -21,6 +21,7 @@ import type {
   WalletEntryDto,
 } from '@idle-dark/protocol';
 import type { DataTables } from '@idle-dark/game-core';
+import type { WorldMapState } from './world-map-state.js';
 import {
   CareerInfo,
   EQUIP_SLOTS,
@@ -44,16 +45,22 @@ export interface AccountExtras {
    */
   worldSeeds: Record<string, number>;
   /**
-   * 每角色当前所在地图（characterId → {map, wave}）。
+   * 每角色当前所在地图 + 该图 run 进度（characterId → {@link WorldMapState}）。
    *
    * 原版 `worldState`（在飞的战斗快照）按方案 §9.2 **不迁**；但「玩家上次在哪张图」
    * 必须记住，否则每次重连都回到 `home`。
    *
-   * `wave`（W4）是**世界侧车状态**：按角色 + 当前地图记录已完成波数，会话重启
-   * （刷新 / 断线重连 / 空闲回收）不丢波数。它**不进** `characters.state`
-   * （`Player` 存档只放角色自身状态）。
+   * 这里是**世界侧车状态**：按角色 + 当前地图记录已完成波数与里程碑
+   * （W4 `wave` / W11 `lastEliteWave` / `lastBossWave`），会话重启
+   * （刷新 / 断线重连 / 空闲回收）不丢进度。它**不进** `characters.state`
+   * （`Player` 存档只放角色自身状态），也不占 Prisma 迁移 —— 它住在
+   * `account_state.data` 这个 JSONB 侧车里。
+   *
+   * ⚠️ **读写都必须走 `world-map-state.ts`**（`parseWorldMapState` / `writeWorldMapState`）：
+   * 曾经 `WorldService` 与 `IdleLogicService` 各拼一次对象字面量，后者少写 `wave`
+   * ⇒ 每次登录都把波数抹掉（详版见该文件注释）。
    */
-  worldMaps: Record<string, { map: string; wave?: number }>;
+  worldMaps: Record<string, WorldMapState>;
 }
 
 export function createAccountExtras(): AccountExtras {

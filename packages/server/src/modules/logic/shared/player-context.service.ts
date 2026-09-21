@@ -25,6 +25,7 @@ import {
 import { GameDatabaseService } from '../../game/game-database.service.js';
 import { DATA_TABLES, GAME_CLOCK, type NowSource } from './game-clock.js';
 import { createAccountExtras, type AccountExtras } from './player-dto.js';
+import { cloneWorldMaps, parseWorldMapState } from './world-map-state.js';
 
 /** 默认落库节流间隔（供 world tick 定期 flush 参考；本服务不主动起定时器）。 */
 export const DEFAULT_PERSIST_INTERVAL_MS = 30_000;
@@ -61,7 +62,7 @@ interface AccountDataJson {
   medicineLevel?: Record<string, number>;
   medicineExp?: number;
   worldSeeds?: Record<string, number>;
-  worldMaps?: Record<string, { map?: unknown; wave?: unknown }>;
+  worldMaps?: Record<string, unknown>;
 }
 
 @Injectable()
@@ -412,34 +413,9 @@ function applyAccountData(
   }
   if (data.worldMaps && typeof data.worldMaps === 'object') {
     for (const key of Object.keys(data.worldMaps)) {
-      const entry = data.worldMaps[key];
-      if (!entry || typeof entry !== 'object') continue;
-      const map = typeof entry.map === 'string' && entry.map !== '' ? entry.map : 'home';
-      // W4：波数是世界侧车状态。非有限数 / 负数 / 非数字 → 0（不落 `wave: 0`，保持旧形状）。
-      const wave = worldWaveOf(entry.wave);
-      extras.worldMaps[key] = wave > 0 ? { map, wave } : { map };
+      // 读入唯一入口（W11）：形状 / 脏值 / 「里程碑晚于 wave」的防御都在那里。
+      const parsed = parseWorldMapState(data.worldMaps[key]);
+      if (parsed) extras.worldMaps[key] = parsed;
     }
   }
-}
-
-/**
- * 波次存档值 → 安全整数。
- *
- * `NaN` / `Infinity` / 负数 / 非数字 / 0 一律归 0（0 波等价于「本图无进度」）。
- */
-export function worldWaveOf(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
-}
-
-function cloneWorldMaps(
-  source: Record<string, { map: string; wave?: number }>,
-): Record<string, { map: string; wave?: number }> {
-  const out: Record<string, { map: string; wave?: number }> = {};
-  for (const key of Object.keys(source)) {
-    const entry = source[key];
-    if (!entry) continue;
-    const wave = worldWaveOf(entry.wave);
-    out[key] = wave > 0 ? { map: entry.map, wave } : { map: entry.map };
-  }
-  return out;
 }

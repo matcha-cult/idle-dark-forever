@@ -33,6 +33,7 @@ import type { BattleSink, Clock, Logger, Rng, TimerHandle } from '../contracts/p
 import type { DataTables, LootEntry, MapData } from '../contracts/data.js';
 import { Timeline } from '../sim/index.js';
 import { lootRuleActionOf } from '../rules/loot-rule.js';
+import { isCombatArea } from '../rules/combat-area.js';
 import { absorbAttrKey, mitigationKindOf, resistAttrKey } from '../rules/damage.js';
 import {
   KEYSTONE_DROP_RATE,
@@ -42,6 +43,7 @@ import {
   pickKeystoneTier,
 } from '../rules/keystone.js';
 import { Camps } from './camps.js';
+import { clampEnemyQuality } from './enemy-rarity.js';
 import { isChaosMap } from '../rules/chaos.js';
 import { EnemyBorn, type Born, type BornSavedState } from './spawner.js';
 import { EnemyUnit } from './enemy-unit.js';
@@ -213,6 +215,14 @@ export class BattleWorld {
    * `> 0` 是**缺陷/病态信号**（正常玩法永远为 0），必须能在 `/api/metrics` 看到。
    */
   refusedUnits = 0;
+  /**
+   * 野外图玩家阵亡待处理标志（W11 / 决策 4）。
+   *
+   * 只在**非混沌的战斗图**置位（混沌图走 `chaosOutcome = 'death'` 的失败分支，语义不同）。
+   * 服务端每次 tick 读取它：读到就调 {@link resetOpenWorldRun} 重置本图 run
+   * （`wave = 0`、里程碑复位、清场、重新武装刷怪器），然后把标志清零。
+   */
+  openWorldDeath = false;
   player: PlayerLike | null = null;
   playerUnit: PlayerUnit | null = null;
 
@@ -336,6 +346,40 @@ export class BattleWorld {
     }
   }
 
+  /**
+   * 记录玩家**在野外战斗图中阵亡**（W11 / 决策 4）。
+   *
+   * 语义：任意波次阵亡 → 本图 run 作废，**自动重开**（`wave = 0`、里程碑复位、清场重刷），
+   * 复活时长不变（`10 + level × 0.5` 秒，原地复活）。
+   *
+   * 边界：
+   * - **混沌图不置位**（走 `chaosOutcome = 'death'` 的失败分支，二者语义不同）；
+   * - **非战斗区不置位**（`isCombatArea` 为假 ⇒ 没有波次可重开，置位只会产生无意义的
+   *   「进入地图」日志）。
+   *
+   * ⚠️ **刻意不加任何护栏**（产品拍板）：不做「连续死亡 N 次停止回退」、不自动退回上一张图、
+   * 不弹确认。打不过就自己回去刷装备或退回能打的图 —— 系统不为玩家做选择。
+   */
+  noteOpenWorldPlayerDeath(): void {
+    if (this.isChaosMap) return;
+    if (!isCombatArea(this.mapData)) return;
+    this.openWorldDeath = true;
+  }
+
+  /**
+   * 重开本图 run：波数归 0、里程碑复位、清场、重新武装刷怪器（W11 / 决策 4）。
+   *
+   * 复用 {@link onMapChanged}（与「重复进入当前地图 = 重置本图」同一条路径），
+   * 因此顺带发出一次 `mapEnter` 日志 —— 这正是「自动重新进入地图」应有的可观测效果。
+   *
+   * 有意**不销毁 / 不重建会话**：那会牵进离线时间锚点（`player.timestamp`）、`opId` 幂等、
+   * 跨服命令与会话回收竞态；这里的效果等价。
+   */
+  resetOpenWorldRun(): void {
+    this.openWorldDeath = false;
+    this.onMapChanged();
+  }
+
   getMedicineLevel(type: string): number {
     return this.medicineLevel(type);
   }
@@ -438,11 +482,14 @@ export class BattleWorld {
     return unit;
   }
 
-  /**
-   * 野外怪物等级覆写（W4）。
+  /** 野外怪物等级覆写（W4 / W11）。
    *
-   * 普通 = 地图等级 / 稀有（`quality >= 1`）+1；守关 BOSS 由 `EnemyBorn.trySpawnWorldBoss`
-   * 在生成后覆写为地图等级 +2。
+   * 普通（`quality 0`）= 地图等级 / 稀有（`quality 1`）+1 / 精英（`quality 2`）+2；
+   * 守关 BOSS 由 `EnemyBorn.trySpawnWorldBoss` 在生成后覆写为地图等级 +2。
+   *
+   * ⚠️ 这里把 `quality` 夹到 `0..2`：怪物稀有度是**四阶**（普通/稀有/精英/传奇），
+   * `quality` 超过 2（词缀更多）不再继续加等级 —— 否则 `quality` 一旦异常（NaN / Infinity /
+   * 负 / 极大）会把怪物等级推到天上去，进而毁掉掉落等级门槛与展示。
    */
   private applyOpenWorldLevelOverride(unit: EnemyUnit, quality: number): void {
     const mapData = this.mapData;
@@ -454,7 +501,7 @@ export class BattleWorld {
     if (typeof mapLevel !== 'number' || !Number.isFinite(mapLevel)) {
       return;
     }
-    unit.levelOverride = mapLevel + (quality >= 1 ? 1 : 0);
+    unit.levelOverride = mapLevel + clampEnemyQuality(quality);
   }
 
   addEnemySaved(saved: Record<string, unknown> & { type?: string; quality?: number }): EnemyUnit {
@@ -723,6 +770,28 @@ export class BattleWorld {
     }
   }
 
+  /**
+   * **通关清算**：击杀本图守关 BOSS（首次）时，一次性发放地图数据里的 `exp`（W11 / 决策 2）。
+   *
+   * 这是原版秘境的清算口径 —— 原版 `DungeonState.switchToPhase` 在阶段全清时
+   * `world.gotExp(mapData.exp, …)` 一次性给经验，然后再回 `outside`。本仓库 W6 删掉旧秘境体系时
+   * 把这条链路一起删了，只留下 `MapEntry.exp` 这个**死字段**（此前全仓唯一引用是一条
+   * `Number.isFinite` 断言）。这里把它重新接上。
+   *
+   * 「全额」：W10 起 `PlayerUnit.gotExp` **不再做等级差衰减**，所以第二个参数只是保住
+   * `world.gotExp(exp, level)` 的冻结端口契约（当前不参与计算）。`expRate` / `expInc` /
+   * `expMul` 钩子**照常生效**（那是玩家的加成与运营开关，不属于「衰减」）。
+   *
+   * 边界：`exp` 缺失 / 非有限 / `<= 0` → 直接不发（不产生 0 经验事件）。
+   */
+  grantWorldClearReward(): void {
+    const exp = this.mapData?.exp;
+    if (typeof exp !== 'number' || !Number.isFinite(exp) || exp <= 0) {
+      return;
+    }
+    this.gotExp(exp, this.playerUnit?.level ?? 0);
+  }
+
   // ────────────────────────────── 掉落 ──────────────────────────────
 
   /**
@@ -924,6 +993,75 @@ export class BattleWorld {
     }
 
     return this.lootGoods(slots);
+  }
+
+  /**
+   * **精英必掉**（W11 / 决策 3）：保证至少产出一条**通货 / 精华**实例。
+   *
+   * ## 为什么需要显式逻辑（不能指望 `quality` 自动化）
+   *
+   * `loots(…, quality)` 的 `quality` **只**作用于 `entry.type === 'equip'` 分支的
+   * `randomEquip` 的 `mfRate`。而怪物掉落里的 equip 类**已物理删除**（W7 起），
+   * 剩下的全是 `{ key, count:[n,n], rate }` 形态的通货 / 精华 ——
+   * `count = ceil(rate × updateRate − rng)` 与 `quality` 无关。
+   * ⇒ 品质对掉落**零影响**，精英的"必掉"必须由本方法承担。
+   *
+   * ## 池子从哪来（不复制数据表）
+   *
+   * 不硬编码任何通货 key：直接从**该怪自己的 `loots`** 里筛出
+   * 「`wallet === true` 的 `key` 条目」（`registerCraftDrops` 已把 `CRAFT_DROP_SPECS` +
+   * `ESSENCE_DROP_RATES` 注入每只怪），用各自 `rate` 作**权重**抽一条，
+   * 再把它的 `rate` 强制为 `1`。这样：① 等级门槛（`minLevel`）沿用既有口径
+   * `min(怪物等级, 地图等级)`；② 池子随数据表自动跟随；③ 不新增随机源（只用 `rng.loot`）。
+   *
+   * ## 为什么是「真·保证」
+   *
+   * 钱包物品**不占背包格、无容量上限、永不 `handled:'lost'`**（AGENTS §19），
+   * 且 `key` 类条目在 `loots()` 里直接 `handled:'pickup'`、**不经过拾取规则** ——
+   * 所以这条掉落**一定**进钱包。刻意不绕过玩家设置的前提在这里自然成立，无需额外处理。
+   *
+   * 边界：池子为空（无掉落表的怪 / 全部被 `minLevel` 挡掉）→ 静默不发，
+   * 不消耗随机数（`rng.loot` 在筛选之后才用）。
+   */
+  lootEliteGuaranteed(loots: LootEntry[], level: number, quality: number): void {
+    const mapLevel = this.mapData?.level;
+    const gateLevel = typeof mapLevel === 'number' ? Math.min(level, mapLevel) : level;
+
+    const pool: Array<{ key: string; weight: number }> = [];
+    for (const raw of loots) {
+      const entry = raw as {
+        key?: unknown;
+        type?: unknown;
+        rate?: unknown;
+        minLevel?: unknown;
+        maxLevel?: unknown;
+      };
+      // 只收 `key` 形态（排除 equip / specialEquip / maxLevel）。
+      if (entry.type !== undefined) continue;
+      if (typeof entry.key !== 'string' || entry.key === '') continue;
+      // 通货 / 精华 = 钱包物品（唯一真相 `GoodData.wallet`）。
+      if (this.tables.goods[entry.key]?.wallet !== true) continue;
+      if (typeof entry.minLevel === 'number' && gateLevel < entry.minLevel) continue;
+      if (typeof entry.maxLevel === 'number' && gateLevel > entry.maxLevel) continue;
+      const weight = entry.rate;
+      if (typeof weight !== 'number' || !Number.isFinite(weight) || weight <= 0) continue;
+      pool.push({ key: entry.key, weight });
+    }
+    if (pool.length === 0) return;
+
+    const total = pool.reduce((sum, e) => sum + e.weight, 0);
+    let dice = this.rng.loot.next() * total;
+    let hit = pool[pool.length - 1]!;
+    for (const e of pool) {
+      if (dice < e.weight) {
+        hit = e;
+        break;
+      }
+      dice -= e.weight;
+    }
+
+    // `rate: 1` + `noUpdateRate` ⇒ `count = ceil(1 − rng) = 1`，且离线倍速不会把它放大成多份。
+    this.loots([{ key: hit.key, count: [1, 1], rate: 1 }], level, quality, false, true);
   }
 
   /**

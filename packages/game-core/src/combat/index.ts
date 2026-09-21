@@ -25,5 +25,6 @@ export * from './buff-state.js';
 export * from './unit.js';
 export * from './player-unit.js';
 export * from './enemy-unit.js';
+export * from './enemy-rarity.js';
 export * from './battle-world.js';
 export * from './spawner.js';

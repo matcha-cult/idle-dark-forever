@@ -25,6 +25,7 @@ import {
 } from '@idle-dark/ui-kit';
 import { useRootStore } from '../../../app/root-context.js';
 import { isAttackableCamp, isDead } from '../../../stores/world-store.js';
+import { UnitRarityTag } from './UnitRarityTag.js';
 
 /**
  * 伤害类型的中文名（**照抄原版** `dark-forever-memorize/src/logics/renderMessage.js`
@@ -399,6 +400,9 @@ export const BattlePanel = observer(function BattlePanel() {
                   onClick={focus}
                   extra={
                     <Flex gap={4}>
+                      {/* W11：怪物稀有度四阶（服务端派生 `rarity`；普通档不贴标）。
+                          精英（每 10 波保底）与守关 BOSS 因此一眼可辨。 */}
+                      <UnitRarityTag rarity={unit.rarity} />
                       {/* 黄名中立怪：不主动攻击、也不会被溅射打到，必须玩家手动点它才会开战
                           （原版「单位」面板语义）。 */}
                       {unit.camp === 'neutral' ? <Tag color="gold">中立</Tag> : null}

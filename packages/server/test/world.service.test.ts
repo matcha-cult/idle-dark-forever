@@ -15,10 +15,8 @@ import type { NotificationBatcher, PushFrame } from '../src/modules/game/notific
 import { OpIdempotencyService } from '../src/modules/game/op-idempotency.service.js';
 import type { OnlineSessionService } from '../src/modules/online/online-session.service.js';
 import { PanelCharacterService } from '../src/modules/logic/shared/panel-character.service.js';
-import {
-  PlayerContextService,
-  worldWaveOf,
-} from '../src/modules/logic/shared/player-context.service.js';
+import { PlayerContextService } from '../src/modules/logic/shared/player-context.service.js';
+import { worldWaveOf } from '../src/modules/logic/shared/world-map-state.js';
 import { InProcessEventBus } from '../src/modules/logic/shared/event-bus.js';
 import { WorldService } from '../src/modules/logic/world/world.service.js';
 import { WORLD_CONFIG } from '../src/modules/logic/world/world.config.js';
@@ -510,4 +508,106 @@ describe('WorldService', () => {
     const extras = await fresh.extrasOf(1);
     expect(worldWaveOf(extras.worldMaps['c1']?.wave)).toBe(7);
   });
+
+  // ────────────────────────────── W11 / R3 / 决策 4 ──────────────────────────────
+
+  it('W11：四阶稀有度在 tick 帧里下发（普通 0 / 稀有 1 / 精英 2 / 传奇 3）', async () => {
+    await startInStreet();
+    const live = await service.start(1, 'c1');
+    const world = live!.world;
+    world.addEnemy('slime.minimal', null, 0); // 普通
+    world.addEnemy('slime.minimal', null, 1); // 稀有
+    const elite = world.addEnemy('slime.minimal', null, 2); // 精英（quality 2）
+    elite.elite = true;
+    for (let i = 0; i < WORLD_BOSS_WAVE_INTERVAL; i += 1) world.enemyBorn!.completeWave();
+
+    now += 1000;
+    service.tick();
+    const units = [...foldPatches(tickFrames()).values()];
+    const rarities = new Set(units.map((u) => u.rarity));
+    expect(rarities.has(0)).toBe(true); // 普通
+    expect(rarities.has(1)).toBe(true); // 稀有
+    expect(rarities.has(2)).toBe(true); // 精英
+    expect(rarities.has(3)).toBe(true); // 传奇（守关 BOSS）
+
+    // `elite` 与 `boss` 一样是可选出生字段：非精英一律省略（不为 false）。
+    expect(units.filter((u) => u.elite === true)).toHaveLength(1);
+    expect(units.every((u) => u.elite === undefined || u.elite === true)).toBe(true);
+    // 精英的 `rarity` 必须是 2（服务端派生，不靠前端拼）。
+    expect(units.find((u) => u.elite === true)?.rarity).toBe(2);
+  });
+
+  it('R3 回归：会话重启后守关 BOSS **当波补刷**（旧实现要等到第 40 波）', async () => {
+    await startInStreet();
+    const live = await service.start(1, 'c1');
+    if (!live?.world.enemyBorn) throw new Error('缺少刷怪器');
+    for (let i = 0; i < WORLD_BOSS_WAVE_INTERVAL; i += 1) live.world.enemyBorn.completeWave();
+    expect(live.world.enemyBorn.wave).toBe(WORLD_BOSS_WAVE_INTERVAL);
+    expect(bossCount(live.world)).toBe(1);
+    expect(eliteCount(live.world)).toBe(1); // 第 10 波精英
+
+    // 重启：会话销毁（BOSS / 精英单位不入档），侧车留下 wave=20 + 里程碑。
+    await service.stop(1, 'c1');
+    const back = await service.start(1, 'c1');
+    expect(back?.world.enemyBorn?.wave).toBe(WORLD_BOSS_WAVE_INTERVAL);
+    expect(bossCount(back!.world)).toBe(1);
+    // 已交付过的精英**不会**重复补刷（里程碑幂等）。
+    expect(eliteCount(back!.world)).toBe(0);
+  });
+
+  it('W11 决策 4：野外阵亡 → 本图 run 重开（波数归 0、清场），会话不销毁', async () => {
+    await startInStreet();
+    const live = await service.start(1, 'c1');
+    const spawner = live!.world.enemyBorn!;
+    for (let i = 0; i < 12; i += 1) spawner.completeWave();
+    expect(spawner.wave).toBe(12);
+    expect(eliteCount(live!.world)).toBe(1);
+
+    live!.world.playerUnit!.kill();
+    expect(live!.world.openWorldDeath).toBe(true);
+
+    now += 1000;
+    service.tick();
+
+    expect(live!.world.openWorldDeath).toBe(false);
+    expect(live!.world.enemyBorn).not.toBe(spawner);
+    expect(live!.world.enemyBorn!.wave).toBe(0);
+    expect(live!.world.enemyBorn!.lastEliteWave).toBe(0);
+    // 清场：只剩玩家（及其召唤链）。
+    expect(live!.world.units.every((u) => u.camp === 'player' || u.camp === 'ghost')).toBe(true);
+    // 会话没被销毁：玩家单位仍在（原地复活照常）。
+    expect(live!.world.playerUnit).toBeTruthy();
+
+    // 波数 0 也落了库（`stop` 走 `persistPosition`，同步可断言）。
+    await service.stop(1, 'c1');
+    const extras = await context.extrasOf(1);
+    expect(extras.worldMaps['c1']?.map).toBe('world.1');
+    expect(worldWaveOf(extras.worldMaps['c1']?.wave)).toBe(0);
+  });
+
+  it('W11 决策 4：混沌图阵亡**不**走野外重开（保持 chaosOutcome 失败分支）', async () => {
+    await startInStreet();
+    const live = await service.start(1, 'c1');
+    // 直接把会话挪到混沌图（跳过混沌仪入口，只为验证内核分支）。
+    live!.world.map = 'chaos.t01';
+    live!.world.onMapChanged();
+    live!.world.playerUnit!.kill();
+    expect(live!.world.openWorldDeath).toBe(false);
+    expect(live!.world.chaosOutcome).toBe('death');
+
+    now += 1000;
+    service.tick();
+    // 重开标志没置位 ⇒ tick 不应重置刷怪器波数（波数保持 0，但也不是被"重开"过）。
+    expect(live!.world.enemyBorn!.wave).toBe(0);
+  });
 });
+
+/** 场上守关 BOSS 数量。 */
+function bossCount(world: { units: unknown[] }): number {
+  return world.units.filter((u) => (u as { worldBoss?: boolean }).worldBoss === true).length;
+}
+
+/** 场上精英数量。 */
+function eliteCount(world: { units: unknown[] }): number {
+  return world.units.filter((u) => (u as { elite?: boolean }).elite === true).length;
+}

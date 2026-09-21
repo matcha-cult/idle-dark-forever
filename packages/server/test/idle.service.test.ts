@@ -166,4 +166,57 @@ describe('IdleService · R5 离线结算编排（RD1/RD2/RD7 + 幂等）', () =>
     expect(context.peek(1, 'c1')?.timestamp).toBe(now);
   });
 
+  // ────────────────────────────── W11 / R0 回归 ──────────────────────────────
+
+  it('R0：离线结算**不得**吞掉波数与里程碑（旧实现手拼 `{ map }` 抹掉 `wave`）', async () => {
+    // 侧车里有真实进度：已挂到第 21 波，第 20 波窗口的精英与 BOSS 都已交付。
+    const extras = await context.extrasOf(1);
+    extras.worldMaps['c1'] = {
+      map: 'world.1',
+      wave: 21,
+      lastEliteWave: 20,
+      lastBossWave: 20,
+    };
+    context.markAccountDirty(1);
+    await context.flushAccount(1);
+
+    now += 2 * HOUR;
+    const idle = new IdleService(context, () => now, tables);
+    const result = await idle.report(1, 'c1');
+    expect(result.success).toBe(true);
+
+    const expected = {
+      map: 'world.1',
+      wave: 21,
+      lastEliteWave: 20,
+      lastBossWave: 20,
+    };
+    // 1) 缓存里原样保留。
+    const after = await context.extrasOf(1);
+    expect(after.worldMaps['c1']).toEqual(expected);
+
+    // 2) **落库**后同样保留 —— 用新的 PlayerContextService 从 DB 重读，排除"只改了缓存"。
+    const fresh = new PlayerContextService(db.asService(), () => now, tables);
+    const persisted = await fresh.extrasOf(1);
+    expect(persisted.worldMaps['c1']).toEqual(expected);
+  });
+
+  it('R0：位置被改成另一张图 → 进度归零（换图不继承）', async () => {
+    const extras = await context.extrasOf(1);
+    extras.worldMaps['c1'] = { map: 'world.1', wave: 21, lastEliteWave: 20, lastBossWave: 20 };
+    context.markAccountDirty(1);
+    await context.flushAccount(1);
+
+    // 存档漂移：侧车记录改成 `home`（安全区）→ 离线零收益，且进度不跟过去。
+    extras.worldMaps['c1'] = { map: 'home' };
+    context.markAccountDirty(1);
+    await context.flushAccount(1);
+
+    now += HOUR;
+    const idle = new IdleService(context, () => now, tables);
+    const result = await idle.report(1, 'c1');
+    expect(result.success).toBe(true);
+    const after = await context.extrasOf(1);
+    expect(after.worldMaps['c1']).toEqual({ map: 'home' });
+  });
 });

@@ -10,6 +10,7 @@ export * from './game-clock.js';
 export * from './exp-rate.js';
 export * from './offline.js';
 export * from './player-dto.js';
+export * from './world-map-state.js';
 export * from './battle-command.js';
 export * from './map-dto.js';
 export * from './battle-collector.js';
