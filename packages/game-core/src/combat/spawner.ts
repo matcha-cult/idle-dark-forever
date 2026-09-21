@@ -105,7 +105,12 @@ export class Born {
     return count;
   }
 
-  /** 是否已达到本图同时存活上限（达到后**暂停自然刷新**，等有怪死亡再恢复）。 */
+  /**
+   * 是否已达到**本图**同时存活上限（达到后暂停自然刷新，等有怪死亡再恢复）。
+   *
+   * ⚠️ 与 `world.atUnitCap()`（**全局单位硬顶**，I2）不是一回事：本函数只看
+   * `config.max`，而 BOSS / 技能召唤物可以把它推过 `max`；全局硬顶是最后一道保险。
+   */
   atMonsterCap(): boolean {
     const max = this.config.max;
     return typeof max === 'number' && max > 0 && this.aliveMonsterCount() >= max;
@@ -172,7 +177,11 @@ export class Born {
     }
     // W12：全图怪物总数（含 BOSS 与召唤物）达到上限 → 暂停自然刷新。
     // 保持定时轮询，因此召唤物 / 杂兵死亡后会自动恢复刷新，不会永久停刷。
-    if (this.atMonsterCap()) {
+    //
+    // 此外还要查**全局单位硬顶**（I2）：`addEnemy` 在超顶时会**拒绝注册**，
+    // 而本函数在其后会 `count += 1 / total += 1` —— 若不在**调用前**拦住，
+    // 记账会失真、该波永远无法判定完成。这里的提前 return 让刷新推迟而**不是丢失**。
+    if (this.atMonsterCap() || this.world.atUnitCap()) {
       this.setTimer();
       return;
     }
@@ -344,6 +353,10 @@ export class EnemyBorn {
       return;
     }
     if (this.world.units.some((u) => u instanceof EnemyUnit && u.worldBoss)) {
+      return;
+    }
+    // I2：全图单位已达硬顶 → 本次不刷 BOSS（下一波还会再试，不会永久丢失）。
+    if (this.world.atUnitCap()) {
       return;
     }
     const unit = this.world.addEnemy(bossKey, null, 0);

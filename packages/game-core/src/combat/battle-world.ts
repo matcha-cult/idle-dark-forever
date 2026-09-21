@@ -181,6 +181,22 @@ export class SkillScheduler {
   }
 }
 
+/**
+ * 单张地图（一个 `BattleWorld`）内**单位总数的硬顶**（I2 的「全局预算」）。
+ *
+ * 为什么需要：自然刷新有闸门（`Born.atMonsterCap()`，本图 `max` = 4），但
+ * **BOSS 与技能召唤物可以把它推过 `max` 且没有数量上限**，唯一边界是「召唤物随
+ * `SkillState` 释放而清除」这条**时间**上的边界。于是：
+ *
+ * - 推送侧的差分循环 `O(单位数 × 9)` 每 200ms/角色无上界（违反 I2）；
+ * - 单帧无上界（20 个召唤物的一次 `reset` ≈ 20 × 264B ≈ 5.3KB）；
+ * - 服务端 `lastSentUnits` 内存 `264B × N/会话` 无上界。
+ *
+ * 取值 32 是**安全阀而不是平衡旋钮**：正常玩法（4 自然怪 + 1 BOSS + 少量召唤）
+ * 约 10 个单位，离它很远；它只在病态情况下兜底。超出后的行为见 `addEnemy`。
+ */
+export const MAX_UNITS_PER_WORLD = 32;
+
 export class BattleWorld {
   readonly clock: Clock;
   readonly logicClock: Clock;
@@ -191,6 +207,12 @@ export class BattleWorld {
   readonly scheduler: SkillScheduler;
 
   units: Unit[] = [];
+  /**
+   * 因超过 {@link MAX_UNITS_PER_WORLD} 而被**拒绝注册**的敌人数（I3：不许静默降级）。
+   *
+   * `> 0` 是**缺陷/病态信号**（正常玩法永远为 0），必须能在 `/api/metrics` 看到。
+   */
+  refusedUnits = 0;
   player: PlayerLike | null = null;
   playerUnit: PlayerUnit | null = null;
 
@@ -335,6 +357,18 @@ export class BattleWorld {
     return unit;
   }
 
+  /**
+   * 全图单位总数是否已达硬顶（I2 的「全局预算」）。
+   *
+   * 自然刷新的闸门是 `Born.atMonsterCap()`（本图 `max`，实测 4）；本闸门管的是
+   * **BOSS / 技能召唤物可以把它推过 `max`** 的那条无界增长路径。刷怪器与 BOSS 刷新
+   * 都必须先查它，否则 `addEnemy` 拒绝注册会让 `Born` 的 `count`/`total` 记账失真、
+   * 波次永远无法完成。
+   */
+  atUnitCap(): boolean {
+    return this.units.length >= MAX_UNITS_PER_WORLD;
+  }
+
   addEnemy(
     type: string,
     borner: Born | null,
@@ -344,6 +378,26 @@ export class BattleWorld {
   ): EnemyUnit {
     const unit = new EnemyUnit(this, type, quality);
     unit.initKeepAlives();
+
+    // ── I2 超载行为：超出单位硬顶 ⇒ **不注册进世界**（不进 `units`，因此不进差分 / 帧 /
+    //    `lastSentUnits` 内存），但**仍然返回一个有效对象**，让数据层的
+    //    `unit.addBuff(...)` / `self.runAttrHooks(unit, 'summonedUnit')` 不会崩。
+    //
+    //    为什么直接改 `camp` 而不是 `kill()`：`EnemyUnit.kill()` 会挂 3s 清尸定时器，
+    //    到期 `removeUnit` 虽然对不在表内的单位是安全 no-op，但纯属多余；
+    //    而 `camp = ghost` 足以让技能 / 读条 / Buff / 受击**全部 early-return**，
+    //    且构造期排入调度队列的那一次求值会因 ghost 立即返回（不重排，无定时器泄漏）。
+    if (this.atUnitCap()) {
+      unit.camp = Camps.ghost;
+      unit.borner = null;
+      unit.summoner = null;
+      unit.summonSkill = null;
+      this.refusedUnits += 1;
+      // I3：不许静默降级 —— 有事件（走 `general`，前端可见）+ 有计数（metrics）。
+      this.sink.general({ text: `world.unitCap:${type}` });
+      return unit;
+    }
+
     this.applyOpenWorldLevelOverride(unit, quality);
     unit.borner = borner;
     unit.summoner = summoner ?? null;
