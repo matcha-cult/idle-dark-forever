@@ -210,6 +210,87 @@ export interface PlayerStateDto {
 
 // ────────────────────────────── 战斗世界 ──────────────────────────────
 
+/**
+ * 玩家单位属性面板（原版 `battle/components/PlayerPanel.js` 的那张表）。
+ *
+ * ## 这是「展示投影」，不是内核原值
+ *
+ * 所有 `…Pct` 字段是**已经 ×100 的百分数**（`16.7` 表示 16.7%），
+ * `…Recovery5s` 是**已经 ×5 的「每 5 秒回复量」**，整数字段是**已经取整**的值。
+ * 换算与取整**全部在服务端**完成（`server/.../internal/player-attributes.ts`），
+ * 前端只负责拼 `%` / `次/秒` 后缀与小数位 —— 前端**不做任何算术**（AGENTS §1.6）。
+ *
+ * ⚠️ 为什么不发内核原值让前端乘：① 违反「前端零推导」；
+ * ② 内核浮点原值每帧都可能抖动出无意义的差分（如 `0.1+0.2`），
+ * 按显示精度取整后差分才是稳定的（`unit-state-diff.ts` 靠内容比较）。
+ *
+ * ## 与原版的三处刻意偏离（内核差异，不是遗漏）
+ *
+ * | 原版 | 本仓 | 依据 |
+ * |---|---|---|
+ * | `耐力 sta` | **不提供** | E1 属性三化：`sta` 已删除且不引入替代属性 |
+ * | 巅峰等级 `peakLevel`（`(39)`） | **不提供** | Q8 删巅峰后无额外等级项 |
+ * | `darkResist` / `darkAbsorb`（暗影） | `chaosResist` / `chaosAbsorb`（混沌） | P7：混沌非元素、全抗不作用于它 |
+ *
+ * 原版「骑士显示圣能 `comboPoint`」一行本次未实现（截图是战士；`comboPoint` 已在
+ * `UnitStateDto` 上，需要时由 UI 按职业补一行即可）。
+ */
+export interface PlayerAttributesDto {
+  /** 当前职业显示名（原版 `careerName`）。无当前职业时为 `''`。 */
+  careerName: string;
+  /** 当前职业的等级上限（原版括号里的「等级上限：N」）。 */
+  maxLevel: number;
+  // ── 三维（原版还有「耐力」，本仓 E1 已删除） ──
+  str: number;
+  dex: number;
+  int: number;
+  // ── 输出 ──
+  atk: number;
+  /** 次/秒（原版 `atkSpeed`，1 位小数）。 */
+  atkSpeed: number;
+  /** 速度加成 `(speedRate - 1) × 100`。 */
+  speedBonusPct: number;
+  critRatePct: number;
+  critBonusPct: number;
+  /** 法术伤害加成 `(dmgAdd - 1) × 100`。 */
+  dmgBonusPct: number;
+  // ── 收益 ──
+  hpFromKill: number;
+  mpFromKill: number;
+  /** `(expInc - 1) × 100`。 */
+  expBonusPct: number;
+  /** `(skillExpInc - 1) × 100`。 */
+  skillExpBonusPct: number;
+  /** 装备品质提升 `(mf - 1) × 100`。 */
+  magicFindPct: number;
+  /** 掉落金币提升 `(gf - 1) × 100`。 */
+  goldFindPct: number;
+  // ── 防御 ──
+  dodgeRatePct: number;
+  def: number;
+  fireResist: number;
+  coldResist: number;
+  lightningResist: number;
+  /** 原版「暗影抗性」；P7 起混沌非元素，不吃智力全抗。 */
+  chaosResist: number;
+  fireAbsorbPct: number;
+  coldAbsorbPct: number;
+  lightningAbsorbPct: number;
+  /** 原版「暗影吸收」。 */
+  chaosAbsorbPct: number;
+  /** 物理吸收（内核字段名 `meleeAbsorb`）。 */
+  meleeAbsorbPct: number;
+  // ── 回复 ──
+  /** 每 5 秒回复量 `hpRecovery × 5`。 */
+  hpRecovery5s: number;
+  mpRecovery5s: number;
+  rpRecovery5s: number;
+  epRecovery5s: number;
+  /** 怒气消耗回复生命。 */
+  rpRecHp: number;
+  leech: number;
+}
+
 /** 单位运行时快照（服务端权威，前端只渲染）。 */
 export interface UnitStateDto {
   id: string;
@@ -254,6 +335,23 @@ export interface UnitStateDto {
    * - 缺省（字段未下发）按**存活**处理，兼容旧服务端。
    */
   alive?: boolean;
+  /**
+   * 角色属性面板（**仅玩家单位携带**，其余单位省略）。
+   *
+   * 展示投影，已换算 + 已取整（见 {@link PlayerAttributesDto}）。
+   * ⚠️ 它在 `MUTABLE_UNIT_FIELDS` 白名单里：升级 / 换装 / 词缀变化会重发整份属性对象
+   * （对象只有玩家单位有，且只在真的变化时发）。
+   */
+  attributes?: PlayerAttributesDto;
+  /**
+   * 当前职业经验 / 升级所需经验（**仅玩家单位携带**）。
+   *
+   * ⚠️ 为什么独立于 `attributes`：经验**每次击杀都会变**，塞进属性对象会让「一整份属性」
+   * 跟着经验每帧重发（约 400B × 5Hz）。独立字段下这一帧只多约 20B，而且它变化时
+   * `gainedExp !== 0` 本来就已经触发了一帧（不会额外制造帧）。
+   */
+  exp?: number;
+  maxExp?: number;
 }
 
 /** 地图展示态。 */

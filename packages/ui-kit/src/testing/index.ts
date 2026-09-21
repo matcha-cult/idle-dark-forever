@@ -18,7 +18,7 @@ export {
   resetViewport,
   setViewportWidth,
 } from './viewport.js';
-export { makeSlot, makeUnit, resetFixtureSeed } from './fixtures.js';
+export { makeAttributes, makeSlot, makeUnit, resetFixtureSeed } from './fixtures.js';
 
 /**
  * 把 React 元素渲染成 HTML 字符串（无 DOM 依赖，node 环境可用）。

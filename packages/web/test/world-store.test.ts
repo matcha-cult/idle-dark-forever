@@ -255,6 +255,45 @@ describe('WorldStore 单位补丁（P2）', () => {
     expect(store.units.map((u) => u.id)).toEqual(['fresh']);
   });
 
+  it('属性 / 经验补丁：整份 `attributes` 替换 + `level` / `maxHp` / `exp` 逐字段覆盖', () => {
+    // 服务端把属性打包成一个对象下发，客户端必须**整份替换**（而不是深合并）——
+    // 深合并会让「已经掉下来的属性」永远留在旧值上。
+    const { store } = makeHarness();
+    pushTick(store, tick({
+      patch: [{
+        op: 'reset',
+        units: [{
+          ...unit('p'),
+          kind: 'player',
+          camp: 'player',
+          level: 1,
+          maxHp: 60,
+          attributes: { careerName: '战士', maxLevel: 60, str: 1, atk: 10 },
+        }],
+      }],
+    }));
+    pushTick(store, tick({
+      patch: [{
+        op: 'chg',
+        id: 'p',
+        fields: {
+          level: 2,
+          maxHp: 70,
+          exp: 5,
+          maxExp: 100,
+          attributes: { careerName: '战士', maxLevel: 60, str: 2, atk: 12 },
+        },
+      }],
+    }));
+    const player = store.units[0];
+    expect(player?.level).toBe(2);
+    expect(player?.maxHp).toBe(70);
+    expect(player?.exp).toBe(5);
+    expect(player?.maxExp).toBe(100);
+    // 整份替换：`str` 从 1 变 2，且**不会**残留被移除的键。
+    expect(player?.attributes).toEqual({ careerName: '战士', maxLevel: 60, str: 2, atk: 12 });
+  });
+
   it('isDead：优先服务端 alive，其次 camp，最后回落 hp', async () => {
     const { isDead } = await import('../src/stores/world-store.js');
     expect(isDead({ alive: false, camp: 'enemy', hp: 10 })).toBe(true);

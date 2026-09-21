@@ -11,6 +11,7 @@ export {
   qualityLabel,
 } from './quality.js';
 export { QuantityInput, type QuantityInputProps } from './quantity-input.js';
+export { PlayerAttributesPanel, type PlayerAttributesPanelProps } from './player-attributes-panel.js';
 export {
   RarityPaletteProvider,
   type RarityColor,

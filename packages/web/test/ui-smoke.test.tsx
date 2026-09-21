@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { ReactElement } from 'react';
 import { runInAction } from 'mobx';
 import { WORLD_CMD } from '@idle-dark/protocol';
-import { htmlToText, renderToHtml } from '@idle-dark/ui-kit/testing';
+import { htmlToText, makeAttributes, renderToHtml } from '@idle-dark/ui-kit/testing';
 import { RootStore } from '../src/app/root-store.js';
 import { RootStoreProvider } from '../src/app/root-context.js';
 import { ThemeRoot } from '../src/theme/theme-root.js';
@@ -193,5 +193,71 @@ describe('页面渲染冒烟（有数据，防空分支假绿）', () => {
     });
     const text = htmlToText(render(<>{renderPanelContent('battle')}</>, root));
     expect(text).not.toContain('守关 BOSS 现身');
+  });
+
+  /**
+   * 玩家单位（属性面板的数据源）。数值刻意带百分数，用来钉住
+   * 「前端不再乘 100」这条最容易漂移的约定。
+   */
+  const PLAYER_UNIT = {
+    id: 'u-player',
+    kind: 'player',
+    typeKey: 'c1',
+    name: '艾尔',
+    camp: 'player',
+    level: 100,
+    quality: 0,
+    hp: 4263,
+    maxHp: 4263,
+    mp: 0,
+    maxMp: 0,
+    rp: 0,
+    maxRp: 100,
+    ep: 0,
+    maxEp: 0,
+    comboPoint: 0,
+    targetId: null,
+    castingProgress: null,
+    buffs: [],
+    attributes: makeAttributes({ critRatePct: 16.7 }),
+    exp: 3602,
+    maxExp: 30720,
+  };
+
+  it('角色属性：玩家单位在场 → 面板按服务端数值渲染（百分数不再乘 100）', () => {
+    const root = seed([HOME, STREET]);
+    pushTick(root, { serverTime: 1, patch: [{ op: 'add', unit: PLAYER_UNIT }] });
+    const html = render(<>{renderPanelContent('battle')}</>, root);
+    const text = htmlToText(html);
+
+    expect(html).toContain('data-testid="player-attributes-panel"');
+    expect(text).toContain('艾尔');
+    expect(text).toContain('等级100');
+    expect(text).toContain('16.7%');
+    expect(text).not.toContain('1670');
+    expect(text).toContain('3,602 / 30,720');
+  });
+
+  it('角色属性：没有玩家单位 → 空态提示，不是空白、也不是 NaN', () => {
+    const root = seed([HOME, STREET]);
+    const html = render(<>{renderPanelContent('battle')}</>, root);
+    const text = htmlToText(html);
+
+    expect(text).toContain('暂无角色属性');
+    expect(html).not.toContain('data-testid="player-attributes-panel"');
+    expect(html).not.toContain('NaN');
+  });
+
+  it('角色属性：只认 `kind === player`（敌方单位不带属性，也不会被误当成本角色）', () => {
+    const root = seed([HOME, STREET]);
+    pushTick(root, {
+      serverTime: 1,
+      patch: [{ op: 'add', unit: { ...PLAYER_UNIT, id: 'u-enemy', kind: 'enemy', camp: 'enemy', name: '大史莱姆', attributes: undefined } }],
+    });
+    const html = render(<>{renderPanelContent('battle')}</>, root);
+    const text = htmlToText(html);
+
+    expect(html).not.toContain('data-testid="player-attributes-panel"');
+    expect(text).toContain('暂无角色属性');
   });
 });

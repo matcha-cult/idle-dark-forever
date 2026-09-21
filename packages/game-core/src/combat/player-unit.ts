@@ -73,6 +73,13 @@ export interface CareerLike {
 export interface PlayerLike {
   key?: number | null;
   name: string;
+  /**
+   * 当前职业的**显示名**（原版 `PlayerMeta.careerName`；无当前职业 / 表里查不到 → `undefined`）。
+   *
+   * 可选：`Player` 通过 `extends PlayerMeta` 天然具备；测试替身可以不实现，
+   * 属性面板会回落到 `careerData.key`（见 `server/.../internal/player-attributes.ts`）。
+   */
+  careerName?: string;
   level: number;
   exp: number;
   maxExp: number;

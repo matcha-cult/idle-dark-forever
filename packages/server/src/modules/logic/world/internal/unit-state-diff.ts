@@ -18,21 +18,26 @@
  * ## 可变字段白名单是唯一真相
  *
  * 只有 `MUTABLE_UNIT_FIELDS` 里的字段会在单位出生后变化；其余字段（`id` / `kind` /
- * `typeKey` / `name` / `level` / `quality` / `maxHp` / `maxMp` / `maxRp` / `maxEp` /
- * `boss`）出生即固定，**只在 `add` / `reset` 里出现一次**。实测这部分占单个单位 DTO
- * 的 64%（170B/264B），是本次优化的主要来源。
+ * `typeKey` / `name` / `quality` / `boss`）出生即固定，**只在 `add` / `reset` 里出现一次**。
+ * 实测这部分占单个单位 DTO 的 64%（170B/264B），是本次优化的主要来源。
  *
  * ⚠️ `camp` **必须**算可变字段：① 死亡 `enemy → ghost`（`unit.ts` `kill()`）；
  * ② 中立怪被攻击参战 `neutral → enemy`（`enemy-unit.ts` `setTarget`）。
  *
+ * ⚠️ **玩家单位的 `level` / `maxHp` / `maxMp` / `maxRp` / `maxEp` / `exp` / `maxExp` /
+ * `attributes` 也必须算可变字段**（属性面板批次补入）。这些字段对**敌人**确实出生即固定，
+ * 但玩家单位会因升级 / 换装 / 词缀 / 强化而整体变化 —— 旧白名单把它们当静态，
+ * 于是升级后客户端的等级与血条上限**永远停在出生值**（血条被夹到 100%，
+ * 看起来像「血一直满的」）。对敌人而言这些值恒定，不会产生任何补丁，因此没有额外流量。
+ *
  * ## 预算与超载行为（I2）
  *
- * 本模块是**纯函数**，无 IO、无副作用。单次调用规模 = `O(单位数 × 9)`；单位数上界由
+ * 本模块是**纯函数**，无 IO、无副作用。单次调用规模 = `O(单位数 × 白名单长度)`；单位数上界由
  * 同屏上限（`max`）+ BOSS 召唤物给出（实测 5 个），调用方每个 200ms 窗口调用一次。
  */
 import type { BattleEventDto, LootDto, UnitPatchOpDto, UnitStateDto } from '@idle-dark/protocol';
 
-/** 出生后仍会变化的字段（唯一真相；改动必须同步 `ai-docs/16` 与 AGENTS §19）。 */
+/** 出生后仍会变化的字段（唯一真相；改动必须同步 `ai-docs/16` 与 AGENTS §20.3）。 */
 export const MUTABLE_UNIT_FIELDS = [
   'hp',
   'mp',
@@ -43,7 +48,16 @@ export const MUTABLE_UNIT_FIELDS = [
   'castingProgress',
   'buffs',
   'camp',
-] as const;
+  // ── 玩家单位专用（对敌人恒定 ⇒ 无额外流量） ──
+  'level',
+  'maxHp',
+  'maxMp',
+  'maxRp',
+  'maxEp',
+  'exp',
+  'maxExp',
+  'attributes',
+] as const satisfies readonly (keyof UnitStateDto)[];
 
 export type MutableUnitField = (typeof MUTABLE_UNIT_FIELDS)[number];
 

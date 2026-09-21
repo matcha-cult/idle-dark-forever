@@ -6,6 +6,7 @@
  */
 import type { UnitStateDto } from '@idle-dark/protocol';
 import { Camps, EnemyUnit, PlayerUnit, Unit } from '@idle-dark/game-core';
+import { playerAttributesOf } from './player-attributes.js';
 
 function finite(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
@@ -92,5 +93,13 @@ export function unitStateDtoOf(unit: Unit, playerUnit: PlayerUnit | null): UnitS
   };
   // W4：守关 BOSS 显式标记（**不要用 key 比较**：同一敌人既可能是某图 BOSS 又是另一图普通怪）。
   if (unit instanceof EnemyUnit && unit.worldBoss) dto.boss = true;
+  // 属性面板 + 经验只属于**玩家单位**（原版 `PlayerPanel` 是每张玩家卡的属性表）。
+  // 用 `instanceof` 而不是 `unit === playerUnit`：即使调用方没传 playerUnit（离线结算等），
+  // 玩家单位也照样带上属性；反之敌方单位无论如何都拿不到这两个字段。
+  if (unit instanceof PlayerUnit) {
+    dto.attributes = playerAttributesOf(unit);
+    dto.exp = finite(unit.exp);
+    dto.maxExp = finite(unit.maxExp);
+  }
   return dto;
 }

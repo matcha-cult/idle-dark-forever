@@ -44,9 +44,58 @@ function unit(partial: Partial<UnitStateDto> & { id: string }): UnitStateDto {
 const indexOf = (...units: UnitStateDto[]) => unitStateIndexOf(units);
 
 describe('MUTABLE_UNIT_FIELDS', () => {
-  it('包含会在出生后变化的 9 个字段，且 camp 必须在列（死亡 enemy→ghost / 中立参战 neutral→enemy）', () => {
+  it('包含会在出生后变化的字段，且 camp 必须在列（死亡 enemy→ghost / 中立参战 neutral→enemy）', () => {
     expect([...MUTABLE_UNIT_FIELDS].sort()).toEqual(
-      ['buffs', 'camp', 'castingProgress', 'comboPoint', 'ep', 'hp', 'mp', 'rp', 'targetId'].sort(),
+      [
+        // 所有单位都会变
+        'buffs',
+        'camp',
+        'castingProgress',
+        'comboPoint',
+        'ep',
+        'hp',
+        'mp',
+        'rp',
+        'targetId',
+        // 只有玩家单位会变（升级 / 换装 / 词缀 / 强化）；对敌人恒定 ⇒ 无额外流量
+        'attributes',
+        'exp',
+        'level',
+        'maxEp',
+        'maxExp',
+        'maxHp',
+        'maxMp',
+        'maxRp',
+      ].sort(),
+    );
+  });
+
+  it('真实存在这些字段：白名单里的键必须都是 `UnitStateDto` 的键（防拼写错误）', () => {
+    // 拼错一个字段名不会报错，只会让该字段**永远不参与差分**（静默失效）。
+    // 这一条由编译期 `satisfies readonly (keyof UnitStateDto)[]` 保证（见白名单定义处），
+    // 运行期只需确认白名单非空且无重复。
+    expect(MUTABLE_UNIT_FIELDS.length).toBeGreaterThan(0);
+    expect(new Set(MUTABLE_UNIT_FIELDS).size).toBe(MUTABLE_UNIT_FIELDS.length);
+  });
+
+  it('⚠️ 玩家单位的静态假象：`level` / `maxHp` / `attributes` 变化**必须**产生补丁', () => {
+    // 旧白名单把这些当静态 → 升级后客户端的等级与血条上限永远停在出生值。
+    const before = indexOf(unit({ id: 'p', kind: 'player', level: 1, maxHp: 60 }));
+    const ops = diffUnitStates(before, [
+      unit({
+        id: 'p',
+        kind: 'player',
+        level: 2,
+        maxHp: 70,
+        exp: 5,
+        maxExp: 100,
+        attributes: { careerName: '战士', maxLevel: 60, str: 1 } as never,
+      }),
+    ]);
+    expect(ops).toHaveLength(1);
+    expect(ops[0]?.op).toBe('chg');
+    expect(Object.keys(ops[0]?.op === 'chg' ? (ops[0].fields ?? {}) : {}).sort()).toEqual(
+      ['attributes', 'exp', 'level', 'maxExp', 'maxHp'].sort(),
     );
   });
 });
@@ -196,10 +245,12 @@ describe('diffUnitStates', () => {
     expect(ops).toEqual([{ op: 'chg', id: 'n1', fields: { camp: 'enemy' } }]);
   });
 
-  it('⚠️ 静态字段变化**不得**产生补丁（否则每帧都会误报）', () => {
+  it('⚠️ 真·静态字段变化**不得**产生补丁（否则每帧都会误报）', () => {
+    // 真正出生即固定的只有「身份 / 类别 / 敌人词缀条数 / 是不是 BOSS」。
+    // ⚠️ `level` / `maxHp` 等**不在此列**：玩家单位升级会改它们，见上一条回归。
     const before = indexOf(unit({ id: 'a' }));
     const ops = diffUnitStates(before, [
-      unit({ id: 'a', name: '换了个名字', level: 99, maxHp: 999, typeKey: 'other', quality: 3, boss: true }),
+      unit({ id: 'a', name: '换了个名字', typeKey: 'other', quality: 3, boss: true }),
     ]);
     expect(ops).toEqual([]);
   });

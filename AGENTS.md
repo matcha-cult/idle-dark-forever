@@ -414,18 +414,26 @@ cmd 段唯一归属、每个 `*LogicServer` 里不得出现 `@ActionMethod`。
 ### 20.3 可变字段白名单是唯一真相
 
 唯一实现在 `packages/server/src/modules/logic/world/internal/unit-state-diff.ts` 的
-`MUTABLE_UNIT_FIELDS`（**9 个**）：
+`MUTABLE_UNIT_FIELDS`（**17 个**）：
 
 ```
 hp mp rp ep comboPoint targetId castingProgress buffs camp
+level maxHp maxMp maxRp maxEp exp maxExp attributes
 ```
 
-其余字段（`id/kind/typeKey/name/level/quality/maxHp/maxMp/maxRp/maxEp/boss`）**出生即固定**，
-只在 `add`/`reset` 里出现一次 —— 这部分占单个单位 DTO 的 **64%**（170B/264B），是优化的主要来源。
+其余字段（`id/kind/typeKey/name/quality/boss`）**出生即固定**，只在 `add`/`reset` 里出现一次
+—— 这部分占单个单位 DTO 的 **64%**（170B/264B），是优化的主要来源。
 
 ⚠️ **`camp` 必须在白名单里**：① 死亡 `enemy → ghost`（`unit.ts#kill()`）；
 ② 中立怪被攻击参战 `neutral → enemy`（`enemy-unit.ts#setTarget`）。
 ⚠️ `buffs` 必须**归一化后比较**（按 `key` 排序），否则数组顺序抖动会让静默率归零。
+⚠️ **玩家单位不是「出生即固定」**：第二行只有玩家会变（升级 / 换装 / 词缀 / 强化），
+对敌人恒定 ⇒ 无额外流量。判定标准是「**对所有单位**都不变吗」，不是「对敌人不变」——
+把 `level` / `maxHp` 当静态的后果是升级后客户端等级与血条上限**永远停在出生值**
+（血条被夹到 100%，看起来像血一直满的）。
+⚠️ `exp` **不得塞进 `attributes`**：经验每次击杀都变，塞进去会让整份属性对象（约 400B）
+跟着每帧重发；独立字段只多约 20B，且它变化时 `gainedExp !== 0` 本就已触发一帧。
+属性面板契约（展示投影 + 与原版的三处刻意偏离）见 [`ai-docs/18`](ai-docs/18-装备与伤害体系约定.md) §18.7。
 
 ### 20.4 死亡 ≠ 移除（最容易搞错的一条）
 
@@ -482,7 +490,7 @@ hp mp rp ep comboPoint targetId castingProgress buffs camp
 ### 20.10 单位硬顶 `MAX_UNITS_PER_WORLD = 32`（I2 的全局预算，详版 [`ai-docs/24`](ai-docs/24-推送观测与实测数据.md)）
 
 - 常量为 `game-core/src/combat/battle-world.ts` 的 `MAX_UNITS_PER_WORLD`。
-  **为什么需要**：BOSS 与技能召唤物能突破刷怪闸门且**无数量上限**，于是差分循环 `O(单位数 × 9)`、
+  **为什么需要**：BOSS 与技能召唤物能突破刷怪闸门且**无数量上限**，于是差分循环 `O(单位数 × 白名单长度)`、
   单帧字节、`lastSentUnits` 内存三者都无上界。
 - **超载行为**（`BattleWorld.addEnemy`）：达顶 ⇒ **不注册进 `units`**，但仍**返回有效对象**并立刻
   `camp = ghost`（数据层的 `addBuff` / `runAttrHooks` 不会崩），同时 `refusedUnits += 1` 并发
