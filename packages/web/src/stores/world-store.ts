@@ -34,6 +34,15 @@ export interface BattleLogEntry {
 /** 日志保留上限（避免长时间挂机把内存吃满）。 */
 const MAX_LOG_ENTRIES = 200;
 
+/**
+ * `单位 id → 显示名` 注册表的上限。
+ *
+ * ⚠️ 这张表必须**比单位本身活得久**：日志保留 200 条（可能跨越数十次清尸），
+ * 而单位死亡后 3s 就会被清出单位表。若渲染时只查「当前单位」，历史行就会退化成
+ * 原始 id（实测 39% 的引用查不到名字）。
+ */
+const MAX_UNIT_NAMES = 512;
+
 /** 守关 BOSS 刷新间隔的兜底（服务端 `bossEvery` 缺失 / 非法时使用）。 */
 export const DEFAULT_BOSS_EVERY = 20;
 
@@ -85,15 +94,24 @@ export class WorldStore {
   private readonly unitMap = new Map<string, UnitStateDto>();
   /** 自愈重拉是否在进行中（避免基线不一致时反复重拉）。 */
   private resyncPending = false;
+  /**
+   * `单位 id → 显示名` 的**历史注册表**（只增不减，超出上限按插入序淘汰最旧）。
+   *
+   * 用途：日志是「历史」，单位表是「当下」——用当下查历史必然有名字缺失。
+   * 名字是服务端下发的**不可变标识**（`add`/`reset`/快照里都有），这里只做缓存，
+   * 不做任何推导。
+   */
+  private readonly unitNames = new Map<string, string>();
 
   constructor(private readonly ctx: StoreContext) {
-    makeAutoObservable<this, 'ctx' | 'guard' | 'logSeq' | 'unitMap' | 'resyncPending'>(
+    makeAutoObservable<this, 'ctx' | 'guard' | 'logSeq' | 'unitMap' | 'unitNames' | 'resyncPending'>(
       this,
       {
         ctx: false,
         guard: false,
         logSeq: false,
         unitMap: false,
+        unitNames: false,
         resyncPending: false,
         units: observable.shallow,
         maps: observable.shallow,
@@ -257,6 +275,15 @@ export class WorldStore {
     }
   }
 
+  /**
+   * 单位 id → 显示名（日志渲染用）。
+   *
+   * 查不到时回落**原始 id**（不猜、不省略），这样缺名字是可见的而不是静默变成空串。
+   */
+  nameOf(id: string): string {
+    return this.unitNames.get(id) ?? id;
+  }
+
   /** 清空本地战斗日志（纯展示态）。 */
   clearLog(): void {
     runInAction(() => {
@@ -317,11 +344,17 @@ export class WorldStore {
     for (const op of patch) {
       if (op.op === 'reset') {
         this.unitMap.clear();
-        for (const unit of op.units ?? []) this.unitMap.set(unit.id, unit);
+        for (const unit of op.units ?? []) {
+          this.unitMap.set(unit.id, unit);
+          this.rememberUnitName(unit);
+        }
         continue;
       }
       if (op.op === 'add') {
-        if (op.unit !== undefined && typeof op.unit.id === 'string') this.unitMap.set(op.unit.id, op.unit);
+        if (op.unit !== undefined && typeof op.unit.id === 'string') {
+          this.unitMap.set(op.unit.id, op.unit);
+          this.rememberUnitName(op.unit);
+        }
         continue;
       }
       if (op.op === 'del') {
@@ -346,6 +379,20 @@ export class WorldStore {
     }
   }
 
+  /** 记入名字注册表（幂等；超出上限淘汰最旧，保证长时间挂机内存有界）。 */
+  private rememberUnitName(unit: { id?: unknown; name?: unknown }): void {
+    const id = unit?.id;
+    const name = unit?.name;
+    if (typeof id !== 'string' || id === '' || typeof name !== 'string' || name === '') return;
+    if (this.unitNames.has(id)) return;
+    this.unitNames.set(id, name);
+    while (this.unitNames.size > MAX_UNIT_NAMES) {
+      const oldest = this.unitNames.keys().next();
+      if (oldest.done === true) break;
+      this.unitNames.delete(oldest.value);
+    }
+  }
+
   /** 掉落提示（`loot` 分区与旧的 `(battle, loot)` 路由共用）。 */
   private applyLoot(loot: LootDto | undefined): void {
     if (loot?.slot === undefined) return;
@@ -365,7 +412,10 @@ export class WorldStore {
     this.snapshot = snapshot;
     // 快照 = 差分基线：重建单位表，后续补丁都相对它。
     this.unitMap.clear();
-    for (const unit of snapshot.units ?? []) this.unitMap.set(unit.id, unit);
+    for (const unit of snapshot.units ?? []) {
+      this.unitMap.set(unit.id, unit);
+      this.rememberUnitName(unit);
+    }
     this.units = [...this.unitMap.values()];
     this.maps = snapshot.maps;
     this.updateRate = snapshot.updateRate;

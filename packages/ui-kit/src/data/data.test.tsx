@@ -61,17 +61,26 @@ describe('LogPanel', () => {
     expect(html).toContain('00:02');
   });
 
-  it('只渲染最后 maxItems 条（截断而非虚拟滚动）', () => {
+  it('只渲染**最新**的 maxItems 条：entries 是倒序，截断丢最旧的（尾部）', () => {
+    // entries = [log-1(最新), log-2, log-3(最旧)]（见该文件顶部的 fixture）
     const html = renderToHtml(<LogPanel entries={entries} maxItems={2} />);
-    expect(html).not.toContain('data-testid="log-1"');
+    expect(html).toContain('data-testid="log-1"');
     expect(html).toContain('data-testid="log-2"');
-    expect(html).toContain('data-testid="log-3"');
+    expect(html).not.toContain('data-testid="log-3"');
   });
 
   it('maxItems=0 时全部截掉但仍渲染容器', () => {
     const html = renderToHtml(<LogPanel entries={entries} maxItems={0} />);
     expect(html).toContain('log-panel-body');
     expect(html).not.toContain('log-1');
+  });
+
+  it('顺序契约：按入参顺序渲染（新在最前），不做二次反转', () => {
+    const html = renderToHtml(<LogPanel entries={entries} />);
+    const at = (id: string) => html.indexOf(`log-${id}`);
+    expect(at('1')).toBeGreaterThanOrEqual(0);
+    expect(at('1')).toBeLessThan(at('2'));
+    expect(at('2')).toBeLessThan(at('3'));
   });
 
   it('空日志显示空态文案（可覆盖）', () => {

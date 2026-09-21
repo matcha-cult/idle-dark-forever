@@ -146,24 +146,41 @@ describe('WorldService', () => {
     expect(tickFrames()[0]?.seq).toBe(1);
   });
 
-  it('P2：帧形状 —— units/events 恒空、seq 递增、patch 非空且 log/loot 为数组', async () => {
+  it('P2：帧形状 —— units/events 恒空、seq 递增、每帧至少一个非空分区', async () => {
     await startInStreet();
-    // 30 个 tick：`tick()` 走 CPU 预算调度，全量并行跑门禁时单轮可能被切断，
-    // 因此这里与同文件的其它用例一样给足 tick 数，避免负载抖动造成假失败。
     for (let i = 0; i < 30; i += 1) {
       now += 1000;
       service.tick();
     }
     const ticks = tickFrames();
     expect(ticks.length).toBeGreaterThan(0);
+
+    // ⚠️ 不要断言「每帧都有非空 patch」：`patch` **合法为空** ——
+    // 只发生日志 / 经验金币 / 波次推进的窗口同样要发帧（判据见 `worldFrameOf`）。
+    // 真正的不变式是「发出去的帧至少有一个非空分区」（其逆否即「无变化不发」）。
+    let prevWave = 0;
     for (const frame of ticks) {
       expect(frame.units).toEqual([]);
       expect(frame.events).toEqual([]);
       expect(Array.isArray(frame.patch)).toBe(true);
       expect(Array.isArray(frame.log)).toBe(true);
       expect(Array.isArray(frame.loot)).toBe(true);
-      expect((frame.patch ?? []).length).toBeGreaterThan(0);
+      const wave = frame.wave ?? 0;
+      const hasContent =
+        (frame.patch ?? []).length > 0 ||
+        (frame.log ?? []).length > 0 ||
+        (frame.loot ?? []).length > 0 ||
+        frame.gainedExp !== 0 ||
+        frame.gainedGold !== 0 ||
+        wave !== prevWave;
+      expect(hasContent).toBe(true);
+      prevWave = wave;
     }
+
+    // 首帧必为 `reset`（客户端差分基线），因此至少有帧带补丁。
+    expect(ticks.some((frame) => (frame.patch ?? []).length > 0)).toBe(true);
+    expect(ticks[0]?.patch?.[0]?.op).toBe('reset');
+
     const seqs = ticks.map((frame) => frame.seq ?? 0);
     expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
     expect(new Set(seqs).size).toBe(seqs.length);

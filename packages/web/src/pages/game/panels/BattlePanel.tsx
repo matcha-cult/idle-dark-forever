@@ -26,22 +26,41 @@ import {
 import { useRootStore } from '../../../app/root-context.js';
 import { isAttackableCamp, isDead } from '../../../stores/world-store.js';
 
-/** 战斗事件 → 日志条目（纯展示映射，不改变任何数值）。 */
+/**
+ * 战斗数值文案（伤害 / 治疗 / 吸收）。
+ *
+ * ⚠️ **不能直接用 `formatAmount`**：它是**整数截断**（面向金币 / 数量），而战斗数值是
+ * 浮点，怪物一击常常 < 1 —— 截断后日志会满屏 `melee 0`，看着像「没造成伤害」。
+ * 这里对小于 100 的小数保留 1 位，其余仍走 `formatAmount`（千分位、整数）。
+ */
+export function formatBattleValue(value: unknown): string {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '0';
+  if (Math.abs(numeric) >= 100 || Number.isInteger(numeric)) return formatAmount(numeric);
+  const rounded = Math.round(numeric * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+/**
+ * 战斗事件 → 日志条目（纯展示映射，不改变任何数值）。
+ *
+ * `nameOf` 必须是**能查到历史单位**的查表函数（`world.nameOf`）——日志是历史，
+ * 单位表是当下，用当下查历史必然有名字缺失。
+ */
 export function formatBattleEvent(
   event: BattleEventDto,
-  names: Readonly<Record<string, string>>,
+  nameOf: (id: string) => string,
 ): { text: string; level: LogLevel } {
-  const nameOf = (id: string): string => names[id] ?? id;
   switch (event.kind) {
     case 'damage':
       return {
-        text: `${nameOf(event.fromId)} → ${nameOf(event.toId)} ${event.skill || '攻击'} ${formatAmount(event.value)}${
-          event.absorbed > 0 ? `（吸收 ${formatAmount(event.absorbed)}）` : ''
+        text: `${nameOf(event.fromId)} → ${nameOf(event.toId)} ${event.skill || '攻击'} ${formatBattleValue(event.value)}${
+          event.absorbed > 0 ? `（吸收 ${formatBattleValue(event.absorbed)}）` : ''
         }${event.crit ? ' 暴击' : ''}`,
         level: 'damage',
       };
     case 'heal':
-      return { text: `${nameOf(event.fromId)} 治疗 ${nameOf(event.toId)} ${formatAmount(event.value)}`, level: 'heal' };
+      return { text: `${nameOf(event.fromId)} 治疗 ${nameOf(event.toId)} ${formatBattleValue(event.value)}`, level: 'heal' };
     case 'dodge':
       return { text: `${nameOf(event.toId)} 闪避了 ${event.skill || '攻击'}`, level: 'warning' };
     case 'death':
@@ -49,9 +68,44 @@ export function formatBattleEvent(
     case 'buff':
       return { text: `${nameOf(event.unitId)} ${event.on ? '获得' : '失去'} ${event.name}`, level: 'system' };
     case 'exp':
-      return { text: `经验 +${formatAmount(event.amount)} → Lv.${event.level}`, level: 'loot' };
+      return { text: `经验 +${formatBattleValue(event.amount)} → Lv.${event.level}`, level: 'loot' };
     default:
-      return { text: event.text, level: 'info' };
+      return { text: formatGeneralText(event.text), level: 'info' };
+  }
+}
+
+/**
+ * `general` 事件文案化。
+ *
+ * 内核用 `general` 承载「没有专门契约事件」的提示（见 `battle-world.ts` 的出站路径），
+ * 文案是 `key:参数...` 形式。**这里只做展示映射**，未知前缀原样透出（不吞、不猜），
+ * 以免新前缀静默消失。
+ */
+export function formatGeneralText(text: string): string {
+  if (typeof text !== 'string' || text === '') return '';
+  const parts = text.split(':');
+  const key = parts[0];
+  switch (key) {
+    case 'enemy.appear': {
+      const name = parts[1];
+      return name === undefined || name === '' ? '敌人出现' : `遭遇 ${name}`;
+    }
+    case 'map.enter': {
+      // 形如 `map.enter:<mapKey>:<地图名>`；地图名可能自身含冒号，取剩余部分。
+      const name = parts.slice(2).join(':');
+      return name === '' ? '进入地图' : `进入 ${name}`;
+    }
+    case 'player.death': {
+      // 形如 `player.death:<角色名>:<复活秒数>`
+      const name = parts[1] ?? '';
+      const seconds = parts[2];
+      const suffix = seconds === undefined || seconds === '' ? '' : `（${seconds}s 后复活）`;
+      return `${name === '' ? '你' : name} 阵亡${suffix}`;
+    }
+    case 'world.unitCap':
+      return '场上单位已达上限，未能召唤更多敌人';
+    default:
+      return text;
   }
 }
 
@@ -73,11 +127,8 @@ export const BattlePanel = observer(function BattlePanel() {
   const visibleMaps = showLocked ? world.maps : unlockedMaps;
   const unlockedCount = unlockedMaps.length;
 
-  const names: Record<string, string> = {};
-  for (const unit of world.units) names[unit.id] = unit.name;
-
   const entries: LogEntry[] = world.log.map((entry) => {
-    const formatted = formatBattleEvent(entry.event, names);
+    const formatted = formatBattleEvent(entry.event, (id) => world.nameOf(id));
     return { id: String(entry.seq), text: formatted.text, level: formatted.level };
   });
 

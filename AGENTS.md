@@ -1,6 +1,9 @@
 # AGENTS.md —— idle-dark-forever 工程约定
 
 > 面向在本仓库工作的 AI 代理与工程师。**新增环境坑或约定时在此追加一节，不要删旧节。**
+>
+> ⚠️ **本文档有注入字节预算（约 64KB），超出部分会被静默截断** —— 新节请写短，
+> 细节放 `ai-docs/*` 并在本节留指针；追加后用 `wc -c AGENTS.md` 自查。
 
 `idle-dark-forever` 是《永夜2016典藏重置版》（纯前端单机游戏，源仓库 `/home/nbb/projects/dark-forever-memorize`）
 的**服务端权威重制版**：ionet-ts + NestJS 后端，React + Vite + Antd + MobX 前端。
@@ -955,3 +958,16 @@ hp mp rp ep comboPoint targetId castingProgress buffs camp
 （`game-core/src/data/skills.ts` 里确有 37 处 `addBuff`，但样本内一次都没触发；疑似因
 角色输出/生存极端、或 100 级阵亡惩罚 `10 + level×0.5 = 60s` 导致大量时间处于尸体状态）。
 若将来在**真实装备档**上观察到 Buff 常驻，再按本文 §20.3 的方案改绝对时间戳。
+
+---
+
+## 21. 战斗日志面板：顺序与名字（细节见 [`ai-docs/16`](ai-docs/16-战斗推送通道-累计制.md) §7）
+
+- **`entries` 新在最前**（`appendEvents` 插队首）⇒ `ui-kit` 的 `<LogPanel>` 必须
+  **截断丢尾部**（`slice(0, maxItems)`）+ **`scrollTop = 0`（顶部）**。两处必须同时正确，
+  否则「日志倒叙 + 滚到底」= 永远看不到新条目。
+- **名字解析必须查历史注册表**：用 `world.nameOf(id)`（`unitNames`，上限 512，插入序淘汰），
+  **不要**用 `world.units` 现建映射 —— 日志是历史、单位表是当下（尸体 3s 后被清），
+  实测 41% 的引用查不到名字；接上注册表后 0%。
+- `general` 事件的 `key:参数` 文案走 `formatGeneralText()`（**未知前缀原样透出**）。
+- 战斗数值走 `formatBattleValue()`；**不要**用 `formatAmount`（整数截断 → 满屏 `melee 0`）。

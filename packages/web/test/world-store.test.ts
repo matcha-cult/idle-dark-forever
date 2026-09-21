@@ -225,3 +225,63 @@ describe('WorldStore 单位补丁（P2）', () => {
     expect(isDead({ camp: 'enemy', hp: 5 })).toBe(false);
   });
 });
+
+describe('WorldStore 单位名注册表（日志历史名字）', () => {
+  function unit(id: string, name: string) {
+    return {
+      id,
+      kind: 'enemy',
+      typeKey: 'slime.minimal',
+      name,
+      camp: 'enemy',
+      level: 1,
+      quality: 0,
+      hp: 25,
+      maxHp: 25,
+      mp: 0,
+      maxMp: 0,
+      rp: 0,
+      maxRp: 0,
+      ep: 0,
+      maxEp: 0,
+      comboPoint: 0,
+      targetId: null,
+      castingProgress: null,
+      buffs: [],
+    };
+  }
+
+  it('单位被 del（清尸）之后，nameOf 仍能查到名字 —— 日志是历史，单位表是当下', () => {
+    const { store } = makeHarness();
+    pushTick(store, tick({ patch: [{ op: 'reset', units: [unit('2', '大史莱姆')] }] }));
+    expect(store.nameOf('2')).toBe('大史莱姆');
+
+    // 清尸：从单位表移除…
+    pushTick(store, tick({ patch: [{ op: 'del', id: '2' }] }));
+    expect(store.units).toHaveLength(0);
+    // …但历史日志里的名字必须还在
+    expect(store.nameOf('2')).toBe('大史莱姆');
+  });
+
+  it('快照播种的单位的名字也进注册表（进图前就存在的单位）', async () => {
+    const { store } = makeHarness(snapshot({ units: [unit('1', '艾尔') as never] }));
+    await store.load();
+    expect(store.nameOf('1')).toBe('艾尔');
+    pushTick(store, tick({ patch: [{ op: 'reset', units: [] }] }));
+    expect(store.nameOf('1')).toBe('艾尔');
+  });
+
+  it('从未见过的 id 回落原始 id（缺名字要可见，不能变空串）', () => {
+    const { store } = makeHarness();
+    expect(store.nameOf('404')).toBe('404');
+  });
+
+  it('注册表有界：超过 512 条时按插入序淘汰最旧，内存不随挂机无限增长', () => {
+    const { store } = makeHarness();
+    const many = Array.from({ length: 600 }, (_, i) => unit(`u${i}`, `怪${i}`));
+    pushTick(store, tick({ patch: [{ op: 'reset', units: many }] }));
+    // 最旧的已被淘汰 → 回落原始 id；最新的仍在
+    expect(store.nameOf('u0')).toBe('u0');
+    expect(store.nameOf('u599')).toBe('怪599');
+  });
+});
