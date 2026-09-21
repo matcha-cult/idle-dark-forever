@@ -95,13 +95,14 @@ export class WorldStore {
   /** 自愈重拉是否在进行中（避免基线不一致时反复重拉）。 */
   private resyncPending = false;
   /**
-   * `单位 id → 显示名` 的**历史注册表**（只增不减，超出上限按插入序淘汰最旧）。
+   * `单位 id → { 名字, 阵营 }` 的**历史注册表**（只增不减，超出上限按插入序淘汰最旧）。
    *
    * 用途：日志是「历史」，单位表是「当下」——用当下查历史必然有名字缺失。
-   * 名字是服务端下发的**不可变标识**（`add`/`reset`/快照里都有），这里只做缓存，
-   * 不做任何推导。
+   * 名字与阵营都是服务端下发的**不可变标识**（`add`/`reset`/快照里都有），这里只做缓存，
+   * 不做任何推导。阵营用于日志着色（玩家造成的伤害标红、其它标蓝，对齐原版
+   * `renderMessage.less` 的 `.campPlayer` / `.campOther`）。
    */
-  private readonly unitNames = new Map<string, string>();
+  private readonly unitNames = new Map<string, { name: string; camp: string }>();
 
   constructor(private readonly ctx: StoreContext) {
     makeAutoObservable<this, 'ctx' | 'guard' | 'logSeq' | 'unitMap' | 'unitNames' | 'resyncPending'>(
@@ -281,7 +282,16 @@ export class WorldStore {
    * 查不到时回落**原始 id**（不猜、不省略），这样缺名字是可见的而不是静默变成空串。
    */
   nameOf(id: string): string {
-    return this.unitNames.get(id) ?? id;
+    return this.unitNames.get(id)?.name ?? id;
+  }
+
+  /**
+   * 单位阵营（`'player' | 'enemy' | 'neutral' | 'ghost' | …`）；查不到返回 `''`。
+   *
+   * 只用于日志着色判断「是不是玩家打出的伤害」，不参与任何数值。
+   */
+  campOf(id: string): string {
+    return this.unitNames.get(id)?.camp ?? '';
   }
 
   /** 清空本地战斗日志（纯展示态）。 */
@@ -379,13 +389,13 @@ export class WorldStore {
     }
   }
 
-  /** 记入名字注册表（幂等；超出上限淘汰最旧，保证长时间挂机内存有界）。 */
-  private rememberUnitName(unit: { id?: unknown; name?: unknown }): void {
+  /** 记入名字/阵营注册表（幂等；超出上限淘汰最旧，保证长时间挂机内存有界）。 */
+  private rememberUnitName(unit: { id?: unknown; name?: unknown; camp?: unknown }): void {
     const id = unit?.id;
     const name = unit?.name;
     if (typeof id !== 'string' || id === '' || typeof name !== 'string' || name === '') return;
     if (this.unitNames.has(id)) return;
-    this.unitNames.set(id, name);
+    this.unitNames.set(id, { name, camp: typeof unit.camp === 'string' ? unit.camp : '' });
     while (this.unitNames.size > MAX_UNIT_NAMES) {
       const oldest = this.unitNames.keys().next();
       if (oldest.done === true) break;

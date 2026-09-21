@@ -1,6 +1,16 @@
 /**
  * LogPanel —— 战斗/系统日志面板。
  *
+ * ## 配色契约（对齐原版 `renderMessage.less`）
+ *
+ * 原版的日志**正文不着色**（默认黑字），只有少数片段上色：
+ * `.campPlayer #fb2400`（玩家造成的伤害=红）、`.campOther #0005ff`（其它单位造成的伤害=蓝）、
+ * `.recovery #3eec2f`（治疗=绿）、`.rebornIn #7799ff`（复活秒数）、`.crit`（暴击前缀加粗）。
+ *
+ * 本仓照此实现，但**颜色全部取 antd token**（§7.3 禁内联 hex），因此自动适配主题切换：
+ * 浅色主题下红/蓝压得住白底，深色主题下 token 会换成更亮的同色系，不会在白/黑底上失衡。
+ * 整行着色（曾经的 `level`）已移除 —— 那会让「伤害数字的红/蓝」被整行颜色吞掉。
+ *
  * ## 顺序契约（**新在最前**，别搞反）
  *
  * `entries` 按**倒序**给出：`entries[0]` 是最新一条（`world-store.appendEvents` 用
@@ -20,13 +30,31 @@
 import { Flex, Typography, theme } from 'antd';
 import { useEffect, useRef, type ReactNode } from 'react';
 
-export type LogLevel = 'info' | 'damage' | 'heal' | 'loot' | 'warning' | 'system';
+/**
+ * 日志片段的色调 —— **唯一的着色入口**。
+ *
+ * - `player`：**玩家**造成的伤害数字（红）
+ * - `other`：其它单位造成的伤害数字（蓝）
+ * - `heal`：治疗数字（绿）
+ * - `accent`：强调数字（如复活秒数）
+ */
+export type LogTone = 'player' | 'other' | 'heal' | 'accent';
+
+/** 一段带可选色调的文案。整行由若干片段拼成，未标 `tone` 的用正文色。 */
+export interface LogSegment {
+  text: string;
+  tone?: LogTone;
+  /** 加粗（原版 `.crit` 的 `font-weight: 600`）。 */
+  bold?: boolean;
+}
 
 export interface LogEntry {
   /** 稳定 key（服务端事件序号 / 自增）。 */
   id: string;
+  /** 纯文本（无片段时直接渲染；有 `segments` 时仅作无障碍/回退用）。 */
   text: ReactNode;
-  level?: LogLevel;
+  /** 需要局部着色的片段；省略则整条用正文色。 */
+  segments?: readonly LogSegment[];
   /** 展示用时间戳文案（已格式化，组件不做时间计算）。 */
   time?: ReactNode;
 }
@@ -57,13 +85,12 @@ export function LogPanel(props: LogPanelProps) {
     box.scrollTop = 0;
   }, [entries, autoScroll]);
 
-  const levelColors: Record<LogLevel, string> = {
-    info: token.colorTextSecondary,
-    damage: token.colorError,
+  /** 片段色调 → 主题 token（浅/深色主题各自解析，禁内联 hex）。 */
+  const toneColors: Record<LogTone, string> = {
+    player: token.colorError,
+    other: token.colorInfo,
     heal: token.colorSuccess,
-    loot: token.gold,
-    warning: token.colorWarning,
-    system: token.colorTextTertiary,
+    accent: token.colorPrimary,
   };
 
   // 截断丢**最旧**的（尾部），保留最新 maxItems 条。
@@ -98,11 +125,24 @@ export function LogPanel(props: LogPanelProps) {
                 <Typography.Text
                   style={{
                     fontSize: token.fontSizeSM,
-                    color: levelColors[entry.level ?? 'info'],
+                    // 正文默认色：浅色主题近黑、深色主题近白（原版是「总体黑色字体」）。
+                    color: token.colorText,
                     wordBreak: 'break-word',
                   }}
                 >
-                  {entry.text}
+                  {entry.segments === undefined
+                    ? entry.text
+                    : entry.segments.map((segment, index) => (
+                        <Typography.Text
+                          key={`${entry.id}-${index}`}
+                          style={{
+                            ...(segment.tone === undefined ? {} : { color: toneColors[segment.tone] }),
+                            ...(segment.bold === true ? { fontWeight: 600 } : {}),
+                          }}
+                        >
+                          {segment.text}
+                        </Typography.Text>
+                      ))}
                 </Typography.Text>
               </Flex>
             ))}

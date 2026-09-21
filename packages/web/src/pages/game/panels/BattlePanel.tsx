@@ -21,7 +21,7 @@ import {
   UnitCard,
   formatAmount,
   type LogEntry,
-  type LogLevel,
+  type LogSegment,
 } from '@idle-dark/ui-kit';
 import { useRootStore } from '../../../app/root-context.js';
 import { isAttackableCamp, isDead } from '../../../stores/world-store.js';
@@ -67,13 +67,31 @@ const skillLabelOf = (event: { skill: string; skillName?: string }): string =>
  * `battle.dodge` / `battle.death` / `battle.buff(Off)` / `player.got.exp` /
  * `map.enter` / `enemy.appear` / `player.death`），不要自行改写语序。
  *
- * `nameOf` 必须是**能查到历史单位**的查表函数（`world.nameOf`）——日志是历史，
- * 单位表是当下，用当下查历史必然有名字缺失。
+ * 着色同样对齐原版 `renderMessage.less`：**正文不着色**，只有
+ * ① 伤害数字（玩家打出=红 `player`、其它=蓝 `other`）、
+ * ② 治疗数字（绿 `heal`）、
+ * ③ 复活秒数（`accent`）、
+ * ④ 暴击前缀加粗。
+ *
+ * `lookup` 必须能查到**历史单位**（`world.nameOf` / `world.campOf`）——日志是历史，
+ * 单位表是当下，用当下查历史必然有名字/阵营缺失。
  */
+export interface UnitLookup {
+  nameOf(id: string): string;
+  /** 阵营；查不到返回 `''`（按「非玩家」处理）。 */
+  campOf(id: string): string;
+}
+
+/** 组装一条日志：`text` 由 `segments` 拼出，保证两者永不漂移。 */
+function compose(segments: LogSegment[]): { segments: LogSegment[]; text: string } {
+  return { segments, text: segments.map((segment) => segment.text).join('') };
+}
+
 export function formatBattleEvent(
   event: BattleEventDto,
-  nameOf: (id: string) => string,
-): { text: string; level: LogLevel } {
+  lookup: UnitLookup,
+): { segments: LogSegment[]; text: string } {
+  const nameOf = (id: string): string => lookup.nameOf(id);
   switch (event.kind) {
     case 'damage': {
       const target = nameOf(event.toId);
@@ -83,46 +101,52 @@ export function formatBattleEvent(
       const absorbed = event.absorbed > 0 ? `(${formatLogValue(event.absorbed)}点已吸收)` : '';
       // 原版按 `!from` 分两支：无来源（环境/持续伤害）不点名攻击者。
       // 服务端在 `!skill` 时不发事件，所以 `fromId !== ''` 一支必然有技能。
-      const text =
+      // 原版按 `from.camp === 'player'` 决定伤害数字的红/蓝（不是「谁受伤」）。
+      const tone: LogSegment['tone'] = lookup.campOf(event.fromId) === 'player' ? 'player' : 'other';
+      const head =
         event.fromId === ''
-          ? `${crit}${target}受到了${amount}点${type}伤害。${absorbed}`
-          : `${crit}${nameOf(event.fromId)}的${skillLabelOf(event)}对${target}造成了${amount}点${type}伤害。${absorbed}`;
-      return { text, level: 'damage' };
+          ? `${target}受到了`
+          : `${nameOf(event.fromId)}的${skillLabelOf(event)}对${target}造成了`;
+      const segments: LogSegment[] = [];
+      if (crit !== '') segments.push({ text: crit, bold: true });
+      segments.push({ text: head });
+      segments.push({ text: amount, tone });
+      segments.push({ text: `点${type}伤害。${absorbed}` });
+      return compose(segments);
     }
     case 'heal':
-      return {
-        text: `${nameOf(event.fromId)}的${skillLabelOf(event)}为${nameOf(event.toId)}回复了${formatLogValue(
-          event.value,
-        )}点生命。`,
-        level: 'heal',
-      };
+      return compose([
+        { text: `${nameOf(event.fromId)}的${skillLabelOf(event)}为${nameOf(event.toId)}回复了` },
+        { text: formatLogValue(event.value), tone: 'heal' },
+        { text: '点生命。' },
+      ]);
     case 'dodge': {
       const from = nameOf(event.fromId);
       const to = nameOf(event.toId);
       // 原版：无技能时退化成「造成的伤害被躲闪了」。
       if (event.skill === '' && (event.skillName === undefined || event.skillName === '')) {
-        return { text: `${from}造成的伤害被${to}躲闪了。`, level: 'warning' };
+        return compose([{ text: `${from}造成的伤害被${to}躲闪了。` }]);
       }
-      return { text: `${from}的${skillLabelOf(event)}被${to}躲闪了。`, level: 'warning' };
+      return compose([{ text: `${from}的${skillLabelOf(event)}被${to}躲闪了。` }]);
     }
     case 'death':
-      return { text: `${event.name}死亡了。`, level: 'warning' };
+      return compose([{ text: `${event.name}死亡了。` }]);
     case 'buff':
-      return {
-        text: event.on
-          ? `${nameOf(event.unitId)}受到了${event.name}效果的影响。`
-          : `${nameOf(event.unitId)}的${event.name}效果消失了。`,
-        level: 'system',
-      };
+      return compose([
+        {
+          text: event.on
+            ? `${nameOf(event.unitId)}受到了${event.name}效果的影响。`
+            : `${nameOf(event.unitId)}的${event.name}效果消失了。`,
+        },
+      ]);
     case 'exp':
-      return {
-        text: `${event.whoId === undefined ? '你' : nameOf(event.whoId)}获得了${formatLogValue(
-          event.amount,
-        )}点经验。`,
-        level: 'loot',
-      };
+      return compose([
+        { text: `${event.whoId === undefined ? '你' : nameOf(event.whoId)}获得了` },
+        { text: formatLogValue(event.amount), tone: 'accent' },
+        { text: '点经验。' },
+      ]);
     default:
-      return { text: formatGeneralText(event.text), level: 'info' };
+      return compose(formatGeneralSegments(event.text));
   }
 }
 
@@ -133,6 +157,23 @@ export function formatBattleEvent(
  * 文案是 `key:参数...` 形式。**这里只做展示映射**，未知前缀原样透出（不吞、不猜），
  * 以免新前缀静默消失。已知前缀的文案同样对齐原版 `renderMessage.js`。
  */
+export function formatGeneralSegments(text: string): LogSegment[] {
+  if (typeof text !== 'string' || text === '') return [];
+  const parts = text.split(':');
+  if (parts[0] === 'player.death') {
+    const name = parts[1] ?? '';
+    const seconds = parts[2];
+    if (seconds !== undefined && seconds !== '') {
+      return [
+        { text: `${name === '' ? '你' : name}陷入了昏迷，将在` },
+        { text: formatLogValue(seconds), tone: 'accent' },
+        { text: '秒后恢复。' },
+      ];
+    }
+  }
+  return [{ text: formatGeneralText(text) }];
+}
+
 export function formatGeneralText(text: string): string {
   if (typeof text !== 'string' || text === '') return '';
   const parts = text.split(':');
@@ -180,8 +221,11 @@ export const BattlePanel = observer(function BattlePanel() {
   const unlockedCount = unlockedMaps.length;
 
   const entries: LogEntry[] = world.log.map((entry) => {
-    const formatted = formatBattleEvent(entry.event, (id) => world.nameOf(id));
-    return { id: String(entry.seq), text: formatted.text, level: formatted.level };
+    const formatted = formatBattleEvent(entry.event, {
+      nameOf: (id) => world.nameOf(id),
+      campOf: (id) => world.campOf(id),
+    });
+    return { id: String(entry.seq), text: formatted.text, segments: formatted.segments };
   });
 
   const enter = async (map: MapDto): Promise<void> => {

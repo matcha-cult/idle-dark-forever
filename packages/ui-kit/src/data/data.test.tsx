@@ -48,17 +48,42 @@ describe('StatList', () => {
 });
 
 const entries: LogEntry[] = [
-  { id: '1', text: '战斗开始', time: '00:00', level: 'system' },
-  { id: '2', text: '造成 120 点伤害', time: '00:01', level: 'damage' },
-  { id: '3', text: '拾取 夜刃短剑', time: '00:02', level: 'loot' },
+  { id: '1', text: '战斗开始', time: '00:00' },
+  {
+    id: '2',
+    text: '艾尔的怒击造成了120点物理伤害。',
+    time: '00:01',
+    segments: [
+      { text: '艾尔的怒击造成了' },
+      { text: '120', tone: 'player' },
+      { text: '点物理伤害。' },
+    ],
+  },
+  { id: '3', text: '拾取 夜刃短剑', time: '00:02' },
 ];
 
 describe('LogPanel', () => {
   it('渲染日志文本与时间列', () => {
-    const html = htmlToText(renderToHtml(<LogPanel entries={entries} />));
-    expect(html).toContain('战斗开始');
-    expect(html).toContain('造成 120 点伤害');
-    expect(html).toContain('00:02');
+    // ⚠️ `htmlToText` 会在行内元素之间插空格（浏览器不会）—— 片段化之后文本会被拆成多段，
+    // 因此这里分段断言，而不是拼成整句。
+    const text = htmlToText(renderToHtml(<LogPanel entries={entries} />));
+    expect(text).toContain('战斗开始');
+    expect(text).toContain('艾尔的怒击造成了');
+    expect(text).toContain('120');
+    expect(text).toContain('点物理伤害。');
+    expect(text).toContain('00:02');
+  });
+
+  it('片段着色：正文用 colorText，只有带 tone 的片段额外着色（禁整行着色）', () => {
+    // 只渲染这一条（时间列也会着色，混在一起会干扰计数）
+    const html = renderToHtml(<LogPanel entries={[entries[1]!]} />);
+    // 全表只有两处 color 声明：外层正文色 + 「120」这一段的 tone 色。
+    // 未带 tone 的片段不写颜色 ⇒ 继承正文色（对齐原版「总体黑字、只给伤害数字上色」）。
+    // 带 tone 的片段：写入颜色
+    expect(html).toMatch(/color:[^;"']+[^>]*>120</);
+    // 不带 tone 的片段：**不写**颜色 ⇒ 继承外层正文色（不锁死具体色值，主题无关）
+    expect(/color:[^;"']+[^>]*>艾尔的怒击造成了\s*</.test(html)).toBe(false);
+    expect(/color:[^;"']+[^>]*>点物理伤害。\s*</.test(html)).toBe(false);
   });
 
   it('只渲染**最新**的 maxItems 条：entries 是倒序，截断丢最旧的（尾部）', () => {

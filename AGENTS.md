@@ -809,9 +809,7 @@ __IDLE_DARK__                   // 根 store（临时排查）
   ui-kit 194 / server 404 / web 77。
 - 数据库冒烟 6 项全绿：路由 **28/28**（含 `chaos 140/1..5`）、指标 9/9、线协议 15/15、
   完整流程 22/22、角色归属 10/10、地图控制器 15/15。
-- 提交序列：W1 `0783da2` 钱包 → W2 `d62e60e` 删剧情 → W3 `bf8181e` 地图/100 级/删巅峰 →
-  W4 `b473692` 波次/BOSS → W5 `a0dde55` 钥石 → W6a `343e6d0` 删旧秘境 → W6b `514bc00` 混沌仪 →
-  W7 文档收尾。
+- 提交序列见 `git log`（W1 钱包 → … → W6b 混沌仪 → W7 文档收尾）。
 
 
 ---
@@ -961,16 +959,17 @@ hp mp rp ep comboPoint targetId castingProgress buffs camp
 
 ---
 
-## 21. 战斗日志与战斗数值（细节见 [`ai-docs/16`](ai-docs/16-战斗推送通道-累计制.md) §7/§8）
+## 21. 战斗日志与战斗数值（细节见 [`ai-docs/16`](ai-docs/16-战斗推送通道-累计制.md) §7/§8/§9）
 
 - **文案逐句对齐原版** `dark-forever-memorize/src/logics/renderMessage.js`：伤害 =
-  `{from}的{技能}对{to}造成了{N}点{类型}伤害。`（无来源 = `{to}受到了…`）；治疗 / 躲闪 /
-  死亡 / Buff / 经验 / 进图 / 遭遇 / 昏迷 各有措辞。**不要自创语序**。伤害类型中文名照抄
-  原版 `DAMAGE_TYPES` + 本仓新增 `lightning`/`chaos`/`holy`/`water`/`poison`。
-- **数值取整在展示层**（`formatLogValue` = `Math.round`，同原版）；**引擎保持浮点**。
-  不要在结算处取整：`0.4→0` 让弱怪打高防玩家完全无效、保底 1 又抬高 <1 伤害，两者都改平衡
-  （曾试过已撤销；金样状态哈希 `0xf7d493b3` 未变可证推演未动）。
+  `{from}的{技能}对{to}造成了{N}点{类型}伤害。`（治疗 / 躲闪 / 死亡 / Buff / 经验 / 进图 /
+  遭遇 / 昏迷 同理）。**不要自创语序**。
+- **着色对齐原版** `renderMessage.less`：正文 `colorText` **不着色**，只给伤害数字上色 ——
+  玩家打出 `colorError`(红) / 其它 `colorInfo`(蓝)；治疗 `colorSuccess`；暴击前缀加粗。
+  片段模型 `LogSegment{tone,bold}`；**禁止整行着色**（会吞掉数字的红蓝）。
+- **数值取整在展示层**（`formatLogValue` = `Math.round`，同原版）；**引擎保持浮点** ——
+  在结算处取整会改平衡；金样状态哈希 `0xf7d493b3` 未变即证推演未动。
 - **`entries` 新在最前** ⇒ `<LogPanel>` 必须**截断丢尾部** + **`scrollTop = 0`**。
-- **名字查历史注册表**（`world.nameOf`），别用 `world.units`（日志是历史、单位表是当下）；
-  **技能名**用 `event.skillName`，经验用 `exp.whoId`。
+- **名字/阵营查历史注册表**（`nameOf`/`campOf`），别用 `world.units`；**技能名**用
+  `event.skillName`，经验用 `exp.whoId`。
 - `general` 的 `key:参数` 走 `formatGeneralText()`（未知前缀原样透出）。
