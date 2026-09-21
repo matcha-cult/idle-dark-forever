@@ -30,6 +30,7 @@ export class RecordingSink implements BattleSink {
     toId: string;
     damageType: string;
     skill: string;
+    skillName?: string;
     value: number;
     crit: boolean;
     absorbed: number;
@@ -40,16 +41,30 @@ export class RecordingSink implements BattleSink {
       toId: e.toId,
       damageType: e.damageType,
       skill: e.skill,
+      ...(e.skillName !== undefined ? { skillName: e.skillName } : {}),
       value: e.value,
       crit: e.crit,
       absorbed: e.absorbed,
     });
   }
-  heal(e: { fromId: string; toId: string; skill: string; value: number }): void {
-    this.events.push({ kind: 'heal', fromId: e.fromId, toId: e.toId, skill: e.skill, value: e.value });
+  heal(e: { fromId: string; toId: string; skill: string; skillName?: string; value: number }): void {
+    this.events.push({
+      kind: 'heal',
+      fromId: e.fromId,
+      toId: e.toId,
+      skill: e.skill,
+      ...(e.skillName !== undefined ? { skillName: e.skillName } : {}),
+      value: e.value,
+    });
   }
-  dodge(e: { fromId: string; toId: string; skill: string }): void {
-    this.events.push({ kind: 'dodge', fromId: e.fromId, toId: e.toId, skill: e.skill });
+  dodge(e: { fromId: string; toId: string; skill: string; skillName?: string }): void {
+    this.events.push({
+      kind: 'dodge',
+      fromId: e.fromId,
+      toId: e.toId,
+      skill: e.skill,
+      ...(e.skillName !== undefined ? { skillName: e.skillName } : {}),
+    });
   }
   death(e: { unitId: string; name: string; camp: string }): void {
     this.events.push({ kind: 'death', unitId: e.unitId, name: e.name, camp: e.camp });

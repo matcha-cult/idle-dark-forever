@@ -46,7 +46,20 @@ export function formatBattleValue(value: unknown): string {
  *
  * `nameOf` 必须是**能查到历史单位**的查表函数（`world.nameOf`）——日志是历史，
  * 单位表是当下，用当下查历史必然有名字缺失。
+ *
+ * 技能名同理：`skill` 是数据表键（`thumpHead` / `meleeForRage`），**不能直接展示**；
+ * 展示名由服务端随事件下发（`skillName`），缺失时才回落键本身（可见的缺失）。
  */
+const skillLabelOf = (event: { skill: string; skillName?: string }): string =>
+  typeof event.skillName === 'string' && event.skillName !== ''
+    ? event.skillName
+    : event.skill === ''
+      ? '攻击'
+      : event.skill;
+
+export function skillTextOf(event: { skill: string; skillName?: string }): string {
+  return skillLabelOf(event);
+}
 export function formatBattleEvent(
   event: BattleEventDto,
   nameOf: (id: string) => string,
@@ -54,7 +67,7 @@ export function formatBattleEvent(
   switch (event.kind) {
     case 'damage':
       return {
-        text: `${nameOf(event.fromId)} → ${nameOf(event.toId)} ${event.skill || '攻击'} ${formatBattleValue(event.value)}${
+        text: `${nameOf(event.fromId)} → ${nameOf(event.toId)} ${skillLabelOf(event)} ${formatBattleValue(event.value)}${
           event.absorbed > 0 ? `（吸收 ${formatBattleValue(event.absorbed)}）` : ''
         }${event.crit ? ' 暴击' : ''}`,
         level: 'damage',
@@ -62,7 +75,7 @@ export function formatBattleEvent(
     case 'heal':
       return { text: `${nameOf(event.fromId)} 治疗 ${nameOf(event.toId)} ${formatBattleValue(event.value)}`, level: 'heal' };
     case 'dodge':
-      return { text: `${nameOf(event.toId)} 闪避了 ${event.skill || '攻击'}`, level: 'warning' };
+      return { text: `${nameOf(event.toId)} 闪避了 ${skillLabelOf(event)}`, level: 'warning' };
     case 'death':
       return { text: `${event.name} 阵亡`, level: 'warning' };
     case 'buff':

@@ -961,13 +961,16 @@ hp mp rp ep comboPoint targetId castingProgress buffs camp
 
 ---
 
-## 21. 战斗日志面板：顺序与名字（细节见 [`ai-docs/16`](ai-docs/16-战斗推送通道-累计制.md) §7）
+## 21. 战斗日志与战斗数值（细节见 [`ai-docs/16`](ai-docs/16-战斗推送通道-累计制.md) §7/§8）
 
-- **`entries` 新在最前**（`appendEvents` 插队首）⇒ `ui-kit` 的 `<LogPanel>` 必须
-  **截断丢尾部**（`slice(0, maxItems)`）+ **`scrollTop = 0`（顶部）**。两处必须同时正确，
-  否则「日志倒叙 + 滚到底」= 永远看不到新条目。
-- **名字解析必须查历史注册表**：用 `world.nameOf(id)`（`unitNames`，上限 512，插入序淘汰），
-  **不要**用 `world.units` 现建映射 —— 日志是历史、单位表是当下（尸体 3s 后被清），
-  实测 41% 的引用查不到名字；接上注册表后 0%。
-- `general` 事件的 `key:参数` 文案走 `formatGeneralText()`（**未知前缀原样透出**）。
-- 战斗数值走 `formatBattleValue()`；**不要**用 `formatAmount`（整数截断 → 满屏 `melee 0`）。
+- **`entries` 新在最前**（`appendEvents` 插队首）⇒ `<LogPanel>` 必须**截断丢尾部** +
+  **`scrollTop = 0`**；两处同时正确，否则「倒叙 + 滚到底」永远看不到新条目。
+- **名字查历史注册表**（`world.nameOf`），别用 `world.units` 现建映射 —— 日志是历史、
+  单位表是当下（尸体 3s 后被清），实测 41% 的引用查不到名字。
+- **技能名**用事件里的 `skillName`（内核 `battle-world#skillNameOf()` 从 `tables.skills` 解析）；
+  `skill` 是表键（`thumpHead`/`meleeForRage`），**不能直接展示**。
+- **伤害/治疗必须是整数**：唯一入口 `battle-world#roundCombatValue()`；正数**保底 1**
+  （只 round 会出现 `melee 0` 与打不死的怪卡波次）、非有限→0、负数对称取整。
+  这是**相对原版的主动变更**（原版全程浮点），会改平衡与三个金样常数。
+- `general` 的 `key:参数` 走 `formatGeneralText()`（未知前缀原样透出）；战斗数值走
+  `formatBattleValue()`（**别用** `formatAmount`，它整数截断）。

@@ -124,6 +124,37 @@ describe('formatBattleEvent：名字解析', () => {
     expect(formatBattleEvent({ kind: 'exp', amount: 5, level: 3 }, nameOf).text).toBe('经验 +5 → Lv.3');
   });
 
+  it('技能名优先用服务端下发的 skillName（不再显示 thumpHead 这类数据表键）', () => {
+    const event: BattleEventDto = {
+      kind: 'damage',
+      fromId: '1',
+      toId: '2',
+      damageType: 'melee',
+      skill: 'thumpHead',
+      skillName: '重击头部',
+      value: 26.7,
+      crit: false,
+      absorbed: 0,
+    };
+    expect(formatBattleEvent(event, nameOf).text).toBe('艾尔 → 大史莱姆 重击头部 26.7');
+
+    // skillName 缺失（旧服务端 / 表里查不到）→ 回落键本身，缺失可见
+    expect(formatBattleEvent({ ...event, skillName: undefined }, nameOf).text).toBe(
+      '艾尔 → 大史莱姆 thumpHead 26.7',
+    );
+    // 两者都空 → 「攻击」（原版行为）
+    expect(formatBattleEvent({ ...event, skill: '', skillName: undefined }, nameOf).text).toBe(
+      '艾尔 → 大史莱姆 攻击 26.7',
+    );
+  });
+
+  it('dodge 也用 skillName', () => {
+    expect(
+      formatBattleEvent({ kind: 'dodge', fromId: '2', toId: '1', skill: 'meleeForRage', skillName: '狂怒打击' }, nameOf)
+        .text,
+    ).toBe('艾尔 闪避了 狂怒打击');
+  });
+
   it('general 走文案化（不再原样透出 key:…）', () => {
     expect(formatBattleEvent({ kind: 'general', text: 'enemy.appear:小史莱姆' }, nameOf).text).toBe('遭遇 小史莱姆');
   });

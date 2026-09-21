@@ -195,3 +195,55 @@ describe('sendGeneralMsg 出站链路（数据层 → 内核适配器 → 服务
     clock.dispose();
   });
 });
+
+describe('BattleCollector：技能展示名透传', () => {
+  const sink = () => new BattleCollector();
+
+  it('damage / dodge / heal 带 skillName 时原样进 DTO', () => {
+    const collector = sink();
+    collector.damage({
+      fromId: '1',
+      toId: '2',
+      damageType: 'melee',
+      skill: 'thumpHead',
+      skillName: '重击头部',
+      value: 26.7,
+      crit: false,
+      absorbed: 0,
+    });
+    collector.dodge({ fromId: '2', toId: '1', skill: 'melee', skillName: '普通攻击' });
+    collector.heal({ fromId: '1', toId: '1', skill: 'heal', skillName: '治疗术', value: 3 });
+    const events = collector.snapshot().events;
+    expect(events[0]).toMatchObject({ kind: 'damage', skill: 'thumpHead', skillName: '重击头部' });
+    expect(events[1]).toMatchObject({ kind: 'dodge', skillName: '普通攻击' });
+    expect(events[2]).toMatchObject({ kind: 'heal', skillName: '治疗术' });
+  });
+
+  it('skillName 缺失 / 空串 / 非字符串 → 不下发该字段（前端回落键本身）', () => {
+    const collector = sink();
+    collector.damage({ fromId: '1', toId: '2', damageType: 'melee', skill: 'k', value: 1, crit: false, absorbed: 0 });
+    collector.damage({
+      fromId: '1',
+      toId: '2',
+      damageType: 'melee',
+      skill: 'k',
+      skillName: '',
+      value: 1,
+      crit: false,
+      absorbed: 0,
+    });
+    collector.damage({
+      fromId: '1',
+      toId: '2',
+      damageType: 'melee',
+      skill: 'k',
+      skillName: 42 as never,
+      value: 1,
+      crit: false,
+      absorbed: 0,
+    });
+    for (const event of collector.snapshot().events) {
+      expect('skillName' in event).toBe(false);
+    }
+  });
+});

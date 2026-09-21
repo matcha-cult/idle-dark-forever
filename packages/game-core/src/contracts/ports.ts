@@ -94,7 +94,16 @@ export interface DamageEvent {
   fromId: string;
   toId: string;
   damageType: string;
+  /** 技能数据表的键（原版 `type`）。 */
   skill: string;
+  /**
+   * 技能的**展示名**（`SkillData.name`，由内核从 `tables.skills` 解析）。
+   *
+   * 为什么由服务端给：技能表有数百条，前端镜像一份就是「两处定义必然漂移」；
+   * 而日志要显示的是中文名而不是 `thumpHead` / `meleeForRage` 这类键。
+   * 缺省（旧数据 / 查不到）时调用方回落 `skill`。
+   */
+  skillName?: string;
   value: number;
   crit: boolean;
   absorbed: number;
@@ -103,12 +112,16 @@ export interface HealEvent {
   fromId: string;
   toId: string;
   skill: string;
+  /** 见 {@link DamageEvent.skillName}。 */
+  skillName?: string;
   value: number;
 }
 export interface DodgeEvent {
   fromId: string;
   toId: string;
   skill: string;
+  /** 见 {@link DamageEvent.skillName}。 */
+  skillName?: string;
 }
 export interface DeathEvent {
   unitId: string;

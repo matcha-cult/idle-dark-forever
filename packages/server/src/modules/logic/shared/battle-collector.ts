@@ -49,6 +49,7 @@ export class BattleCollector implements BattleSink {
       toId: e.toId,
       damageType: e.damageType,
       skill: e.skill,
+      ...(typeof e.skillName === 'string' && e.skillName !== '' ? { skillName: e.skillName } : {}),
       value: finite(e.value),
       crit: e.crit === true,
       absorbed: finite(e.absorbed),
@@ -61,12 +62,19 @@ export class BattleCollector implements BattleSink {
       fromId: e.fromId,
       toId: e.toId,
       skill: e.skill,
+      ...(typeof e.skillName === 'string' && e.skillName !== '' ? { skillName: e.skillName } : {}),
       value: finite(e.value),
     });
   }
 
   dodge(e: DodgeEvent): void {
-    this.events.push({ kind: 'dodge', fromId: e.fromId, toId: e.toId, skill: e.skill });
+    this.events.push({
+      kind: 'dodge',
+      fromId: e.fromId,
+      toId: e.toId,
+      skill: e.skill,
+      ...(typeof e.skillName === 'string' && e.skillName !== '' ? { skillName: e.skillName } : {}),
+    });
   }
 
   death(e: DeathEvent): void {

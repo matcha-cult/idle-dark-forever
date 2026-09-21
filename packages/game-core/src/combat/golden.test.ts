@@ -16,9 +16,12 @@ import { hashString, makePlayer, makeTestWorld, type RecordingSink } from './tes
 /** 金样参数：改动战斗逻辑时这里必须显式更新并解释原因。 */
 const GOLDEN_SEED = 20240919;
 const GOLDEN_MS = 30000;
-const GOLDEN_EVENT_HASH = 0x6f3847b3; // = 1865959347，W3 重录：exp 事件删除 `peak` 字段（Q8 删巅峰）；W4 不变
-const GOLDEN_STATE_HASH = 0xf7d493b3; // = 4157903795，W12 重录：同屏上限改「全图存活敌对怪总数」（Born 被挡住时保持轮询，dumpState 的 timer 剩余时间随之变化）；事件流不变
-const GOLDEN_EVENT_COUNT = 27; // 首次运行记录，见交付报告
+// 取整变更重录：伤害/治疗在 `sendDamage` / `sendHeal` 处整数化（正的至少 1，见 `roundCombatValue`）。
+// 事件里的数值变了，战斗时序随之**分叉**（拿掉取整做对照：玩家会在 30s 内阵亡并产生 death/exp；
+// 开启取整则存活、无击杀）。因此三个金样常数必须一起更新。
+const GOLDEN_EVENT_HASH = 0x255e00d0; // = 626917584，取整变更重录
+const GOLDEN_STATE_HASH = 0x248e509e; // = 613306526，取整变更重录
+const GOLDEN_EVENT_COUNT = 20; // 取整变更后的事件条数（原 27）
 
 interface GoldenRun {
   sink: RecordingSink;

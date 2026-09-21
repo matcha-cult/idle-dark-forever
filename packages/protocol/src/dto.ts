@@ -287,9 +287,21 @@ export interface WorldSnapshotDto {
 
 /** 战斗事件（推送给前端做日志渲染 / Toast）。 */
 export type BattleEventDto =
-  | { kind: 'damage'; fromId: string; toId: string; damageType: string; skill: string; value: number; crit: boolean; absorbed: number }
-  | { kind: 'heal'; fromId: string; toId: string; skill: string; value: number }
-  | { kind: 'dodge'; fromId: string; toId: string; skill: string }
+  | {
+      kind: 'damage';
+      fromId: string;
+      toId: string;
+      damageType: string;
+      /** 技能数据表的键（如 `thumpHead`）。**不要直接展示**，用 `skillName`。 */
+      skill: string;
+      /** 技能的展示名（服务端从技能表解析）。缺省时前端回落 `skill`。 */
+      skillName?: string;
+      value: number;
+      crit: boolean;
+      absorbed: number;
+    }
+  | { kind: 'heal'; fromId: string; toId: string; skill: string; skillName?: string; value: number }
+  | { kind: 'dodge'; fromId: string; toId: string; skill: string; skillName?: string }
   | { kind: 'death'; unitId: string; name: string; camp: string }
   | { kind: 'buff'; unitId: string; buffKey: string; name: string; on: boolean }
   | { kind: 'exp'; amount: number; level: number }

@@ -172,3 +172,42 @@ describe('testDodge / testCrit', () => {
     expect(seqA.every((v) => v === 0 || v === 1)).toBe(true);
   });
 });
+
+describe('技能展示名（skillName）', () => {
+  it('damage / dodge / heal 事件都带上 `SkillData.name`，而不是数据表键', () => {
+    const { world, from, to, skill, sink } = bare();
+    // fixture 里 melee 的展示名是 'Melee'
+    world.sendDamage('melee', from, to, skill, 10, false);
+    const dmg = sink.events.find((e) => e.kind === 'damage')!;
+    expect(dmg.skill).toBe('melee');
+    expect(dmg.skillName).toBe('Melee');
+
+    // 闪避判定：把闪避率拉到必闪
+    to.addAttrHook('noDodgeRate', (() => 0) as never);
+    world.testDodge(from, to, skill);
+    const dodge = sink.events.find((e) => e.kind === 'dodge')!;
+    expect(dodge.skill).toBe('melee');
+    expect(dodge.skillName).toBe('Melee');
+
+    world.sendHeal(from, to, skill, 5);
+    const heal = sink.events.find((e) => e.kind === 'heal')!;
+    expect(heal.skillName).toBe('Melee');
+  });
+
+  it('技能表里查不到 / 无技能 → **不带** skillName（调用方回落键本身，缺失可见）', () => {
+    const { world, from, to, skill, sink } = bare();
+    // 造一个表里不存在的键
+    (skill as unknown as { type: string }).type = 'not.in.table';
+    world.sendDamage('melee', from, to, skill, 10, false);
+    const dmg = sink.events.find((e) => e.kind === 'damage')!;
+    expect(dmg.skill).toBe('not.in.table');
+    expect('skillName' in dmg).toBe(false);
+
+    // 无技能（null）→ 不发 damage 事件（原版 early return），但 heal 仍应安全
+    sink.events.length = 0;
+    world.sendHeal(from, to, null, 5);
+    const heal = sink.events.find((e) => e.kind === 'heal')!;
+    expect(heal.skill).toBe('');
+    expect('skillName' in heal).toBe(false);
+  });
+});
