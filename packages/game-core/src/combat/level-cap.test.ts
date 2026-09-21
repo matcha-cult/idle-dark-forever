@@ -17,7 +17,7 @@ describe('等级上限 100（Q8）', () => {
     const t = makeTestWorld({ seed: 11, player });
     t.world.addPlayer(player);
 
-    // 怪物等级与玩家同级 → 不触发等级差衰减。
+    // W10 起经验不再有等级差衰减；第二个参数只是冻结端口契约的一部分。
     t.world.gotExp(100, 99);
     expect(player.level).toBe(100);
     expect(player.exp).toBe(0);

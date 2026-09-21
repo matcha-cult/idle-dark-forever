@@ -388,8 +388,13 @@ cmd 段唯一归属、每个 `*LogicServer` 里不得出现 `@ActionMethod`。
   服务端经 `WorldTickDto/WorldSnapshotDto.bossPending` 下发（翻转也算一次变化、合并取**最新**帧）；
   前端 `world.bossPending === false` 时**整条 BOSS 文案都不显示**（含「守关 BOSS 现身」），
   ⚠️ **不要再按 `wave % bossEvery` 直接显示倒计时** —— 通关后那个倒计时永远不会到来。
-- ⚠️ **经验衰减按怪物真实等级比较**（`gotExp(this.exp, this.level)`），窗口 = 玩家等级 < 地图等级 + 10；
-  **不要再把怪物等级 `transformEquipLevel` 减半** —— 会让 world.4（L=25）起经验恒 0、进度死锁在 ~Lv.20。
+- ⚠️ **经验不做等级差衰减**（W10 已移除）：`PlayerUnit.gotExp` 曾按 `dis = min(自身等级, 70) − 怪物等级`
+  每级递减 10%、`dis ≥ 10` 时**归零**；那道窗口恰好等于段位宽度（解锁门槛 = 上一段内容等级 + 10），
+  于是**越接近解锁线经验越低、到线归零**，整条推进链事实上不可达（`world.2` 实测 13→14 需
+  21228 次击杀 ≈ 5300 波，全库 388 角色无一自然推进过 `world.2`）。
+  平衡现由**怪物经验分布**（`enemyData.exp` × `2 ** quality`）+ `expRate` 承担 ——
+  **后期调整经验曲线不要再引入等级差系数**。`gotExp` 的第二个参数（怪物等级）保留为
+  冻结端口契约的一部分，但**当前不参与任何计算**。回归见 `combat/exp-no-level-penalty.test.ts`。
 - ⚠️ **刷怪池必须按真实数值 + 阵营挑选**（不能只看 `level`）：普通怪与 BOSS 必须 `camp:'enemy'`
   且非 `onPress` 机关 —— `neutral` 不会自动索敌（挂机卡波次）、`alien` 玩家根本打不到；
   且 BOSS 的 HP 不得低于本图普通怪。`data/spawn-eligibility.test.ts` 是门禁。

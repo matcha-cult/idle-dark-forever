@@ -817,7 +817,23 @@ export class PlayerUnit extends Unit {
 
   // ────────────────────────────── 经验 / 升级 / 复活 ──────────────────────────────
 
-  override gotExp(v: number, level: number): void {
+  /**
+   * 获得经验。
+   *
+   * ⚠️ **刻意不做等级差衰减**（W10 移除）。曾经按 `dis = min(自身等级, 70) − 怪物等级`
+   * 每级递减 10%，并在 `dis >= 10` 时**直接归零**。在「怪物等级 = 地图等级、
+   * 解锁门槛 = 上一段内容等级 + 10」的段位模型下，那道窗口恰好等于段位宽度，于是
+   * **越接近解锁线经验越低、到线归零** —— 整条推进链事实上不可达
+   * （实测 13 级在 world.2 升到 14 级需 21228 次击杀 ≈ 5300 波）。
+   *
+   * 平衡现由**怪物经验分布**（`enemyData.exp`，经 `2 ** quality` 放大）与角色经验倍率
+   * `expRate` 承担。**后期调整经验曲线时不要再引入等级差系数**（见 `AGENTS.md` §19）。
+   *
+   * `_level` 是冻结端口契约（`Unit.gotExp` / `BattleWorld.gotExp`）的一部分，
+   * 仍由调用方传入怪物等级，但**当前不参与任何计算** —— 保留形参而不是删掉，
+   * 是为了不动契约、也便于将来需要时按显式规则（而非隐式衰减）复用。
+   */
+  override gotExp(v: number, _level: number): void {
     const player = this.player;
     if (!player) {
       return;
@@ -829,13 +845,6 @@ export class PlayerUnit extends Unit {
     this.hp += hpFromKill;
     this.mp += mpFromKill;
 
-    // 根据等级差计算经验值衰减
-    const dis = Math.min(this.level, 70) - level;
-    if (dis >= 10) {
-      return;
-    } else if (dis > 0) {
-      value *= 1 - dis / 10;
-    }
     value *= this.runAttrHooks(1, 'expInc');
     value *= this.runAttrHooks(1, 'expMul');
     this.world.sink.exp({ amount: value, level: player.level, whoId: this.id });

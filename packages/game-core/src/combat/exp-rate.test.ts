@@ -20,7 +20,7 @@ function worldWith(options: { expRate?: number; updateRate?: number } = {}): Bat
   return t.world;
 }
 
-/** 最后一次 `sink.exp` 的数值（`PlayerUnit.gotExp` 在衰减与 hook 之后回报）。 */
+/** 最后一次 `sink.exp` 的数值（`PlayerUnit.gotExp` 在 hook 之后回报；W10 起无等级差衰减）。 */
 function lastExp(world: BattleWorld): number | undefined {
   const events = world.sink?.events ?? [];
   for (let i = events.length - 1; i >= 0; i -= 1) {
@@ -86,11 +86,11 @@ describe('BattleWorld.expRate', () => {
     expect(lootCount(world)).toBe(1);
   });
 
-  it('等级差衰减先于倍率之外照常生效（dis ≥ 10 → 0 经验）', () => {
+  it('经验倍率与等级差无关（W10 起不再有衰减窗口）', () => {
     const world = worldWith({ expRate: 10 });
-    // 玩家 1 级、怪物 20 级 → dis = -19（不倒扣），仍有经验；用怪物 1 级且玩家 11 级验证衰减
+    // 旧实现：玩家 11 级打 1 级怪 → `dis = 10` → 直接 return、无 exp 事件。
     world.player!.level = 11;
-    world.gotExp(100, 1); // dis = 10 → 直接 return，不发 exp 事件
-    expect(lastExp(world)).toBeUndefined();
+    world.gotExp(100, 1);
+    expect(lastExp(world)).toBe(1000);
   });
 });

@@ -448,11 +448,10 @@ export class EnemyUnit extends Unit {
 
     this.world.sink.death({ unitId: this.id, name: this.displayName, camp: campBefore });
     if (this.exp) {
-      // ⚠️ 用**怪物真实等级**做经验衰减判定，不要再 `transformEquipLevel` 减半。
-      // W4 规则是「普通 = 地图等级」、段位 = 玩家等级带；若这里减半，
-      // `dis = 玩家等级 − 地图等级/2`，world.4（L=25）起玩家一到进图门槛就 `dis≥10` → 经验恒 0，
-      // 从而卡死在 Lv.20、永远够不到后续解锁门槛。改用真实等级后，经验窗口恰好等于段位。
-      // （`transformEquipLevel` 仍用于 `stunResist` 等装备等级口径，不要一起改。）
+      // W10：经验**不再做等级差衰减**（唯一实现在 `PlayerUnit.gotExp`，那段窗口已删除）。
+      // 这里仍传怪物真实等级（含 W4 的 `levelOverride`），只是为了保住
+      // `world.gotExp(exp, level)` 的冻结端口契约；当前该参数不参与计算。
+      // `transformEquipLevel` 只用于装备等级口径（如 `stunResist`），不要拿来做经验判定。
       this.world.gotExp(this.exp, this.level);
     }
 
