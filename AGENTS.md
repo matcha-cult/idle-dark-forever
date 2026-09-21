@@ -2,8 +2,18 @@
 
 > 面向在本仓库工作的 AI 代理与工程师。**新增环境坑或约定时在此追加一节，不要删旧节。**
 >
-> ⚠️ **本文档有注入字节预算（约 64KB），超出部分会被静默截断** —— 新节请写短，
-> 细节放 `ai-docs/*` 并在本节留指针；追加后用 `wc -c AGENTS.md` 自查。
+> ⚠️ **本文档有注入字节预算（约 64KB），超出部分会被静默截断** —— 新节必须写短，
+> 细节一律放 `ai-docs/*` 并在本节留指针；追加后用 `wc -c AGENTS.md` 自查。
+>
+> **已外迁的详版**（2026 精简，65KB → 34KB）：§5.2/§17 → [`ai-docs/22`](ai-docs/22-框架坑与内核视图门禁.md)、
+> §7/§10 → [`ai-docs/17`](ai-docs/17-环境坑与沙箱实操.md)、
+> §11/§12 → [`ai-docs/20`](ai-docs/20-拾取规则与剧情沿革.md)、
+> §14/§15 → [`ai-docs/21`](ai-docs/21-推送频率沿革与会话归属.md)、
+> §16.1/§16.2 → [`ai-docs/23`](ai-docs/23-逻辑服边界详解.md)、
+> §18 → [`ai-docs/18`](ai-docs/18-装备与伤害体系约定.md)、
+> §19 → [`ai-docs/19`](ai-docs/19-钱包地图混沌仪约定.md)、
+> §20.7/§20.8/§20.10/§20.11 → [`ai-docs/24`](ai-docs/24-推送观测与实测数据.md)。
+> 内联保留的都是**动作性硬约定**（§1–§5.1、§6、§8–§16、§17 摘要、§20.1–§20.6/§20.9、§21）。
 
 `idle-dark-forever` 是《永夜2016典藏重置版》（纯前端单机游戏，源仓库 `/home/nbb/projects/dark-forever-memorize`）
 的**服务端权威重制版**：ionet-ts + NestJS 后端，React + Vite + Antd + MobX 前端。
@@ -31,6 +41,8 @@
    时间走 `Clock` 端口或注入参数。这是离线结算可审计、单测可稳定、金样回归可对比的前提。
 6. **禁止前端做数值推导**：服务端权威。前端只发"意图"、只渲染服务端下发的 DTO。
 
+---
+
 ## 2. 依赖方向（单向，禁止反向）
 
 ```
@@ -45,6 +57,8 @@ server → protocol
 - `web`：不得 import 除 `@nbb-ionet/client-protocol` 之外的任何 `@nbb-ionet/*`
   —— 框架其余包依赖 Node `async_hooks`，浏览器加载即炸。
 
+---
+
 ## 3. 构建与验证
 
 ```bash
@@ -58,6 +72,8 @@ pnpm run test        # 仅本仓 packages/*，不含 vendor
 - 单包：`pnpm --filter <name> run build|typecheck|test`
 - `server` 依赖 `game-core`/`protocol` 的 **dist**，所以**改了上游必须先 rebuild 上游**。
 
+---
+
 ## 4. 冻结契约（并行开发期间只许加可选字段）
 
 | 契约 | 位置 |
@@ -69,6 +85,8 @@ pnpm run test        # 仅本仓 packages/*，不含 vendor
 
 **前端不再手工镜像 cmd 常量**（这是相对参考实现 `idle-path-of-xiuxian` 的改进）：
 `@idle-dark/ionet-transport` 直接依赖 `@idle-dark/protocol`。
+
+---
 
 ## 5. 线协议要点（唯一规格：ionet-ts `PROTOCOL.md`）
 
@@ -88,15 +106,13 @@ pnpm run test        # 仅本仓 packages/*，不含 vendor
 
 > ⚠️ **只判 `errorCode` 会把全部业务失败当成成功。**
 
-### 5.2 框架已知坑与规避
-| 坑 | 规避 |
-|---|---|
-| HTTP 裸 object DTO 被当信封解包（与 `PROTOCOL.md` §9 矛盾） | 业务 object DTO **一律** `{data:{...}}` 包装 |
-| `RateLimitInOut` 无法短路（骨架不读 `ctx.errorCode`） | 自建限流，抛错或返回 `fail(RATE_LIMITED)` |
-| NestJS 默认直接 `new` Action，不经容器 | `resolveAction: (Cls) => appRef.app!.get(Cls)`；Action 加 `@Injectable()` |
-| `FlowContext` 用 `import type` → `emitDecoratorMetadata` 退化 → **鉴权静默失效** | **必须值导入** |
-| `NODE_ENV=production` 默认拒启动 | 显式 `allowProduction` |
-| 普通对象构造参数无 DI token → Nest 把 `Object` 当 provider | 给显式 token |
+### 5.2 框架已知坑与规避 → 详版 [`ai-docs/22`](ai-docs/22-框架坑与内核视图门禁.md)
+
+六条必踩的坑（**`FlowContext` 必须值导入**，否则 `emitDecoratorMetadata` 退化 → **鉴权静默失效**；
+裸 object DTO 一律 `{data:{…}}` 包装；`resolveAction` 走容器；生产须 `allowProduction`；
+限流要自建；普通对象构造参数要给显式 DI token）—— 详见详版。
+
+---
 
 ## 6. 新框架源码由 CI 挂载到 `vendor/ionet-ts/`
 
@@ -107,165 +123,26 @@ pnpm run test        # 仅本仓 packages/*，不含 vendor
 - 本地：`ln -sfn /path/to/ionet-ts vendor/ionet-ts`
 - **不要**在本仓库修改 `vendor/ionet-ts/`：框架改动须在框架仓库完成、提交、推送后再同步。
 
-## 7. 环境坑（本机 DSH 沙箱实测）
+---
 
-### 7.1 SSH 访问 GitHub 报 "Bad owner or permissions"
-这是**沙箱 uid 映射渲染出的假象**（`/bin/bash` 也显示 `nobody:nogroup`），不是真机 `/etc/ssh` 坏了。
-OpenSSH 拒绝解析含坏 owner 的 `Include`。解法：让 ssh 不读系统配置。
+## 7. 环境坑（本机 DSH 沙箱实测）→ 详版 [`ai-docs/17`](ai-docs/17-环境坑与沙箱实操.md)
 
-```bash
-GIT_SSH_COMMAND='ssh -F /dev/null' git ls-remote git@github.com:matcha-cult/idle-dark-forever.git
-GIT_SSH_COMMAND='ssh -F /dev/null' git push -u origin main
-```
-**不要**试图 `chown`/`chmod` `/etc/ssh`（`/` 只读 + `no_new_privs` 已置位）。
+> 完整原文（§7.1–§7.9，含命令、实测与反面教训）已外迁，**动这些环境前先读**。下面是最高频几条：
 
-### 7.2 pnpm 全局 store 只读
-`~/.local/share/pnpm/store` 在沙箱外、只读。根 `.npmrc` 已写 `store-dir=.pnpm-store`（工作区本地）。
-安装用 `--config.confirmModulesPurge=false` 避免无人值守卡在交互确认；**不要**在 `CI=1` 下跑
-（会顺带打开 frozen-lockfile）。
-
-### 7.3 antd 权威资料用全局 CLI（**改前端 UI 前必须先查，别靠记忆**）
-```bash
-cd /home/nbb/projects/idle-dark-forever
-antd-zh() { XDG_CACHE_HOME="$PWD/tmp/antd-cache" /home/nbb/n/bin/antd --lang zh --version 6.6.3 "$@"; }
-XDG_CACHE_HOME=$PWD/tmp/antd-cache /home/nbb/n/bin/antd list --lang zh
-antd-zh info Card          # 精确 props / 默认值 / Since
-antd-zh doc Button --format markdown
-antd-zh demo Layout side --format markdown
-antd-zh token Menu --format markdown
-```
-- `--version` 必须与本仓实装一致（当前 **6.6.3**），且是**全局选项、放在子命令之前**。
-- `XDG_CACHE_HOME` 指向工作区是必需的：沙箱 `~/.cache` 只读，不加会喷 `EROFS`（exit 0，非失败）。
-- 已知 v6 弃用：`Space split→separator`、`Space direction→orientation`、`Divider type→orientation`、
-  `Alert message→title`、`Card bordered→variant`、`Statistic valueStyle→styles`、`Drawer width→size`、
-  `InputNumber addonAfter→suffix`、**`Progress trailColor→railColor`**（6.6.x 运行期告警，
-  `.d.ts` 也标了 `@deprecated`）、**`List`→`Listy`**（6.6 起 `[antd: List]` 弃用告警；
-  本仓 src 无直接使用，告警来自 antd 内部组件，属上游噪声）。
-- 另注意：antd 默认 `autoInsertSpaceInButton` 会把**两个汉字**的按钮文案插空格（「攻击」→「攻 击」），
-  写断言时必须归一化空白。
-- 官方示例必须按本仓规则改写：颜色只用 token（禁内联 hex）、不传 `size`（全局 `compactAlgorithm` 承担紧凑）、
-  组件禁 `export default`。
-
-### 7.4 workspace 包必须显式声明依赖（pnpm 隔离布局）
-`packages/ui-kit` 用 `import type { ... } from '@idle-dark/protocol'`（type-only，运行时被擦除），
-但**仍必须**在 `package.json` 里声明 `"@idle-dark/protocol": "workspace:*"`，否则 pnpm 隔离布局下
-`tsc` 会报 `Cannot find module`。**不要用软链绕过** —— `pnpm install` 会清掉它，
-且会掩盖真实的依赖缺失。（已发生一次：ui-kit 用软链绕过，集成时才修。）
-
-加依赖后必须重跑 `pnpm install --no-frozen-lockfile --config.confirmModulesPurge=false`，
-并确认 `node_modules/@idle-dark/<pkg>` 指向 workspace 包（`../../../<pkg>`）而非手工软链。
-
-### 7.5 Vite dev server 会缓存「工作区外源码」的旧版
-`packages/web` 是 vite root，而 `ui-kit/src`、`ionet-transport/src` 在 root 之外（经 `resolve.alias` 指过去）。
-**新增文件**总是从磁盘首读；**改写老文件**可能被缓存住旧版甚至读到撕裂内容 → 表现为「磁盘对、单测绿、
-浏览器就是看不到新东西」。
-
-- `packages/web/vite.config.ts` 的 `idle-dark:watch-workspace-src` 插件是**必需项**，不是可选优化。
-- 仍失效时 `touch` 相关文件强制失效；彻底办法是重启该 dev server。
-- **验证纪律**：报告"已生效"前，必须 `curl` dev server 吐出的那份模块，并 grep **只有新版本才有的运行期符号**
-  （type-only 模块被 esbuild 抹空，grep 其类型字段名必然 0 命中，那是正常的）。
-  先看状态码：`curl -s -o /dev/null -w '%{http_code}'`；`000` 说明 server 压根没监听，
-  和"缓存旧版"是完全不同的处置。
-
-### 7.6 开发中的页面一律包 `ErrorBoundary`
-模块级异常会把整棵 React 树卸载成白屏。`panel-registry` 对每个域包一层（key 跟域走，错误态不粘下一个面板）。
-
-### 7.7 数据库：沙箱内**没有服务端二进制**，但有一个**可用的外部实例**
-本机实测：
-- 只有 `psql` **客户端**；`/usr/lib/postgresql/18/bin/` 下**没有 `initdb` / `postgres`**；
-  `docker` 命令存在但 **daemon 不可用**（`/var/run/docker.sock` 不存在）→ **无法在沙箱内自建集群**。
-- **但**本机有一个可直接使用的 PostgreSQL 实例（`idle-path-of-xiuxian` 用的那台），
-  凭据写在 `packages/server/.env` 里 → **数据库相关的端到端验收在本地就能跑**（见 §10.3）。
-
-因此：
-
-| 能在本地跑 | 说明 |
+| 场景 | 一句话 |
 |---|---|
-| `pnpm run build` / `typecheck` / `test` | 纯逻辑，不需要数据库 |
-| `db:init` / `prisma:validate` / `prisma:pull` | 连 `localhost:35432` |
-| 服务端启动 + 线协议冒烟 15/15 | 需要数据库健康（`/api/health` = 200） |
-| 路由探针 20/20 | 需要数据库（Action 会打到持久化层） |
-| **完整游戏流程冒烟 22/22** | `scripts/game-flow-smoke.mjs`，**已在本地实跑通过** |
-| **拾取规则冒烟 18/18** | `scripts/loot-rule-smoke.mjs`（真实战斗掉落 → `(battle,loot)` 推送；本地以 `LOOT_WINDOW_MS=300000` 实跑通过） |
-| **进图剧情冒烟 14/14** | `scripts/story-entry-smoke.mjs`（进图自动播放 + 击杀任务静默登记，已本地实跑通过） |
-| **角色归属冒烟 10/10** | `scripts/character-scope-smoke.mjs`（同账号两条连接不串号 + 刷新后不再推战斗消息，见 §15） |
+| SSH 到 GitHub 报 `Bad owner or permissions` | 沙箱 uid 假象 → `GIT_SSH_COMMAND='ssh -F /dev/null'`；**不要** chown/chmod `/etc/ssh` |
+| pnpm 安装卡住 / store 只读 | `pnpm install --no-frozen-lockfile --config.confirmModulesPurge=false`；**不要**在 `CI=1` 下跑 |
+| 改前端 UI | **先用全局 `antd` CLI 查权威 props**（`--version 6.6.3`，见 `ai-docs/17` §7.3）；颜色只用 token |
+| workspace 包报 `Cannot find module` | 必须在 `package.json` 声明 `workspace:*`；**不许软链绕过**，改完重跑 install |
+| 浏览器看不到新代码 | Vite 会缓存工作区外旧版 → 先 `curl` dev server 的模块 + grep 新符号（§7.5） |
+| 端口疑似被占 | **自己 bind 一次判定**，别信 `ss`；`/tmp` 每次调用都是新 tmpfs，日志写工作区 `tmp/` |
+| 端口默认值 | `dev.config.json` 是唯一真相（后端 3100 / 前端 5273）；前端 `strictPort: true` |
+| 数据库 | 沙箱内装不了 PG，但外部实例可用（见 §10 与 `ai-docs/17` §7.7） |
 
-> 无数据库时的行为：`/api/health` 返回 `503 degraded`（正确降级），协议层断言仍可通过；
-> 但依赖 `users`/`characters` 的 Action 会返回 `INTERNAL`。
+⚠️ **不要 `pkill -f vite`**：跨 PID namespace 杀不到，且 3000/5173 是 `idle-path-of-xiuxian` 的服务。
 
-需要**脱离外部实例**做单测时，用内存替身实现 `DatabaseService` 的 `query` / `connect`
-（`packages/server/test/helpers/fake-database.ts` 已有），不要试图在沙箱里安装/启动 PostgreSQL。
-
-### 7.8 端口冲突排查：每次 bash 调用在**独立 PID namespace**
-
-**结论（已验证）**：DSH 的每次 `bash` 调用都跑在 `bwrap --unshare-pid` 里 ——
-`ps -eo pid,ppid,comm` 只能看到本调用自己的 `bwrap / bash / ps / head`，
-而**网络 namespace 是共享的**（`ss` 能看到别的调用绑的端口）。于是会出现两种看似矛盾的现场：
-
-| 现象 | 真相 |
-|---|---|
-| `ss` 里有监听、`ps` 里找不到对应进程 | 正常：进程在**另一次调用**的 PID namespace 里，`kill` / `pkill` 都够不到 |
-| bind 失败（`EADDRINUSE`）但 `ss` 空空如也、`curl` 也是 `000` | 端口确实被占（多半是上次调试残留的 dev server），只是那一刻没抓到 |
-
-排查只用**自己 bind 一次**（比 `ss` 可信）：
-
-```bash
-node -e "const n=require('net');const s=n.createServer();
-s.on('error',e=>{console.log('FAIL',e.code)});
-s.listen(5273,'127.0.0.1',()=>{console.log('OK');s.close()})"
-```
-
-- `FAIL EADDRINUSE` → 换端口，或让**用户在他自己的终端里**关掉那个进程（你够不到它）。
-- `OK` 但 Vite 仍报占用 → 是**竞态 / 残留**，重试一次通常就好（实测 5273 经历过
-  「占用 → 空闲 → 又占用」的反复），**不要**据此写下"某端口不可用"的死结论。
-
-> ⚠️ 不要用 `pkill -f vite` 去"清理干净"：跨 namespace 杀不到，
-> 而且 3000 / 5173 是 `idle-path-of-xiuxian` 的服务，误杀会影响别的工程。
-> 另外 `curl` 得到 `000` 既可能是"没有监听"，也可能是"端口被占但无响应"，
-> 两者处置相反 —— 判断依据只能是 bind 探测。
-
-### 7.8.1 `/tmp` 是**每次调用一个新 tmpfs**，日志别写那儿
-
-沙箱用 `bwrap … --tmpfs /tmp` 起每次 `bash`，所以**上一条命令写进 `/tmp` 的文件，下一条就读不到了**
-（实测：`pnpm run verify >/tmp/v.log` 之后 grep 报 `No such file or directory`，
-白跑一次全量门禁）。落盘用工作区内的 `tmp/`（已 gitignore）：
-
-```bash
-mkdir -p tmp && pnpm run verify >tmp/verify.log 2>&1; echo "exit=$?"; grep -E "Tests  " tmp/verify.log
-```
-
-### 7.9 本地调试默认值：`dev.config.json`（唯一真相）
-
-端口与代理地址只写一次：前端 `packages/web/vite.config.ts` **直接 import 它**，
-后端 `packages/server/scripts/dev.mjs` 读它并写进 `process.env.PORT`
-（dotenv 不覆盖已存在的环境变量，所以配置能盖住 `.env` 里的 `PORT=3000`，
-而命令行 `PORT=… pnpm dev:server` 又能盖住配置）。
-
-```jsonc
-// dev.config.json
-{ "backendHost": "127.0.0.1", "backendPort": 3100, "frontendPort": 5273, "expRate": 10 }
-```
-
-```bash
-pnpm dev:server          # 后端 3100（tsc --watch + node --watch）
-pnpm dev:web             # 前端 5273（vite），/api 与 /ws 代理到 3100
-pnpm dev                 # 两者一起（--parallel）
-```
-
-临时换端口/倍率（不改文件）：`PORT=3200 pnpm dev:server`、`EXP_RATE=1 pnpm dev:server`、
-`VITE_DEV_PORT=5300 pnpm dev:web`、`VITE_BACKEND_ORIGIN=http://127.0.0.1:9999 pnpm dev:web`。
-
-**`expRate`（角色经验倍率，开发用）**：`dev.mjs` 把它写成环境变量 `EXP_RATE`，
-服务端启动时读一次（`world.config.ts#parseExpRate`），注入 `BattleWorldOptions.expRate`：
-
-- 只作用于**角色经验**（在线战斗 + 离线结算都走 `BattleWorld.gotExp`）；
-  **不影响技能经验与掉落数量**（掉落数量归 `updateRate`，两者相乘）。
-- **只有走 `pnpm dev:server` 才有倍率**：直接 `node dist/main.js`、CI、生产都不设 `EXP_RATE` → `1`。
-- 非法值（0 / 负数 / NaN / Infinity / > 1000 / 非数字）一律回落 `1` ——
-  配错一个 0 不该让全服经验归零。
-
-前端固定 `strictPort: true`：端口被占时**直接失败**、不静默换号 ——
-否则收藏夹 / 代理指向的地址会悄悄变成一个不存在的 dev server（曾因此误判"改了没生效"）。
+---
 
 ## 8. 新增一个游戏域要改哪些文件
 1. `packages/protocol/src/cmd.ts` —— 登记段与 subCmd（段宽 10、subCmd 从 1 起、0 保留）
@@ -275,6 +152,8 @@ pnpm dev                 # 两者一起（--parallel）
 5. `packages/ionet-transport/src/api/game-api.ts` —— 加 typed 方法（cmd 常量直接来自 protocol）
 6. `packages/web/src/stores/<domain>-store.ts` + `packages/web/src/pages/game/panel-registry.tsx` —— 注册面板
 7. 单测：纯规则放 `game-core`，编排放 `server`（用内存端口替身）
+
+---
 
 ## 9. 环境变量（`packages/server/.env`）
 
@@ -291,130 +170,39 @@ pnpm dev                 # 两者一起（--parallel）
 
 ---
 
-## 10. 数据库：schema 是设计真相，运行期用原生 pg
+## 10. 数据库：schema 是设计真相，运行期用原生 pg → 详版 [`ai-docs/17`](ai-docs/17-环境坑与沙箱实操.md)
 
-采用与 `idle-path-of-xiuxian` **相同**的 Prisma 用法（刻意保持一致，便于两个工程互相参照）：
-
-| 角色 | 是什么 |
-|---|---|
-| `packages/server/prisma/schema.prisma` | **数据设计的唯一真相**：表形状/约束/默认值以它为准 |
-| `packages/server/scripts/init-db.mjs` | **实际执行 DDL**（幂等 `CREATE TABLE IF NOT EXISTS` + 增量 `ALTER ... ADD COLUMN IF NOT EXISTS`） |
-| 运行期 | **原生 `pg`**（`DatabaseService` / `GameDatabaseService`）。`src/` 内**禁止** import `@prisma/client` |
-| `prisma` / `@prisma/client` | 只在 **devDependencies**，仅用于 `validate` / `generate` / `db pull` |
-
-> 改表 = 同时改 `schema.prisma` **和** `init-db.mjs`，两处必须一致（`db pull` 可核对）。
-
-```bash
-cd packages/server
-pnpm run prisma:validate   # 校验 schema 语法/一致性（不需要数据库）
-pnpm run prisma:generate   # 生成 Prisma Client（仅类型参考，运行期不用）
-pnpm run prisma:pull       # 用**线上库**反推 schema —— 核对「设计真相」是否已漂移
-pnpm run db:init           # 执行 DDL（幂等）
-```
-
-### 10.1 沙箱内跑 Prisma 必须重定向 `HOME`
-
-Prisma 把引擎缓存在 `os.homedir()/.cache/prisma`，而沙箱内 `~` 只读 → 报
-`EROFS: read-only file system, utime '.../libquery-engine'`。`XDG_CACHE_HOME` **无效**（Prisma 不读它），
-必须改 `HOME`：
-
-```bash
-export HOME="$PWD/../../tmp/prisma-home"   # 指向工作区内（tmp/ 已 gitignore）
-mkdir -p "$HOME"
-./node_modules/.bin/prisma validate
-```
-
-### 10.2 库的选择：**独立数据库，绝不与 xiuxian 共库**
-
-本机 PostgreSQL（`localhost:35432`）上的 `idle_game` 是 `idle-path-of-xiuxian` 的库，里面已有它的
-`users` / `characters`（`characters.id` 是 `integer`、有 `nickname`/`gender`…）与 30 张 `game_*` 表。
-
-本工程的 `characters` 列定义**完全不同**（`id text` / `name` / `role` / `career` / `state jsonb`）。
-建在同一库里会被 `CREATE TABLE IF NOT EXISTS` **静默跳过**，随后所有查询都会失败。
-
-因此本工程使用**独立数据库** `idle_dark`：
-
-```sql
-CREATE DATABASE idle_dark;   -- 已创建；init-db.mjs 只建表不建库
-```
-`DATABASE_URL` 指向 `.../idle_dark`。当前用户具备 `CREATEDB`/`SUPERUSER`（实测），
-但**不要把本工程的表建进 `idle_game`**。
-
-### 10.3 端到端验收（需要数据库，本地/CI 均可）
-
-```bash
-cd packages/server
-node dist/main.js &                        # 需先 pnpm run build；会读 .env
-node scripts/route-probe.mjs 3000 "$JWT_SECRET"    # 20/20 域 Action 是否都注册
-node scripts/game-flow-smoke.mjs 3000              # 完整流程（22 项断言）
-LOOT_WINDOW_MS=300000 node scripts/loot-rule-smoke.mjs 3000   # 拾取规则 → 真实掉落（18 项）
-node scripts/story-entry-smoke.mjs 3000                       # 进图自动触发剧情（14 项）
-node scripts/character-scope-smoke.mjs 3000                   # 角色归属 / 推送范围（10 项）
-```
-
-> ⚠️ **不要占用 3000 端口做验证前先确认它是不是 xiuxian 的服务端**：
-> 两者健康检查形状不同（xiuxian 的响应没有 `service` 字段且会报 `redis`），
-> 打到别人的服务端会得到一堆莫名其妙的 404。本工程验证时用独立端口更安全。
+- `packages/server/prisma/schema.prisma` = **设计真相**；`scripts/init-db.mjs` = **实际执行的 DDL**（幂等）；
+  运行期用**原生 `pg`**，`src/` 内**禁止** import `@prisma/client`（prisma 只在 devDependencies）。
+- **改表必须同时改这两处**（`pnpm run db:init` 执行、`prisma:pull` 核对漂移）。
+- **本工程用独立库 `idle_dark`，绝不与 xiuxian 的 `idle_game` 共库**（`characters` 列定义不同，
+  共库会被 `CREATE TABLE IF NOT EXISTS` 静默跳过）。清库用 `DELETE FROM users;`。
+- 沙箱内跑 prisma 必须把 `HOME` 指到工作区 `tmp/`（`~` 只读，`XDG_CACHE_HOME` **无效**）。
+- 端到端验收脚本与「3000 端口可能是别人的服务」的坑见 `ai-docs/17` §10.3。
 
 ---
 
-## 11. 跨域硬约定：拾取规则编码（只允许一处定义）
+## 11. 跨域硬约定：拾取规则编码（只允许一处定义）→ 详版 [`ai-docs/20`](ai-docs/20-拾取规则与剧情沿革.md)
 
-`Player.lootRule` 是 `Map<string, number>`（原版是 `Map<class, number[]>`），扁平编码为：
-
-| key | value |
-|---|---|
-| `__enabled__` | `1` 开 / `0` 关（缺省视为开） |
-| `c:${class}:${quality}` | `action`（启用）或 `action + 10`（该条停用）；`action` = 0 拾取 / 1 出售 / 2 分解 |
-
-**唯一定义在 `packages/game-core/src/rules/loot-rule.ts`**（`lootRuleKeyOf` / `parseLootRuleKey` /
-`encodeLootRule` / `decodeLootRule` / `lootRuleEnabledOf` / `lootRuleActionOf`）。
-面板（`server/.../lootrule/internal/loot-rule-ops.ts`）与战斗（`combat/battle-world.getLootRule`）
-都**只消费**这套定义。
-
-判定顺序：全局关 → 一律拾取；显式规则命中且 `action !== 0` → 用该 action；
-否则回落 `minLootLevel`（`level < minLootLevel` 时 0 品质出售、其余分解）。
-注意「显式设为拾取（0）」等价于未设置，仍会被 `minLootLevel` 兜底（与原版 `if (ret) return ret;` 一致）。
-
-> 教训：这两处曾各写一份实现，键格式（`class` vs `c:class:quality`）与值类型（`number` vs `number[]`）
-> 双双漂移，面板设置**静默失效**、永远回退兜底。类型撒谎（`PlayerLike.lootRule` 曾误标为
-> `Map<string, Record<number, number>>`）还让 `tsc` 无法发现。**禁止在消费侧复制编码或判定逻辑。**
-
-### 11.1 落地回调必须**先快照再 `player.loot()`**
-
-`Player.loot(slot)` 会把传入的 slot `clear()`（key/count 归零）。`toPlayerLike` 的 `lootRecorder`
-如果在其后才读 slot，拿到的是空槽 → `(battle, loot)` 推送变成 `{slot:{key:null,count:0}}`、
-`dto.gold` 也会因 `slot.key !== 'gold'` 丢失。
-因此 `internal/player-like.ts` 先 `InventorySlot.fromJSON(...)` 复制一份再调用 `player.loot`。
-新增任何"落地后记录"的回调都要遵守这条。
+- `Player.lootRule` 是 `Map<string, number>`，编码：`__enabled__` = 1 开 / 0 关；
+  `c:${class}:${quality}` = `action`（0 拾取 / 1 出售 / 2 分解）或 `action + 10`（该条停用）。
+- **唯一定义在 `game-core/src/rules/loot-rule.ts`**（`lootRuleKeyOf` / `parseLootRuleKey` /
+  `encodeLootRule` / `decodeLootRule` / `lootRuleEnabledOf` / `lootRuleActionOf`）；面板与战斗**只消费**。
+  **禁止在消费侧复制编码或判定逻辑** —— 曾两处各写一份、键格式与值类型双双漂移 → 面板设置静默失效。
+- 判定顺序：全局关 → 一律拾取；显式规则命中且 `action !== 0` → 用该 action；否则回落 `minLootLevel`。
+- ⚠️ **落地回调必须先把 slot 快照再 `player.loot()`**（`loot()` 会 `clear()` 传入的 slot，
+  后读只能拿到空槽 → 推送与金币双双丢失）。
 
 ---
 
-## 12. 剧情推进：进图自动触发（原版 `MapPanel.checkStories()`）
+## 12. 剧情（quest / story）域：**已物理删除**（W2）
 
-**服务端**：判定与登记的唯一实现在 `server/.../story/internal/story-ops.ts#opAdvanceStoriesOnMapEntry`，
-由 quest（`StoryLogicService`）**订阅 battle 发布的 `MapEntered` 事件**后调用
-（08 §2.3 解环；`WorldService.start()` 会话首次落地 / `enterMap()` 进图时发布该事件，
-battle 不再直接调用 story）。
-对**当前地图上条件已满足且尚未开启**的每条剧情：
+原「进图自动触发剧情」（`MapPanel.checkStories()` 移植）随 quest / story 逻辑服一起删除：
+`story` cmd 段(100)、`MapEntered` / `EnemyKilled` 事件、`StoriesPanel` / `story-store`、
+`story-entry-smoke.mjs`、`Requirement.stories` 均已移除。
 
-| 剧情类型 | 服务端行为 | 推送 `StoryUnlockDto` |
-|---|---|---|
-| `kill` / `purchase` | **静默登记**为进行中；击杀任务同时挂上剩余数（原版 `addKillTask`） | `autoPlay: false`（等玩家去打 / 去买） |
-| 纯剧情脚本（数据里无 `taskType`） | **不改状态** | `autoPlay: true`（前端自动播放） |
-
-- `opFinishStory` 也用同一套分类：新就绪的 `kill`/`purchase` 当场登记，纯剧情脚本上报 `autoPlay: true`
-  —— 对应原版 `checkStories()` 的 `while (dirty)` 循环。
-- 击杀任务剩余数降到 0 时，`StoryLogicService` 订阅 `EnemyKilled` 事件并推 `autoPlay: true`
-  （原版 `checkKill()` 当场弹剧本）。
-- ⚠️ **服务端绝不替玩家 `finish`**：剧本要人读，`finish` 只能由前端在玩家读完/关闭后调用。
-- 该函数**幂等**：登记过的条目因 `status !== 'none'` 直接跳过，重复进图不会重置击杀进度。
-
-**前端**：`story-store.handleNotification` 按 `autoPlay` 分流 —— 为真则 `story.load()` 后
-`ui.setActivePanel('stories')` 并 `open(key)`；为假只提示 + 刷新列表。
-玩家正在读另一段剧情时（`play !== null`）**不打断**。
-
-⚠️ 面板 key 是 **`UiStore` 状态**（不是 `GameShellPage` 的局部 state），否则推送驱动的跳转无法发起。
+- 删除清单见 [`ai-docs/19`](ai-docs/19-钱包地图混沌仪约定.md) §19.5。
+- 旧实现原文存档在 [`ai-docs/20`](ai-docs/20-拾取规则与剧情沿革.md) —— **仅作参考，不要回引**。
 
 ---
 
@@ -433,9 +221,9 @@ battle 不再直接调用 story）。
 - 判定只有一个入口：`web/src/stores/world-store.ts` 的 `isAttackableCamp(camp)` /
   `get attackables()`；`enemies` 只用于计数与展示。
 - ⚠️ **不要自己写 `unit.camp === 'enemy'`**：前端曾经只列 `enemy`，于是中立的大史莱姆
-  (`slime.giant`) 既看不见也点不动 → `eyer-stories-4`（击杀 1 只大史莱姆）直接把主线卡死。
-  这正是原版剧情要教玩家的那条规则：「黄色名字的魔物不会主动攻击英雄们……但如果英雄主动
-  攻击他们，他们就会加入战斗」。
+  (`slime.giant`) 既看不见也点不动 —— 当时直接把一条主线任务卡死（那次教训之后，
+  中立怪改为可点选）。这正是原版要教玩家的那条规则：「黄色名字的魔物不会主动攻击英雄们……
+  但如果英雄主动攻击他们，他们就会加入战斗」。
 - 中立怪不是"点一下就变敌人"，而是**首次受到伤害**时由
   `Unit.damage()` → `setTarget(from)` → `EnemyUnit.setTarget()` 把 `camp` 翻成 `enemy` 并反击
   （见 `unit.ts:602-614` 与 `enemy-unit.ts:455-460`）。
@@ -444,95 +232,32 @@ battle 不再直接调用 story）。
 
 ---
 
-## 14. `(world, tick)` 推送频率：设计值 5Hz/连接 + 自检探针
+## 14. `(world, tick)` 推送频率 → **已被 §20 取代**
 
-**设计（实测，不要凭感觉）**：`WorldService` 心跳 `WORLD_CONFIG.tickIntervalMs = 200`，
-`NotificationBatcher` flush 周期 `200`，同一 `(userId, cmdMerge)` 在一批内**合并成一帧**。
-⇒ **每个 WS 连接**每秒收到 ~5 帧 `(cmd=30, subCmd=5)`，帧间隔中位数 200ms。
+旧设计「每 200ms 无条件推整份 `units` 快照、5 帧/秒」**已废弃**；现在是 §20 的 **200ms 累计制差分**
+（无变化不发帧，实测 1.6~1.8 帧/秒，见 §20.7）。判断服务端是否在跑请看 `/api/metrics` 的
+`world_push_*`（§20.6 / §20.7），**不要**再用「窗口内 0 帧」当断线判据。
 
-实测（直连 3100 与经 5273 代理一致）：
-
-```
-{"frames":60,"perSecond":5,"gapMin":199,"gapP50":200,"gapP90":201,"gapMax":202}
-```
-
-**若在浏览器里看到明显更多**，只有两种可能 —— 用探针量，不要靠 console 里数：
-
-```js
-await __idleDarkTickRate()      // 默认采样 10s，打印 frames / perSecond / 间隔分布 / 结论
-await __idleDarkTickRate(3000)
-__IDLE_DARK__                   // 根 store（临时排查）
-```
-
-| 现象 | 结论 |
-|---|---|
-| 同一 `serverTime` 出现多次（`duplicatedFrames > 0`） | **同一帧被投递多次**：多个标签页 / 5273 与 5274 两个 dev server / 残留 socket。框架 `sendNotification` 会发给该 userId 的**全部** OPEN 连接 |
-| 不重复但 `perSecond > 6` | 服务端真的快于设计 —— 查 `tickIntervalMs` 与 batcher `flushIntervalMs` |
-| 两者都正常，只是"刷屏" | 帧里带整份 `units` 快照，`console.log` 5 次/秒 × 大对象 = 观感问题 |
-
-探针只在 `import.meta.env.DEV` 下**动态 import**（`main.tsx`），
-生产包里 `grep __idleDarkTickRate dist/assets/*.js` 应为 **0 命中**（已验证）。
-纯汇总逻辑在 `web/src/services/tick-rate.ts#summarizeTickRate`，单测覆盖空样本/单帧/乱序/
-重复 `serverTime`/窗口非法等边界。
+仍然有效的部分（`__idleDarkTickRate()` 探针、`__IDLE_DARK__`、
+「同一 `serverTime` 出现多次 ⇒ 一帧被投递多次」的排查表）见
+[`ai-docs/21`](ai-docs/21-推送频率沿革与会话归属.md)。
 
 ---
 
-## 15. 角色会话归属：一个账号同一时刻只有一个活跃角色
+## 15. 角色会话归属：一个账号同一时刻只有一个活跃角色 → 详版 [`ai-docs/21`](ai-docs/21-推送频率沿革与会话归属.md)
 
-**语义**（原版是单存档单玩家，没有"同账号同时玩两个角色"的概念）：
-
-- 选角是 WS Action（`player.select`，cmd 20/6）；握手只认**账号**（`?token=` → userId），
-  所以「先连 WS 再选角色」是协议决定的，不是 bug。
-- **每次 WS 握手成功 = 该账号回到「未选角色」**：`app.module.ts` 的 `authenticate` 里
-  **await** `WorldService.resetActiveCharacter(userId)`（停活跃会话 + 清两个注册表 +
-  `batcher.drop(userId)`）。不这样做的话，刷新页面后旧角色仍被当成"在线"
-  （`OnlineSessionService.isOnline` 是**账号级**判据），`(world, tick)` 会灌给停在选角页的页面。
-  - 必须 **await**：否则握手已放行、连接已能收推送，而旧会话还在 tick（实测漏 1 帧）；
-  - 必须 **drop** 而不是 flush 待发帧：队列里那批 tick 属于"上一段游玩"，不能投给新连接；
-  - 有 2s 超时保护：DB 卡住也不能把握手挂死（超时放行，重置继续在后台跑）。
-  - 断线重连由前端补：`RootStore` 在「曾经 online 过之后再次 online」时重新
-    `player.select(activePlayerKey)`；**全新登录/刷新时 `activePlayerKey` 为 null，
-    故意不自动选角**（否则又会在选角页拉起战斗推送）。
-- `player.select` 是**切换**：`PlayerLogicService.select` 会 `start(新角色)` 后
-  `stop(旧角色)`，保证同一账号**只有一个活跃世界会话**。
-- `WorldService.stop()` 在指针仍指向该角色时清理 `activeByUser`（切人流程是
-  `start(新) → stop(旧)`，所以不能无条件清）。
-
-**角色归属校验**（唯一入口 `WorldService.resolveActiveCharacter(userId, rawKey)`）：
-
-| 入参 | 结果 |
-|---|---|
-| 未选角 + 不给 key | 失败（`NOT_IN_MAP`，'尚未选择角色'） |
-| 已选角 + 不给 key / 空串 | 回退到当前角色 |
-| key === 当前角色 | 通过 |
-| key ≠ 当前角色 | **失败**（`PLAYER_NOT_FOUND`，'该角色不是当前选择的角色'） |
-
-`world.*` / `battle.focus` / `idle.*` 都走这一个入口，**不要再各写一份 `?? activeCharacterOf`**。
-
-> ⚠️ **为什么必须这样**：框架的定向推送 `sendNotification(userId, …)` 会发给该 userId 的
-> **全部 OPEN 连接**。如果允许"一个账号两个角色会话"或"A 连接操作 B 角色"，就会出现
-> 「两条连接互相收到/推进对方的角色」= 串号 + 双份 tick 推送（实测过：
-> A 选 X、B 选 Y，A 不带 key 的 `world.snapshot` 解析到 Y；2 秒内 A=9 B=10 帧且 serverTime 相同）。
-> 单会话 + 归属校验之后，**推送到该账号任何连接的消息都只属于当前角色**。
-
-**回归验证**：
-
-- 单测 `server/test/character-switch.test.ts`（切人停旧会话 / tick 只含当前角色 /
-  `stop` 清指针 / `resolveActiveCharacter` 四种入参 / 每 tick 至多一帧）。
-  去掉"停旧会话"那两行 → 3/6 用例失败（已实测）。
-- 端到端 `server/scripts/character-scope-smoke.mjs`（真实 REST+WS+DB，同账号两条连接）
-  **10/10 通过**，含「新连接（未 select、模拟刷新）收不到 `(world, tick)`」与
-  「新连接 `world.snapshot` → 尚未选择角色」。
-- 面板域（inventory/shop/… 的 `characterId` 可选、走 `PanelCharacterService`）**尚未**做
-  同样的显式化 —— 见交接文档的后续项。
-
-### 15.1 别在 `pnpm dev:server` 运行时手动 build
-
-`pnpm dev:server` 已经在跑 `tsc --watch` + `node --watch dist/main.js`。
-再手动 `pnpm --filter idle-dark-server run build`（或 `pnpm run verify` 里的 build）会与 watcher
-抢写 dist → `node --watch` 连续重启，期间**端口短暂不可用**（实测出现过
-`ECONNREFUSED` 与 `Cannot use a pool after calling end on the pool`）。
-要跑全量门禁就**先停 dev**，或跑完后再确认 `/api/health` 已恢复。
+- 选角是 WS Action（`player.select` 20/6）；握手只认账号 → **每次握手成功 = 该账号回到「未选角色」**：
+  `app.module.ts` 的 `authenticate` 里 **await** `WorldService.resetActiveCharacter(userId)`
+  （停旧会话 + 清两个注册表 + `batcher.drop`；2s 超时保护）。不 await / 改成 flush 会漏帧或串号。
+- `player.select` 是**切换**（`start(新角色)` 后 `stop(旧角色)`）—— 同一账号只有一个活跃世界会话。
+- **归属校验唯一入口** `WorldService.resolveActiveCharacter(userId, rawKey)`：
+  未选角 + 无 key → 失败（`NOT_IN_MAP`）；已选角 + 无 key / 空串 → 回退当前角色；key 相等 → 通过；
+  key 不等 → 失败（`PLAYER_NOT_FOUND`）。`world.*` / `battle.focus` / `idle.*` 都走它，
+  **不要再各写一份 `?? activeCharacterOf`**。
+- 理由：框架 `sendNotification(userId, …)` 会发给该账号**全部 OPEN 连接** —— 允许多会话就会互相串号
+  + 双份 tick 推送（实测过）。
+- 回归：`server/test/character-switch.test.ts`、`scripts/character-scope-smoke.mjs`（11/11）。
+- ⚠️ **别在 `pnpm dev:server` 运行时手动 build**：watcher 会抢写 dist → 端口短暂不可用。
 
 ---
 
@@ -553,29 +278,21 @@ __IDLE_DARK__                   // 根 store（临时排查）
 | **C6** | 每片状态只有一个写者（`characters.state` 分区、`account_state.data` 分键、在线/会话注册表归 external） |
 | **C7** | **战斗（伤害判定、经验获取、掉落判定）必须运行在 battle 逻辑服内**，不得散落在对外服或面板域 |
 
-### 16.1 边界登记表是唯一真相
+### 16.1 边界登记表是唯一真相（详版 [`ai-docs/23`](ai-docs/23-逻辑服边界详解.md)）
 
-逻辑服的划分、源码根、cmd 段归属都写在
-`packages/server/src/logic-servers/registry.ts`（`SERVER_DEFINITIONS`）：
-`external / battle / item / quest / character / dungeon / map`（拓扑 B，09 §4.1）。
+- 唯一真相：`logic-servers/registry.ts#SERVER_DEFINITIONS`。
+  当前 **六服** = `external / battle / item / character / idle / map`
+  （`idle` 兼持 `idle(120)` + `chaos(140)`；旧 `quest` / `dungeon` 已删除）。
+- 跨服事件（`modules/logic/shared/events.ts`）**仅两条**：
+  `CombatHooksDirty`（item / character → battle）、`ChaosRunEnded`（battle → idle）；
+  总线 `EVENT_BUS` 是**进程内同步**实现，保持解环前的调用时序。
 
-**跨服事件**（08 §2.3 解环）定义在 `modules/logic/shared/events.ts`：
-`MapEntered`（battle→quest）、`EnemyKilled`（battle→quest）、`CombatHooksDirty`（item/character→battle）。
-总线 `EVENT_BUS` 是**进程内同步**实现，保持解环前的调用时序。
+### 16.2 架构门禁（详版 [`ai-docs/23`](ai-docs/23-逻辑服边界详解.md)）
 
-### 16.2 架构门禁（会失败的测试）
-
-`pnpm --filter idle-dark-server exec vitest run test/logic-server-boundary.test.ts` 断言：
-
-1. **文件级 SCC = 0**，且**逻辑服级图无环**（含 `world/story/inventory` 三条已知环的回归）；
-2. **共享层不反向依赖任何逻辑服**；
-3. **跨服深路径 import 恰好等于** `TRANSITIONAL_DEEP_IMPORTS`（**过渡债务，禁止增长**）；
-   当前仅剩 `dungeon → map` 一条（09 §4.2 允许的方向：队列耗尽/非秘境条目 → `map.ContinueOpenWorld`）。
-4. **cmd 段唯一归属**：`CMD_SEGMENTS` 每段恰好属于一个服；
-5. 每个逻辑服根下的 `logic-server.ts` 导出 `XxxLogicServer` 且**不得出现 `@ActionMethod`**。
-
-> 扫描器会**先剥注释**再解析：本仓多处 JSDoc 里有示例 `import`，不剥会把文档当真实依赖（实测过）。
-> 动态 `import(变量)` 与无法解析的相对 import 一律**显式报告**，不得静默通过。
+`test/logic-server-boundary.test.ts` 断言：文件级 SCC = 0、逻辑服级无环、
+共享层不反向依赖任何逻辑服、**`TRANSITIONAL_DEEP_IMPORTS` 当前为空数组（禁止增长）**、
+cmd 段唯一归属、每个 `*LogicServer` 里不得出现 `@ActionMethod`。
+⚠️ 扫描器**先剥注释**再解析；动态 `import(变量)` 与无法解析的相对 import **显式报告**，不得静默通过。
 
 ### 16.3 容量不变式（07 §0，与逻辑服调度绑定）
 
@@ -587,230 +304,71 @@ __IDLE_DARK__                   // 根 store（临时排查）
 
 ---
 
-## 17. `src/data/**` 的视图类型是「对内核的断言」——已加编译期门禁
+## 17. `src/data/**` 的视图类型是「对内核的断言」→ 详版 [`ai-docs/22`](ai-docs/22-框架坑与内核视图门禁.md)
 
-`contracts/data.ts` 把数据表函数的 `this` / `world` / `self` 冻结成 `unknown`（正确：契约只描述
-「表里有什么」）。为了让 183 个原版数据文件**保持原样**能过 `strict`，`src/data/_shapes.ts` 声明了
-一层「视图接口」（`UnitLike` / `WorldLike` / `BuffStateLike` / `SkillStateLike` / `PlayerView`）。
-
-**风险**：视图类型比真实内核**多写一个成员**，`tsc` 只会更宽松 —— 缺陷被推迟到运行期，
-而数据层 hook 抛的错会被 tick / 离线结算的 `try/catch` 吞成一条 WARN，**静默失效**。
-
-已发生三次（同一根因，详见 `05` §2.3 / §2.4）：
-
-| 视图成员 | 内核真相 | 运行期后果 |
-|---|---|---|
-| `UnitLike.timeline` | 真实 `Unit` 只有 `clock`（原版 `this.timeline` 的移植名） | `undefined.pause()`；`freezed`/`stunned` 等 debuff 全部失效 |
-| `WorldLike.sendGeneralMsg` | `BattleWorld` 上**不存在**该方法 | 26 处机关提示 / BOSS 对话 `is not a function` |
-| `SkillStateLike.summoner` | `summoner` 只属于 `Unit`；hook 的 `this` 是 `SkillState` | `year2018.heal` 恒 `undefined` → 永远静默不生效 |
-
-**门禁**：`packages/game-core/src/data/_shapes.gate.ts` ——
-`type MissingOn<View, keyof Kernel>` + `AssertNoMissing<T extends never>` 为 7 组视图断言
-「视图的每个成员都真实存在于内核上」。视图再撒谎 → `pnpm run typecheck` 报 `TS2344` 并**点名成员**。
-
-- ⚠️ 该文件**不可**命名为 `*.test.ts`：`packages/game-core/tsconfig.json` 的 `exclude` 含
-  `src/**/*.test.ts`，放进测试文件就是**假门禁**（实测：塞回 `timeline` 后 typecheck 仍 exit 0）。
-- ⚠️ 多类目标要传**并集**：`keyof (A | B)` 是**交集**，写成 `keyof (Unit | PlayerUnit | EnemyUnit)`
-  会把子类独有的 `str` / `player` / `transformType` 全误报为缺失。
-- 加成员的处置顺序：**先在内核上补**（如 `BattleWorld.sendGeneralMsg` 转发到 `BattleSink.general`），
-  确实属于数据层动态挂载的才登记进 `BuffDynamicFields` 白名单并写明谁写谁读。
-
-**移植新数据时**：凡原版属性名在本仓被改名，视图里必须写**新名**；
-`sendSkillUsage` / `sendGeneralMsg` 这类「原版 `world.*` 但内核没有」的调用，
-一律在 `BattleWorld` 上加**适配器**，不要把数据层改成别的写法。
+- `contracts/data.ts` 把数据表函数的 `this` / `world` / `self` 冻结成 `unknown`；为让原版数据文件
+  保持原样过 `strict`，`src/data/_shapes.ts` 声明了一层「视图接口」。
+  **视图比真实内核多写一个成员时 `tsc` 不会报错** → 缺陷延到运行期，且被 tick / 离线结算的
+  `try/catch` 吞成一条 WARN = **静默失效**（已发生三次：`UnitLike.timeline`、
+  `WorldLike.sendGeneralMsg`、`SkillStateLike.summoner`）。
+- **编译期门禁** `src/data/_shapes.gate.ts`（`MissingOn<View, keyof Kernel>` + `AssertNoMissing`）：
+  视图再撒谎，`pnpm run typecheck` 就报 `TS2344` 并**点名成员**。
+- ⚠️ 门禁文件**不可**命名为 `*.test.ts`（`game-core` 的 tsconfig `exclude` 含 `src/**/*.test.ts`，
+  放进去就是**假门禁**）；多类目标要传**并集**（`keyof (A | B)` 是**交集**，会误报子类独有成员）。
+- 移植数据：原版属性在本仓改名就写**新名**；「原版 `world.*` 但内核没有」的调用
+  （如 `sendSkillUsage` / `sendGeneralMsg`）一律在 `BattleWorld` 上加**适配器**。
 
 ---
 
-## 18. 装备与伤害体系（12 号任务书 E0–E7 重构后的硬约定）
+## 18. 装备与伤害体系（12 号任务书 E0–E7 后的硬约定）→ 详版 [`ai-docs/18`](ai-docs/18-装备与伤害体系约定.md)
 
-> 来源：[`ai-docs/12-装备与伤害体系重构任务书.md`](ai-docs/12-装备与伤害体系重构任务书.md)。
-> **P1：不做存量兼容**（当前无真实玩家、测试号可删号重开）；`idle_dark` 清库用 `DELETE FROM users;`。
-
-### 18.1 装备槽与副手判定：唯一真相在 `@idle-dark/protocol` 的 `equip.ts`
-
-- 装备位有 **9 个**：`weapon / offHand / plastron / gloves / belt / boots / amulet / ring1 / ring2`
-  （**箭袋属副手，不是第 10 槽**）。
-- `GoodData.position` 使用同一联合；`GoodData.equipCategory` 标武器类别：
-  主手 `oneHand | twoHandMelee | bow`，副手专属 `shield | quiver`。
-- `canEquipOffHand(main, off)` 是**前后端共用的唯一判定表**（禁止在 server/web 各写一份）：
-  主手空→盾/箭袋；单手→双持/盾（禁箭袋）；双手近战→锁定；弓→箭袋（禁盾）。
-- `Player.equip(slot)` 返回 **boolean**：判定表拒绝或副手腾不出空位时为 `false`；
-  单手武器在主手已占且副手空时自动落副手（双持）；双手武器落主手前把副手挪回背包；
-  戒指在两个戒指槽里取第一个空的。`opEquip` 必须处理 `false`（抛 `INVALID_PARAM`）。
-- `EQUIP_SLOTS`（`career-info.ts`）与 `EQUIP_POSITIONS`（protocol）是同一份；server 面板槽位
-  走 `slot-ref.ts` 自动覆盖。前端只渲染协议常量，不硬编码槽位。
-
-### 18.2 品质三档（P4）
-
-- `protocol` 的 `Quality = 0|1|2`（普通 / 优秀 / 传奇），`QUALITY_NAMES` 是值导出；
-  ui-kit 镜像 `QUALITY_LABELS` 并由 `game/quality.test.ts` 做一致性门禁。
-- `BASE_QUALITY_RATE = [1, 0.5, 0.005, 0]`（长度绑定最大品质，2 档分别为 ~49.5% / ~0.5%）。
-- ⚠️ `UnitStateDto.quality` 是**敌人词缀条数**（`EnemyUnit.quality`，可 >2），与装备 `Quality`
-  **同名不同义**，类型是 `number` —— 不要把它夹到 0..2。
-
-### 18.3 词缀前后缀骨架（P5，只做预分类）
-
-- `AffixData.affixType?: 'prefix' | 'suffix'`（缺省 prefix）+ `tag?: string`；
-  不变式：**同一 tag 只归属前缀或后缀之一**（`data/index.test.ts` 有门禁）。
-- `generateEquip` 按**前后缀分池**抽取：普通 1+1、优秀 3+3、传奇 3+3 + 末尾 1 条传奇
-  （传奇词缀**豁免**前后缀规则）；某侧候选不足时按可用数抽取，整池为空才抛错。
-- `GoodData.affixGroup` 是「底材 → 词缀池」的挂点：`affixPoolOf(tables, goodData)` 优先查
-  `DataTables.affixGroups[group]`，未命中回落全池。具体分组分布下期（P5）。
-
-### 18.4 伤害类型与元素分类（P6/P7）
-
-- 唯一真相 `game-core/src/rules/damage.ts`：元素 = `fire/cold/lightning`；
-  物理 = `melee`；**混沌 `chaos` 非元素**（`allResist` 不作用于它）。
-- `battle-world.sendDamage` 的护甲/抗性分支收口到 `mitigationKindOf`，**禁止**再散落
-  `camelCase(type + '-resist')` 判定。
-- **附加元素伤害本期未开工**（P6）：不要给 `GoodData`/`InventorySlot` 加半成品元素字段。
-
-### 18.5 词缀作用域二元划分与双持（P12）
-
-- **区域词缀**（武器 / 副手）：只在该武器出手时生效。`rebindEquipmentHooks` **不挂** weapon/offHand；
-  `PlayerUnit.weaponAffixAttr(slot, key, value)` 按手叠加到该手武器底材值上。
-- **全局词缀**（防具 / 饰品）：沿用 `addAttrHook` 挂 Unit。
-- 按手取值：`atkOf / atkSpeedOf / critRateOf / critBonusOf / leechOf / hpFromKillOf`
-  （默认主手）。**攻速基准取自该手武器底材**，双持总节奏**不等于**两把武器攻速之和。
-- 双持交替：`PlayerUnit.activeHand` + `setAttackCoolDown`（冷却取当前手攻速、并清除未到期旧计时器）
-  + `onAttackCoolDown`（冷却结束换手）；非双持恒用主手。
-
-### 18.6 掉落与商店（P8/P10/P11）
-
-- 怪物与副本**都不再产装备**（184 条 equip 掉落条目已物理删除）；数据门禁断言「无 equip 掉落」。
-- **工艺通货 12 种 + 精华 6 种**（实装，全部 `type:'material'` + `stack`）：
-  - 通货 key `currency.<code>` = `transmute/alchemy/chaos/scour/annul/blessed/exalt/ember/wisp/divine/fracture/mirror`
-    （取自修仙设计稿，**不含 `vaal` 瓦尔宝珠**）；`description` 写有效果说明，但**炼器效果尚未接线**（下期 P9）。
-  - 精华 key `essence.<code>` = `atk/spirit/def/hp/regen/insight`（按前后缀 + 词缀族定向）。
-  - 精华槽共 12 个：`essence.07..12` 是**空位**（下期实装，**不参与掉落**）。
-- 掉落规格表在 `data/index.ts` 的 `CRAFT_DROP_SPECS`（`{ rate, minLevel }`）/ `ESSENCE_DROP_RATES`，
-  `registerCraftDrops(tables)` 接线（地图通关 = ×`MAP_DROP_MULTIPLIER`）。稀有度口径：
-  **`mirror` 最低（控制持有量）**，`divine` / `fracture` 高于它且是**大额交易通货**，
-  **`annul`（剥离石）比 `wisp`（古灵溶液）更稀有**；**`count` 一律 `[n,n]` 数组**
-  （`battle-world.loots` 对 `count` 只认数组，标量会算出 0）。改数值只动这张表。
-- **掉落等级门槛**（`LootEntry.minLevel` / `maxLevel`，见 `battle-world.loots`）：
-  判定等级 = **`min(怪物等级, 地图等级)`**；地图无 `level`（剧情图）时退化为只用怪物等级。
-  门槛在**消耗 RNG 之前**判定（门槛外不扰动掉落流）。通货门槛：`scour`（重铸石）起 **40**、
-  `exalt`（崇高石）起 **60**、`fracture`（破溃宝珠）起 **100**。
-- 0 级地图 `town` 与 `baseCatalogOf(tables)`（数据驱动底材目录）是商店入口骨架；
-  底材目录与购买 Action 下期（P8）。`lootRule` 域因装备不再掉落而**休眠**（未删除）。
-- **默认背包 50 格**（`DEFAULT_INVENTORY_SIZE`，原版 4 格；用户要求扩位）。`postCreate` / `postLoad`
-  都按它补格；神力扩容（`upgrades.inventoryByDiamonds`，32 级）在此基础上继续叠加。
-- **掉落必须如实上报**：`Player.loot(good)` 返回**实际入包数量**（0 = 放不下），
-  `BattleWorld.lootGood` 先落地再上报 —— `0` → `LootEvent.handled: 'lost'`（`LootDto` 同步），
-  部分入包则补发一条 `'lost'`。前端对 `'lost'` 弹「包裹已满」错误提示；
-  `BattleCollector` **跳过 `'lost'`**（不计入战利品 / 金币 / 离线报告）。
-  ⚠️ 旧实现先发事件后落地，会出现「弹了获得提示但背包里没有」——不要改回。
+- **装备槽 9 个**（箭袋属副手，不是第 10 槽）：唯一真相是 `@idle-dark/protocol` 的 `equip.ts`；
+  `canEquipOffHand(main, off)` 是前后端**共用**判定表（禁止各写一份）；`Player.equip()` 返回 boolean。
+- **品质三档** `Quality = 0|1|2`（普通 / 优秀 / 传奇），`BASE_QUALITY_RATE = [1, 0.5, 0.005, 0]`。
+  ⚠️ `UnitStateDto.quality` 是**敌人词缀条数**（可 >2），与装备品质**同名不同义**，不要夹到 0..2。
+- **词缀**按前后缀分池（普通 1+1 / 优秀 3+3 / 传奇 3+3+1，传奇词缀豁免前后缀规则）；
+  不变式：同一 `tag` 只归前缀或后缀之一（有门禁）。
+- **元素 = fire/cold/lightning；物理 = melee；混沌 chaos 非元素**（`allResist` 不作用于它）。
+  唯一真相 `game-core/src/rules/damage.ts`；护甲/抗性分支收口到 `mitigationKindOf`，
+  **禁止**再散落 `camelCase(type + '-resist')` 判定。
+- **词缀作用域二元划分**：武器 / 副手 = **区域**（只在该手出手时生效，按手取值
+  `atkOf` / `atkSpeedOf` / `critRateOf` / …，双持交替走 `activeHand`）；防具 / 饰品 = **全局**
+  （`addAttrHook`）。**攻速基准取自该手武器底材**，双持总节奏 ≠ 两把武器攻速之和。
+- **掉落**：怪物与副本**都不再产装备**（184 条 equip 掉落已物理删除，有门禁）；改为通货 12 种 +
+  精华 6 种（规格表 `CRAFT_DROP_SPECS` / `ESSENCE_DROP_RATES`，`count` **一律 `[n,n]` 数组**，
+  标量会算出 0）。等级门槛在**消耗 RNG 之前**判定。默认背包 **50 格**（原版 4 格）。
+- **掉落必须如实上报**：`Player.loot(good)` 返回**实际入包数量**，`lootGood` **先落地再上报**；
+  放不下 → `handled:'lost'`（前端提示「包裹已满」，`BattleCollector` 跳过）。
+  ⚠️ 不要改回「先发事件后落地」—— 会出现「弹了获得提示但背包里没有」。
 
 ---
 
-## 19. 钱包 · 新地图 · 混沌仪（13 号任务书 W0–W7 重构后的硬约定）
+## 19. 钱包 · 新地图 · 混沌仪（13 号任务书 W0–W7 后的硬约定）→ 详版 [`ai-docs/19`](ai-docs/19-钱包地图混沌仪约定.md)
 
-> 来源：[`ai-docs/13-下一期重构-地图·无尽·钱包交接任务书.md`](ai-docs/13-下一期重构-地图·无尽·钱包交接任务书.md)。
-> **本节覆盖 §18.6 与更早文档里关于「剧情 / 氪金秘境 / 旧地图」的旧描述**——那些系统已物理删除。
+> 本节覆盖更早文档里关于「剧情 / 氪金秘境 / 旧地图」的旧描述 —— 那些系统**已物理删除**。
 
-### 19.1 钱包（R1）：通货 / 精华不占背包格
-
-- `GoodData.wallet?: boolean` 标记钱包物品。已标记：`currency.*`（12 种）+ `essence.*`（实装 6 + 空位 6）。
-  **普通材料仍占背包**；**混沌钥石不是钱包物品**（走背包）。
-- `Player.wallet: Map<string, number>`：**无容量上限**。`Player.loot` 命中钱包物品时走独立分支 ——
-  不碰 `inventory`、返回**全额**（因此钱包物品永远不会 `handled:'lost'`）。
-  `walletCount` / `costWallet`（原子扣款；0/负数/NaN/Infinity 均安全）。
-- `PlayerJson.wallet` 落 `characters.state`；`fromJSON` 丢弃 ≤0 / 非有限值。
-- DTO：`InventorySlotDto.wallet?`（服务端按 `good.wallet` 打标，`(battle,loot)` 推送复用同一 DTO）、
-  `WalletEntryDto`、`PlayerStateDto.wallet?`（`walletDtoOf` 排序：goodOrder → key）。**前端零推导**。
-- 钱包物品**本期不可卖店**（`opSell` 仍只作用于背包格）。
-
-### 19.2 新地图（R2）：等级段 + 一次性野外 BOSS
-
-- 地图种子在 `packages/game-core/src/data/maps-world.ts`（旧 `data/maps.ts` 已物理删除）。
-  `home`（自宅）保留；战斗图为 `world.1`…`world.13`（**9 段各 1 张**，等级 = 段下界
-  `1/5/15/25/35/45/55/65/75`；**85+ 共 4 张**，等级 85）。段首取 **1 级**（角色初始即 1 级）。
-- 解锁：`Requirement` 只保留 `level`（**`stories`/`beforeStories` 已删除**），并新增可选
-  `bossKilled?: string`（上一段守关 BOSS 所在图 key）。`world.2..9` 接 `world.(N-1)`；
-  `world.10..13` 都接 `world.9`。`checkRequirement` 中 `bossKilled` 缺失即 fail-closed。
-- **波次**（`combat/spawner.ts`）：1 波 = 该图 `monsters` 全部条目刷满 `config.total` 且清空；
-  `Born.reset()` 单调推进，`EnemyBorn.wave` 随 `dumpState` 往返（离线/读档不丢波数）。
-  新地图统一 **`total = 4`（每波 4 只）、`max = 4`（同屏上限 4 只）**。
-- **同屏上限口径（W12）**：`Born` 的自然刷新闸门是 **`Born.aliveMonsterCount()`（全图存活敌对怪总数，
-  含守关 BOSS 与 BOSS 召唤物；`camp` = `enemy`/`neutral`）**，**不是** `this.count`。
-  达到 `max` 即暂停自然刷新，但**保持定时轮询**，有怪死亡后自动恢复（绝不永久停刷）。
-  **BOSS 召唤物可以把总数推过 4**（设计允许）；玩家/联军召唤物（`player`/`alien`）**不计入**，
-  否则玩家召唤会把刷怪卡死。波次完成判据仍只看 `total`/`count`（召唤物不参与计数）。
-- **波次下发 + 持久化**：`WorldTickDto` / `WorldSnapshotDto` 带可选 `wave` / `bossEvery`
-  （`WorldService.emitTick` / `snapshotOf`；`mergeWorldTick` 取**最新**帧，不得回退波数），
-  前端 `world-store` 暴露 `wave` / `bossEvery` / `wavesToBoss` / `bossWave` 并显示在 `BattlePanel`。
-  波数是**世界侧车状态**：落在 `AccountExtras.worldMaps[characterId].wave`（**不进** `characters.state`），
-  `WorldService.start()` 恢复、`persistPosition()` 写回、切图 / 重复进图（重置本图）自然归 0；
-  脏值（NaN / 负数 / 非数字）一律按 0 处理（`worldWaveOf`）。
-  ⚠️ `unitStateDtoOf` 在 `server/.../world/internal/unit-state.ts`（**不在** `shared/`）。
-- **守关 BOSS**：每 `WORLD_BOSS_WAVE_INTERVAL = 20` 波尝试刷新；同屏一只；
-  **一次性**——击杀记在角色 `Player.worldBossKilled: Set<string>`（`PlayerJson.worldBossKilled`），
-  已击杀的图不再刷 BOSS 但普通怪照常 farm。BOSS 单位用显式 `worldBoss` 标记（**不要用 key 比较**：
-  `slime.queen` 既可能是某图 BOSS 又是另一图普通怪）。
-- **怪物等级**（`EnemyUnit.levelOverride`，`BattleWorld.addEnemy` 对非混沌图设置）：
-  普通 = 地图等级 / 稀有（`quality>=1`）= +1 / 守关 BOSS = +2。地图无 `level` 时回落旧公式。
-- **经验衰减必须按怪物真实等级比较**（`EnemyUnit.kill` → `world.gotExp(this.exp, this.level)`）：
-  经验窗口 = `玩家等级 < 地图等级 + 10`，与段位一一对应（world.1 → <11、world.3 → <25、world.4 → <35 …）。
-  ⚠️ **不要再把怪物等级 `transformEquipLevel` 减半**：减半会让 `dis = 玩家 − 地图/2`，
-  world.4（L=25）起玩家一到进图门槛就 `dis≥10`、经验恒 0 → 进度死锁在 ~Lv.20。
-  `transformEquipLevel` 只用于装备等级口径（如 `stunResist`），不要用在经验判定。
-- **刷怪池必须按真实数值 + 阵营挑选**（不能只看 `level` 字段）：普通怪与守关 BOSS 必须是
-  `camp:'enemy'` 且非 `onPress` 机关 —— `neutral` 不会被自动索敌（挂机卡波次）、
-  `alien`（如 `chapter3.fishzilla.magician`）**玩家根本无法攻击**；且 BOSS 的 HP 不得低于本图普通怪。
-  `data/spawn-eligibility.test.ts` 是门禁。
-- 等级上限 **100**（`CareerInfo.maxLevel` 默认 100，`CareerData.maxLevel?` 可覆写）；
-  **巅峰等级体系已全部删除**（`peakLevel`/`peakExp`/`maxPeakExp`/`levelUpPeak`、DB `peak_level`）。
-  满级后经验溢出直接丢弃，不再有任何巅峰轨迹。
-
-### 19.3 混沌钥石（R3 / W5）：PoE 式白图
-
-- 16 种独立物品 `keystone.t01`…`keystone.t16`（`data/goods.ts`）：`type:'material'` + `stack:9999`，
-  **本期无词缀、无加工入口、不接 `AffixInfo`**；同阶可堆叠；**不进钱包**。
-- 掉落规则（`rules/keystone.ts` + `BattleWorld.rollKeystoneDrop`）：
-  `tier = clamp(floor(level) - 84, 1, 16)`；**仅地图 `level >= 85`** 掉落；
-  单只怪最多掉 **自身阶 + 1**（`maxKeystoneDropTier`）；基础率 `KEYSTONE_DROP_RATE`，
-  掷阶 `P(cap)=0.75` 否则在 `1..cap-1` 均匀。全程走 `rng.loot`，**禁止 `Math.random()`**。
-- 词缀化 + 洗图参考 PoE，随 A1 炼器一起做（届时改为按实例、不堆叠）；T16 后的「梦魇地图」属后续。
-
-### 19.4 混沌仪（R3 / W6）：无尽挂机建筑
-
-- 地图种子 `data/maps-chaos.ts`：`chaos.t01`…`chaos.t16`，**地图等级 = 84 + T**（`MapData.chaos?: number`）。
-  **开图 UI 只显示 T 阶**；混沌图从 `map.list`（`mapListDtoOf`）中过滤，普通 `map.enter` 一律 `MAP_LOCKED`。
-- **解锁 = 通关全部野外 BOSS**（13 张 `world.*`），判定 `Player.hasAllWorldBossesKilled()`。
-- **钥石序列**：`Player.chaosSequence: string[]`（≤16，可重复）、`chaosFailMode:'normal'|'continue'`、
-  `chaosIndex` / `chaosRetry` / `chaosActive`，随角色存档往返。
-- 状态机唯一实现在 `packages/server/src/modules/logic/chaos/internal/chaos-ops.ts`（纯函数，在线/离线共用）：
-  每次进入消耗 1 把钥石；`clear` → 下一把；`death + normal` → 中断回普通地图；
-  `death + continue` → 重试当前把，**连败 3 次跳下一把**；越界 / 缺钥石 → 干净停止。
-- 运行接线：battle 的 `BattleWorld.chaosOutcome`（混沌 BOSS 死 = `clear`，**不写** `worldBossKilled`、可重复刷；
-  玩家死 = `death`）→ `WorldService.tick` 发跨服事件 **`ChaosRunEnded`**（`shared/events.ts`）→
-  `ChaosLogicService` 订阅后用 `BATTLE_COMMAND.enterMap(..., { allowChaos: true })` 推进。
-  ⚠️ `clear` 必须等守关 BOSS **清尸（`clean()` 掉落结算）后**才上报，否则换图会 dispose 掉清尸计时器、吞掉落。
-- 协议：`CMD_SEGMENTS.chaos = 140`（**复用已退役的 dungeon 段**）、`CHAOS_CMD{state,setSequence,setFailMode,start,stop}`；
-  逻辑服 `idle` 同时拥有 `idle(120)` 与 `chaos(140)`（roots 含 `modules/logic/idle` + `modules/logic/chaos`）。
-- **离线**：`IdleService.settle` 在 `chaosActive` 且持久化地图是混沌图时，用同一 `VirtualClock`/预算循环模拟并复用
-  `chaos-ops` 推进；**预算耗尽 / run 未结算 → 停在当前钥石，`extrapolatedMs = 0`**（混沌部分不外推）。
-  非混沌图的开放世界 C2 外推保持不变。
-- 前端面板 `ChaosPanel.tsx` + `chaos-store.ts`（T1~T16 + 钥石数、可编辑序列、失败选项、start/stop）。
-
-### 19.5 已物理删除的旧体系（不要回引）
-
-- **剧情 / quest 域**：`data/stories.ts`、story 逻辑服、`story` cmd 段（100）、`StoriesPanel`/`story-store`、
-  `MapEntered`/`EnemyKilled` 事件、`story-entry-smoke.mjs`；`Requirement.stories` 已删。
-- **旧氪金秘境**：`dungeon` cmd 段（140，现由 `chaos` 复用）、`challengeQueue`/`dungeonRuns`/`dungeonCooldowns`、
-  `dungeonTickets`/`countTicket`/`costTicket`、`endlessLevel`/`pendingMaps`、`nightmare.*` 图、
-  `data/packages/nightmare.ts`、`DungeonState`/phases、`year2018.dungeon`、`dungeon-queue-smoke.mjs`、
-  `dungeon → map` 过渡白名单。`TRANSITIONAL_DEEP_IMPORTS` 现为空。
-
-### 19.6 本期基线（W7 收尾）
-
-- `pnpm run verify` = 0，**1333 用例**：protocol 30 / ionet-transport 73 / game-core 555 /
-  ui-kit 194 / server 404 / web 77。
-- 数据库冒烟 6 项全绿：路由 **28/28**（含 `chaos 140/1..5`）、指标 9/9、线协议 15/15、
-  完整流程 22/22、角色归属 10/10、地图控制器 15/15。
-- 提交序列见 `git log`（W1 钱包 → … → W6b 混沌仪 → W7 文档收尾）。
-
+- **钱包（R1）**：`GoodData.wallet` 标记的通货 / 精华**不占背包格**、无容量上限、永不 `handled:'lost'`；
+  普通材料仍占背包；**混沌钥石不进钱包**。DTO 带 `wallet?`，**前端零推导**。
+- **新地图（R2）**：`world.1`…`world.13`（等级 1/5/15/25/35/45/55/65/75 + 85×4 张）；
+  `Requirement` 只保留 `level` + 可选 `bossKilled`（缺失即 fail-closed）。上限 **100 级，巅峰已删**。
+  统一 `total = 4` / `max = 4`；**刷怪闸门是 `Born.aliveMonsterCount()`（全图存活敌对怪，排除 ghost、
+  排除玩家/联军召唤物）**，不是 `this.count`；到达上限**保持轮询**，有怪死自动恢复（绝不永久停刷）。
+- **守关 BOSS**：每 20 波尝试刷新，**一次性**（记 `Player.worldBossKilled`）；用显式 `worldBoss` 标记，
+  **不要用 key 比较**（`slime.queen` 既可能是某图 BOSS 又是另一图普通怪）。怪物等级 = 地图等级 /
+  稀有（`quality>=1`）+1 / BOSS +2。
+- ⚠️ **经验衰减按怪物真实等级比较**（`gotExp(this.exp, this.level)`），窗口 = 玩家等级 < 地图等级 + 10；
+  **不要再把怪物等级 `transformEquipLevel` 减半** —— 会让 world.4（L=25）起经验恒 0、进度死锁在 ~Lv.20。
+- ⚠️ **刷怪池必须按真实数值 + 阵营挑选**（不能只看 `level`）：普通怪与 BOSS 必须 `camp:'enemy'`
+  且非 `onPress` 机关 —— `neutral` 不会自动索敌（挂机卡波次）、`alien` 玩家根本打不到；
+  且 BOSS 的 HP 不得低于本图普通怪。`data/spawn-eligibility.test.ts` 是门禁。
+- **混沌钥石（R3 / W5）**：`keystone.t01`…`t16`（材料、可堆叠、**不进钱包**）；**仅地图 `level >= 85`**
+  掉落，单怪最多掉自身阶 + 1，掷阶 `P(cap)=0.75`；全程走 `rng.loot`，**禁止 `Math.random()`**。
+- **混沌仪（R3 / W6）**：`chaos.t01`…`t16`（等级 = 84 + T）；解锁 = 通关全部野外 BOSS；
+  状态机唯一实现在 `logic/chaos/internal/chaos-ops.ts`（在线 / 离线共用）。开图 UI 只显示 T 阶，
+  混沌图从 `map.list` 过滤且普通 `map.enter` 一律 `MAP_LOCKED`。
+  ⚠️ **`clear` 必须等守关 BOSS 清尸（掉落结算）后**才上报，否则换图会 dispose 清尸计时器、吞掉落。
+- **已物理删除，不要回引**：quest / story 域、旧氪金秘境（`nightmare.*` / `dungeon` 队列 / 挑战券）、
+  巅峰等级体系、旧 `data/maps.ts`。完整清单见详版 §19.5。
 
 ---
 
@@ -886,30 +444,15 @@ hp mp rp ep comboPoint targetId castingProgress buffs camp
 ⚠️ `web/src/services/tick-rate.ts` 的探针语义已变：**帧率 ≤ 5/s 且可以为 0**，
 「窗口内 0 帧」不再是「连接已断」。判断服务端是否在跑要看 `/api/metrics` 的 `world_push_*`。
 
-### 20.7 观测（I3/I5）
+### 20.7 观测与实测（详版 [`ai-docs/24`](ai-docs/24-推送观测与实测数据.md)）
 
-`/api/metrics` 新增：
-
-| 指标 | 含义 |
-|---|---|
-| `world_push_frames_total` | 实际入队成功的帧数 |
-| `world_push_quiet_skips_total` | **设计行为**：无变化而未发帧的窗口数（不是丢弃） |
-| `world_push_dropped_total` | 入队被 batcher 丢弃的帧数 —— **> 0 即缺陷信号** |
-| `world_push_patch_ops_total` | 补丁操作总数 |
-| `world_push_frame_bytes_total` / `_max` | 帧字节合计 / 历史峰值 |
-| `push_flushed_total` / `push_dropped_total` / `push_resync_total` / `push_pending_*` / `push_max_routes_per_user` / `push_flush_interval_ms` | 推送防线（此前只有 `batcher.stats`，没接进 metrics，违反 I5） |
-
-### 20.8 实测带宽（本机真实服务端，25s/张）
-
-| | P1 之前（全量快照） | P2（累计制差分） |
-|---|---|---|
-| 帧率 | 5.00/s | 1.6~1.8/s |
-| 静默窗口占比 | 0% | **62%~67%** |
-| 线字节/帧（含信封） | 1211B | 370~396B |
-| **单连接带宽** | **5.89 KB/s** | **0.63~0.67 KB/s** |
-| 降幅 | — | **8.9×~9.3×** |
-
-帧字节峰值实测 **699B data / ~776B 线**（没走到 20 波 BOSS 波，故不是最坏值）。
+- `/api/metrics` 必看：`world_push_frames_total`、`world_push_quiet_skips_total`（**设计行为**）、
+  **`world_push_dropped_total`（> 0 即缺陷信号）**、`world_push_frame_bytes_max`、
+  **`world_unit_cap_refused_total`（正常恒 0，> 0 即病态）**，以及 `push_flushed_total` /
+  `push_dropped_total` / `push_resync_total` / `push_pending_*` / `push_max_routes_per_user` /
+  `push_flush_interval_ms`（I5：限额必须可见）。
+- 实测单连接带宽 **5.89 KB/s → 0.63~0.67 KB/s（约 9×）**，静默窗口 **62%~67%**；
+  帧字节峰值 699B data / ~776B 线（**未**含 20 波 BOSS 波的最坏值）。完整表格见详版。
 
 ### 20.9 禁止事项
 
@@ -919,43 +462,20 @@ hp mp rp ep comboPoint targetId castingProgress buffs camp
 - ❌ 不要让前端从 `hp <= 0` 之类别的地方判死 —— 用 `isDead()`。
 - ❌ 不要新增「无变化也发」的心跳帧。
 
-### 20.10 单位硬顶：`MAX_UNITS_PER_WORLD`（I2 的全局预算）
+### 20.10 单位硬顶 `MAX_UNITS_PER_WORLD = 32`（I2 的全局预算，详版 [`ai-docs/24`](ai-docs/24-推送观测与实测数据.md)）
 
-- 常量：`packages/game-core/src/combat/battle-world.ts` 的 **`MAX_UNITS_PER_WORLD = 32`**。
-- **为什么需要**：自然刷新有闸门（`Born.atMonsterCap()`，本图 `max` = 4），但
-  **BOSS 与技能召唤物可以把它推过 `max` 且没有数量上限**（`contracts/data.ts` / `combat/**`
-  里既无 `maxSummon` 也无 `maxCount`），唯一边界是「召唤物随 `SkillState` 释放而清除」这条
-  **时间**上的边界。于是差分循环 `O(单位数 × 9)`、单帧字节、`lastSentUnits` 内存三者都无上界。
-- **超载行为**（`BattleWorld.addEnemy`）：达硬顶 ⇒ **不注册进 `units`**，但**仍返回一个有效对象**
-  并立刻置 `camp = ghost`（技能 / 读条 / Buff / 受击全部 early-return，数据层的
-  `unit.addBuff(...)` / `runAttrHooks(unit, 'summonedUnit')` 不会崩）；同时
-  `world.refusedUnits += 1` 并发 `general` 事件 `world.unitCap:<type>`（I3：不许静默降级）。
-  - ⚠️ **不要**改成 `unit.kill()`：那会挂 3s 清尸定时器，纯属多余（`removeUnit` 对不在表内的
-    单位虽是安全 no-op，但没必要）。
+- 常量为 `game-core/src/combat/battle-world.ts` 的 `MAX_UNITS_PER_WORLD`。
+  **为什么需要**：BOSS 与技能召唤物能突破刷怪闸门且**无数量上限**，于是差分循环 `O(单位数 × 9)`、
+  单帧字节、`lastSentUnits` 内存三者都无上界。
+- **超载行为**（`BattleWorld.addEnemy`）：达顶 ⇒ **不注册进 `units`**，但仍**返回有效对象**并立刻
+  `camp = ghost`（数据层的 `addBuff` / `runAttrHooks` 不会崩），同时 `refusedUnits += 1` 并发
+  `general` 事件 `world.unitCap:<type>`（I3：**不许静默降级**）。
+  ⚠️ **不要**改成 `unit.kill()`（会白挂 3s 清尸定时器）。
 - **刷怪器必须先查再刷**：`Born.onTimer` 的条件是 `atMonsterCap() || world.atUnitCap()`，
-  `trySpawnWorldBoss` 也先查 `atUnitCap()`。**否则** `addEnemy` 的拒绝会让
-  `Born.count/total` 记账失真、该波永远无法判定完成。被挡住时**保持定时轮询**，怪死后自动恢复。
-- 指标：`world_unit_cap_refused_total`（**正常恒为 0，> 0 即缺陷/病态信号**）。
-
-### 20.11 连续量（`remainMs` / `castingProgress`）：实测后**决定不做**
-
-按设计，这两个字段仍留在 `MUTABLE_UNIT_FIELDS` 里，因此「有 Buff 或正在读条时窗口不静默」。
-**实测结论：这一点在当前可构造的场景里收益为零，故不改绝对时间戳**（保留 `remainMs` 反而更贴合
-「前端零推导」，不需要给规则开豁免）。
-
-实测（`tmp/measure-buff.mjs`，按序回放真实补丁流分类）：
-
-| 场景 | 帧率 | 连续量造成的额外帧 | 出现过非空 `buffs` | 连续量字节占比 |
-|---|---|---|---|---|
-| `world.1`（Lv1，30s） | 1.8/s | **0%** | 否 | ~0% |
-| `world.9`（Lv90，30s） | 1.6/s | **0%** | 否 | ~0% |
-| `world.13`（Lv100，30s） | 1.8/s | **0%** | 否 | 0.2% |
-| `world.9`（Lv100，120s） | 0.5/s | **0%** | 否 | 0% |
-
-⚠️ **这个结论有明确前提**：上述样本用的是**导入的无装备角色**，构造不出「带 Buff 的战斗」
-（`game-core/src/data/skills.ts` 里确有 37 处 `addBuff`，但样本内一次都没触发；疑似因
-角色输出/生存极端、或 100 级阵亡惩罚 `10 + level×0.5 = 60s` 导致大量时间处于尸体状态）。
-若将来在**真实装备档**上观察到 Buff 常驻，再按本文 §20.3 的方案改绝对时间戳。
+  `trySpawnWorldBoss` 也先查 `atUnitCap()`。否则 `addEnemy` 的拒绝会让 `Born.count/total` 记账失真、
+  该波永远无法判定完成。被挡住时**保持轮询**，怪死后自动恢复。
+- **连续量（`remainMs` / `castingProgress`）**：按设计留在白名单里，但**实测 4 组场景收益均为 0
+  → 决定不改绝对时间戳**（保留 `remainMs` 更贴合「前端零推导」）。前提与数据见详版。
 
 ---
 
@@ -973,3 +493,5 @@ hp mp rp ep comboPoint targetId castingProgress buffs camp
 - **名字/阵营查历史注册表**（`nameOf`/`campOf`），别用 `world.units`；**技能名**用
   `event.skillName`，经验用 `exp.whoId`。
 - `general` 的 `key:参数` 走 `formatGeneralText()`（未知前缀原样透出）。
+
+---
