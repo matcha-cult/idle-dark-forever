@@ -1,0 +1,688 @@
+/**
+ * 守关 BOSS 重做（v4.2）—— **新增**的 BOSS / 普通怪数据，不修改 `enemies.ts`。
+ *
+ * 规格真相：`/home/nbb/projects/user-tmp/map-boss-redesign-plan.md`（v4.2 定稿）。
+ * 本文件只做三件事：
+ *  1. `mapBosses`：29 条**传奇守关者** = 13 野外 `boss.world.NN` + 16 混沌 `boss.chaos.TNN`；
+ *  2. `mapMobs`：8 条新增普通怪（`wolf.frost` / `mine.ghoul` / …）；
+ *  3. 每条带 `originKey` 溯源字段，记录它是从哪只原生敌人变异 / 新造而来（P5「只加不改」）。
+ *
+ * ## 纪律
+ *
+ * - **P1 一 BOSS 一实体**：任一 BOSS key 只被一张图引用，且**不得出现在任何普通刷怪池**。
+ * - **P2 一实体一角色**：同一个 key 最多当一张图的守关 BOSS。
+ * - **P3 守关者必须压过杂兵**：`maxHp ≥ 3×本图最强杂兵`、`atk ≥ 1.5×本图最强杂兵`。
+ * - **P4 名字可溯源、不抬人名**：保留物种 / 职阶词，丢弃人形单位的个人名。
+ * - **P5 只加不改**：`enemies.ts`（机械移植）**逐字不动**；旧 BOSS 条目保留为**未被引用**的遗留。
+ * - **P6 三合一**：地图名（主题）= 普通刷怪池 = 守关 BOSS，见 `spawn-eligibility.test.ts` 第 7 条门禁。
+ *
+ * ## 与 `enemies.ts` 旧条目的关系
+ *
+ * 旧 BOSS（`slime.queen` / `wolf.king` / `kobold.goldteeth` / `chapter3.necromancer` /
+ * `chapter3.murloc.warlord` / `chapter3.fishzilla` 等）**保留在 `enemies.ts` 里不被删除**：
+ * 它们是「逐字移植、未臆造」的溯源证据，且混沌图的普通刷怪池仍在引用其中一部分
+ * （如 `chapter3.beast.simba` / `chapter3.beast.dingman`）。删除它们会破坏 P5 与混沌池。
+ *
+ * ## 未在设计稿中数值化的字段（本文件的取值口径，已在文档留痕）
+ *
+ * 设计稿 §5.1 给出野外 BOSS 的 `maxHp / atk / exp / def`，§5.2 只给出混沌 BOSS 的
+ * `maxHp / atk`。以下字段设计稿未指定，故按「**从 `originKey` 原生条目继承**」处理，
+ * 以免臆造数值：
+ *  - `atkSpeed`：继承原生（野外 + 混沌）；
+ *  - 混沌 BOSS 的 `exp` / `def`：继承原生；
+ *  - `level`：野外 = 地图等级（§2.1 的 Lv 列），混沌 = `84 + T`（`chaosLevelOfTier`）。
+ * 另外 `gold` 掉落的具体 `count` 区间（§5.4 只要求 `rate: 1`、`count` 用 `[min,max]` 数组）
+ * 与描述文案为本文件新增。
+ *
+ * ⚠️ BOSS **只继承原生的 skills，不继承其 buffs**：§5.4 只点名 `world.9` 沿用
+ * `simba.goodFriends`。若混沌 T4/T6 沿用 `pengpeng` / `dingman` 的 `goodFriends`，
+ * 会与同池的携带者一起复现 W12 的「BOSS 死后杂兵停刷」尾巴（见 `AGENTS.md` §19）。
+ */
+
+import type { EnemyEntry } from './_shapes.js';
+
+/** 词缀权重表（BOSS 以 `quality = 0` 生成，`affixes` 仅作权重，实际强度靠写死数值）。 */
+const AFFIXES = { stronger: 2, faster: 1, recover: 0.5 } as const;
+
+/** §4 新增普通怪（8 条）。数值逐字取自设计稿 §4。 */
+export const mapMobs: Record<string, EnemyEntry> = {
+  'wolf.frost': {
+    key: 'wolf.frost',
+    name: '霜狼',
+    description: '毛皮上结着终年不化的霜，呼气在雪原里凝成白雾。',
+    camp: 'enemy',
+    race: 'unknown',
+    career: 'melee',
+    maxHp: 400,
+    atk: 12,
+    atkSpeed: 0.5,
+    exp: 25,
+    level: 24,
+    skills: [{ key: 'melee', level: 0 }],
+    affixes: { ...AFFIXES },
+    loots: [{ key: 'gold', count: [1, 10], rate: 0.1 }],
+    originKey: 'wolf.minimal',
+  },
+  'mine.ghoul': {
+    key: 'mine.ghoul',
+    name: '矿坑尸鬼',
+    description: '死在坑道里的矿工，被熄灭的熔炉重新烤活了过来。',
+    camp: 'enemy',
+    race: 'unknown',
+    career: 'melee',
+    maxHp: 550,
+    atk: 12,
+    atkSpeed: 0.4,
+    exp: 45,
+    level: 36,
+    skills: [{ key: 'melee', level: 0 }],
+    affixes: { ...AFFIXES },
+    loots: [{ key: 'gold', count: [1, 10], rate: 0.2 }],
+    originKey: 'zombies.farmer',
+  },
+  'kobold.digger': {
+    key: 'kobold.digger',
+    name: '掘宝狗头人',
+    description: '抱着比身体还大的镐子，见什么都想刨开看看。',
+    camp: 'enemy',
+    race: 'unknown',
+    career: 'melee',
+    maxHp: 850,
+    atk: 35,
+    atkSpeed: 0.5,
+    exp: 35,
+    level: 44,
+    skills: [{ key: 'melee', level: 0 }],
+    affixes: { ...AFFIXES },
+    loots: [{ key: 'gold', count: [1, 10], rate: 0.2 }],
+    originKey: 'kobold.miner',
+  },
+  'beast.bear': {
+    key: 'beast.bear',
+    name: '磐石巨熊',
+    description: '背脊硬得像块岩石，一爪子能把骸骨堆拍散。',
+    camp: 'enemy',
+    race: 'unknown',
+    career: 'melee',
+    maxHp: 5000,
+    atk: 220,
+    atkSpeed: 0.5,
+    exp: 200,
+    level: 74,
+    skills: [{ key: 'melee', level: 0 }, { key: 'cleave', level: 0 }],
+    affixes: { ...AFFIXES },
+    loots: [{ key: 'gold', count: [5, 35], rate: 0.1 }],
+    originKey: 'chapter3.beast.lion',
+  },
+  'mino.grunt': {
+    key: 'mino.grunt',
+    name: '牛头人卫士',
+    description: '迷宫入口的持斧守卫，撞击声在石廊里回响。',
+    camp: 'enemy',
+    race: 'unknown',
+    career: 'melee',
+    maxHp: 20000,
+    atk: 500,
+    atkSpeed: 0.5,
+    exp: 400,
+    level: 84,
+    skills: [{ key: 'melee', level: 0 }],
+    affixes: { ...AFFIXES },
+    loots: [{ key: 'gold', count: [20, 50], rate: 0.1 }],
+    originKey: 'chapter3.murloc.warlord',
+  },
+  'mino.seer': {
+    key: 'mino.seer',
+    name: '牛头人先知',
+    description: '在岔路口低声吟诵，火球比斧刃先到。',
+    camp: 'enemy',
+    race: 'unknown',
+    career: 'melee',
+    maxHp: 15000,
+    atk: 650,
+    atkSpeed: 0.4,
+    exp: 400,
+    level: 84,
+    skills: [{ key: 'melee', level: 0 }, { key: 'shaman.fireball', level: 0 }],
+    affixes: { ...AFFIXES },
+    loots: [{ key: 'gold', count: [20, 50], rate: 0.1 }],
+    originKey: 'chapter3.murloc.shaman',
+  },
+  'hydra.spawn': {
+    key: 'hydra.spawn',
+    name: '幼蛇',
+    description: '九头蛇的子嗣，斩断一条还会从鳞甲下钻出更多。',
+    camp: 'enemy',
+    race: 'unknown',
+    career: 'melee',
+    maxHp: 20000,
+    atk: 400,
+    atkSpeed: 0.5,
+    exp: 400,
+    level: 84,
+    skills: [{ key: 'melee', level: 0 }],
+    affixes: { ...AFFIXES },
+    loots: [{ key: 'gold', count: [20, 50], rate: 0.1 }],
+    originKey: 'chapter3.waterElement',
+  },
+  'phoenix.spark': {
+    key: 'phoenix.spark',
+    name: '不死鸟雏',
+    description: '从圣坛灰烬里扑出的火星，落地就成了鸟。',
+    camp: 'enemy',
+    race: 'unknown',
+    career: 'melee',
+    maxHp: 18000,
+    atk: 900,
+    atkSpeed: 0.5,
+    exp: 500,
+    level: 84,
+    skills: [{ key: 'melee', level: 0 }, { key: 'fireElement.fireball', level: 0 }],
+    affixes: { ...AFFIXES },
+    loots: [{ key: 'gold', count: [20, 50], rate: 0.1 }],
+    originKey: 'chapter3.element.fire',
+  },
+};
+
+/** 造一条守关 BOSS（统一 `camp: 'enemy'` + `gold` 必掉，`rate = 1`）。 */
+function bossEntry(input: {
+  key: string;
+  name: string;
+  description: string;
+  maxHp: number;
+  atk: number;
+  atkSpeed: number;
+  exp: number;
+  def?: number;
+  level: number;
+  skills: Array<{ key: string; level: number }>;
+  buffs?: Array<{ type: string }>;
+  gold: [number, number];
+  originKey: string;
+}): EnemyEntry {
+  return {
+    key: input.key,
+    name: input.name,
+    description: input.description,
+    camp: 'enemy',
+    race: 'unknown',
+    career: 'melee',
+    maxHp: input.maxHp,
+    atk: input.atk,
+    atkSpeed: input.atkSpeed,
+    exp: input.exp,
+    ...(input.def !== undefined ? { def: input.def } : {}),
+    level: input.level,
+    skills: input.skills,
+    ...(input.buffs !== undefined ? { buffs: input.buffs } : {}),
+    affixes: { ...AFFIXES },
+    loots: [{ key: 'gold', count: input.gold, rate: 1 }],
+    originKey: input.originKey,
+  };
+}
+
+/** 13 野外传奇守关者（P4 命名终稿，§2.1 / §5.1 / §5.4）。 */
+const worldBosses: EnemyEntry[] = [
+  bossEntry({
+    key: 'boss.world.01',
+    name: '原始变异·小史莱姆',
+    description: '荒野里最弱却最固执的一团变异体。',
+    maxHp: 160,
+    atk: 3,
+    atkSpeed: 0.25,
+    exp: 60,
+    def: 0,
+    level: 1,
+    skills: [{ key: 'melee', level: 0 }],
+    gold: [5, 20],
+    originKey: 'slime.giant.enemy',
+  }),
+  bossEntry({
+    key: 'boss.world.02',
+    name: '恶臭之源·大史莱姆',
+    description: '迷雾里的甜腥味就是它——吞下的一切都还泡在体内。',
+    maxHp: 1200,
+    atk: 18,
+    atkSpeed: 0.1,
+    exp: 200,
+    def: 20,
+    level: 5,
+    skills: [{ key: 'melee', level: 0 }, { key: 'slime.swallow', level: 0 }],
+    gold: [10, 40],
+    originKey: 'slime.queen',
+  }),
+  bossEntry({
+    key: 'boss.world.03',
+    name: '腐骨狼妖',
+    description: '伏在骨堆之后，皮毛上挂着未干的血与腐叶。',
+    maxHp: 3000,
+    atk: 40,
+    atkSpeed: 0.4,
+    exp: 500,
+    def: 30,
+    level: 15,
+    skills: [{ key: 'melee', level: 0 }, { key: 'wolf.worry', level: 0 }],
+    gold: [20, 60],
+    originKey: 'wolf.giant',
+  }),
+  bossEntry({
+    key: 'boss.world.04',
+    name: '雪原狼主·狼王',
+    description: '一声长嚎，整片雪原的狼都成了它的爪牙。',
+    maxHp: 8000,
+    atk: 90,
+    atkSpeed: 0.6,
+    exp: 1500,
+    def: 60,
+    level: 25,
+    skills: [{ key: 'melee', level: 0 }, { key: 'wolf.call', level: 0 }],
+    gold: [30, 90],
+    originKey: 'wolf.king',
+  }),
+  bossEntry({
+    key: 'boss.world.05',
+    name: '熔炉怨魂·尸匠',
+    description: '熄灭的熔炉里还烧着怨魂，铁锤一下一下砸在旧砧上。',
+    maxHp: 20000,
+    atk: 180,
+    atkSpeed: 0.4,
+    exp: 4000,
+    def: 80,
+    level: 35,
+    skills: [{ key: 'melee', level: 0 }, { key: 'zombie.thumpHead', level: 0 }],
+    gold: [50, 150],
+    originKey: 'zombies.hammersmith',
+  }),
+  bossEntry({
+    key: 'boss.world.06',
+    name: '噬金暴君·狗头人',
+    description: '坐在财宝堆上的狗头人暴君，眼里只有金子。',
+    maxHp: 45000,
+    atk: 320,
+    atkSpeed: 0.4,
+    exp: 8000,
+    def: 120,
+    level: 45,
+    skills: [{ key: 'melee', level: 0 }, { key: 'candle.call', level: 0 }],
+    gold: [80, 200],
+    originKey: 'kobold.goldteeth',
+  }),
+  bossEntry({
+    key: 'boss.world.07',
+    name: '堕誓圣殿骑士·无冕者',
+    description: '背弃誓约的骑士，站在哨塔顶端俯视一切来者。',
+    maxHp: 90000,
+    atk: 520,
+    atkSpeed: 0.5,
+    exp: 15000,
+    def: 200,
+    level: 55,
+    skills: [
+      { key: 'melee', level: 0 },
+      { key: 'knight.shout', level: 0 },
+      { key: 'knight.reflect', level: 0 },
+    ],
+    gold: [120, 300],
+    originKey: 'knight.leader',
+  }),
+  bossEntry({
+    key: 'boss.world.08',
+    name: '噬魂亡语·暗影法师',
+    description: '在回廊尽头吞食往来的幽魂，影子比人先到。',
+    maxHp: 180000,
+    atk: 820,
+    atkSpeed: 0.4,
+    exp: 30000,
+    def: 300,
+    level: 65,
+    skills: [
+      { key: 'melee', level: 0 },
+      { key: 'shaman.darkball', level: 0 },
+      { key: 'necromancer.ghostShield', level: 0 },
+    ],
+    gold: [200, 500],
+    originKey: 'chapter3.necromancer',
+  }),
+  bossEntry({
+    key: 'boss.world.09',
+    name: '蛮荒兽主·巨狮',
+    description: '在骸骨堆上踱步，吼声一沉，群兽就围拢过来。',
+    maxHp: 350000,
+    atk: 1300,
+    atkSpeed: 0.7,
+    exp: 60000,
+    def: 400,
+    level: 75,
+    skills: [{ key: 'melee', level: 0 }, { key: 'simba.heal', level: 0 }],
+    // §5.4：world.9 沿用兽群领袖标识；该图新池（wildpig / lion / bear）里**没有**
+    // `simba.goodFriends` 携带者，因此 BOSS 死后会立刻挂清尸计时器、不产生 W12 尾巴。
+    buffs: [{ type: 'simba.goodFriends' }],
+    gold: [300, 700],
+    originKey: 'chapter3.beast.simba',
+  }),
+  bossEntry({
+    key: 'boss.world.10',
+    name: '混沌守卫·牛头人',
+    description: '牛头人迷宫的主人，每一次转弯都可能撞上它的斧刃。',
+    maxHp: 700000,
+    atk: 2000,
+    atkSpeed: 0.4,
+    exp: 120000,
+    def: 600,
+    level: 85,
+    skills: [
+      { key: 'melee', level: 0 },
+      { key: 'cleave', level: 0 },
+      { key: 'murloc.thumpHead', level: 0 },
+    ],
+    gold: [500, 1000],
+    originKey: 'chapter3.murloc.warlord',
+  }),
+  bossEntry({
+    key: 'boss.world.11',
+    name: '混沌守卫·九头蛇',
+    description: '深潭里的多头巨蛇，斩下一颗头，还有更多在等着。',
+    maxHp: 1000000,
+    atk: 2600,
+    atkSpeed: 0.4,
+    exp: 180000,
+    def: 700,
+    level: 85,
+    skills: [
+      { key: 'melee', level: 0 },
+      { key: 'cleave', level: 0 },
+      { key: 'wolf.worry', level: 0 },
+    ],
+    gold: [700, 1400],
+    originKey: 'chapter3.beast.pengpeng',
+  }),
+  bossEntry({
+    key: 'boss.world.12',
+    name: '混沌守卫·奇美拉',
+    description: '三种元素在它体内撕咬，岩窟的穹顶都被烤得发红。',
+    maxHp: 1400000,
+    atk: 3200,
+    atkSpeed: 0.4,
+    exp: 240000,
+    def: 800,
+    level: 85,
+    skills: [
+      { key: 'melee', level: 0 },
+      { key: 'fireElement.fireball', level: 0 },
+      { key: 'shaman.chainingLightning', level: 0 },
+    ],
+    gold: [1000, 2000],
+    originKey: 'chapter3.element.azathoth.fire',
+  }),
+  bossEntry({
+    key: 'boss.world.13',
+    name: '混沌守卫·不死鸟',
+    description: '圣坛的火焰熄灭之处，灰烬里又亮起火星。',
+    maxHp: 2000000,
+    atk: 4000,
+    atkSpeed: 0.4,
+    exp: 350000,
+    def: 1000,
+    level: 85,
+    skills: [
+      { key: 'melee', level: 0 },
+      { key: 'fireElement.fireball', level: 0 },
+      { key: 'orcs.summonHealToken', level: 0 },
+    ],
+    gold: [1500, 3000],
+    originKey: 'chapter3.waterElement.Nynnroth',
+  }),
+];
+
+/**
+ * 16 混沌化身（可重复刷，§2.2 / §5.2 / §5.4）。
+ *
+ * `skills` 继承对应原生 BOSS（§5.4）；`atkSpeed / exp / def` 亦继承原生（本文件口径，见文件头）。
+ * **不继承原生 buffs**（避免 `simba.goodFriends` 尾巴）。
+ */
+const chaosBosses: EnemyEntry[] = [
+  bossEntry({
+    key: 'boss.chaos.T01',
+    name: '混沌化身·狂怒豪猪',
+    description: '浑身尖刺炸开的混沌豪猪。',
+    maxHp: 50000,
+    atk: 300,
+    atkSpeed: 0.4,
+    exp: 65,
+    def: 100,
+    level: 85,
+    skills: [{ key: 'melee', level: 0 }],
+    gold: [200, 600],
+    originKey: 'chapter3.beast.wildpig',
+  }),
+  bossEntry({
+    key: 'boss.chaos.T02',
+    name: '混沌化身·鱼人祭祀',
+    description: '吟诵着不属于这片海的祷词。',
+    maxHp: 80000,
+    atk: 400,
+    atkSpeed: 0.7,
+    exp: 125,
+    def: 50,
+    level: 86,
+    skills: [{ key: 'shaman.iceball', level: 0 }, { key: 'melee', level: 0 }],
+    gold: [300, 800],
+    originKey: 'chapter3.murloc.shaman',
+  }),
+  bossEntry({
+    key: 'boss.chaos.T03',
+    name: '混沌化身·鱼人暴君',
+    description: '被混沌之力撑大的鱼人，只会横冲直撞。',
+    maxHp: 130000,
+    atk: 500,
+    atkSpeed: 0.5,
+    exp: 100,
+    level: 87,
+    skills: [{ key: 'melee', level: 0 }],
+    gold: [400, 1000],
+    originKey: 'chapter3.murloc.slaves',
+  }),
+  bossEntry({
+    key: 'boss.chaos.T04',
+    name: '混沌化身·蛮荒巨兽',
+    description: '蛮荒巨兽的混沌倒影，比本体更不知疲倦。',
+    maxHp: 200000,
+    atk: 650,
+    atkSpeed: 0.6,
+    exp: 800,
+    level: 88,
+    skills: [{ key: 'simba.heal', level: 0 }, { key: 'melee', level: 0 }],
+    gold: [500, 1200],
+    originKey: 'chapter3.beast.dingman',
+  }),
+  bossEntry({
+    key: 'boss.chaos.T05',
+    name: '混沌化身·兽群之王',
+    description: '一声低吼，混沌里所有兽影都转向了你。',
+    maxHp: 300000,
+    atk: 800,
+    atkSpeed: 0.7,
+    exp: 800,
+    def: 50,
+    level: 89,
+    skills: [{ key: 'melee', level: 0 }],
+    gold: [700, 1500],
+    originKey: 'chapter3.beast.simba',
+  }),
+  bossEntry({
+    key: 'boss.chaos.T06',
+    name: '混沌化身·疯狂巨兽',
+    description: '疯了之后反而更耐打，撞上来就再也甩不掉。',
+    maxHp: 450000,
+    atk: 1000,
+    atkSpeed: 0.4,
+    exp: 800,
+    def: 100,
+    level: 90,
+    skills: [{ key: 'simba.thumpHead', level: 0 }, { key: 'melee', level: 0 }],
+    gold: [900, 1800],
+    originKey: 'chapter3.beast.pengpeng',
+  }),
+  bossEntry({
+    key: 'boss.chaos.T07',
+    name: '混沌化身·兽人战神',
+    description: '越战越狂的兽人战士，伤口只让它更快。',
+    maxHp: 650000,
+    atk: 1300,
+    atkSpeed: 0.4,
+    exp: 300,
+    level: 91,
+    skills: [{ key: 'melee', level: 0 }],
+    gold: [1200, 2200],
+    originKey: 'chapter4.orcs.warrior',
+  }),
+  bossEntry({
+    key: 'boss.chaos.T08',
+    name: '混沌化身·深海巨人',
+    description: '从深海淤泥里站起来的巨人，每一步都带起水墙。',
+    maxHp: 900000,
+    atk: 1600,
+    atkSpeed: 0.4,
+    exp: 450,
+    def: 250,
+    level: 92,
+    skills: [{ key: 'cleave', level: 0 }],
+    gold: [1500, 2800],
+    originKey: 'chapter3.waterElement.giants',
+  }),
+  bossEntry({
+    key: 'boss.chaos.T09',
+    name: '混沌化身·鱼人霸主',
+    description: '鱼人督军的混沌形态，号令着整片潮水。',
+    maxHp: 1200000,
+    atk: 2200,
+    atkSpeed: 0.4,
+    exp: 3000,
+    level: 93,
+    skills: [
+      { key: 'melee', level: 0 },
+      { key: 'murloc.thumpHead', level: 0 },
+      { key: 'murloc.shieldShout', level: 0 },
+    ],
+    gold: [2000, 3500],
+    originKey: 'chapter3.murloc.warlord',
+  }),
+  bossEntry({
+    key: 'boss.chaos.T10',
+    name: '混沌化身·焚世火灵',
+    description: '它走过的地方，连石头都在燃烧。',
+    maxHp: 1600000,
+    atk: 2700,
+    atkSpeed: 0.4,
+    exp: 7000,
+    def: 150,
+    level: 94,
+    skills: [{ key: 'fireElement.fireball', level: 0 }, { key: 'azathoth.transformIce', level: 0 }],
+    gold: [2500, 4500],
+    originKey: 'chapter3.element.azathoth.fire',
+  }),
+  bossEntry({
+    key: 'boss.chaos.T11',
+    name: '混沌化身·霜渊冰灵',
+    description: '呼吸之间，岩壁就结满了冰棱。',
+    maxHp: 2000000,
+    atk: 3300,
+    atkSpeed: 0.4,
+    exp: 8000,
+    def: 150,
+    level: 95,
+    skills: [
+      { key: 'waterElement.waterArrow', level: 0 },
+      { key: 'iceNova', level: 0 },
+      { key: 'azathoth.transformEarth', level: 0 },
+    ],
+    gold: [3000, 5500],
+    originKey: 'chapter3.element.azathoth.ice',
+  }),
+  bossEntry({
+    key: 'boss.chaos.T12',
+    name: '混沌化身·磐岩土灵',
+    description: '一身的石甲，连大地都在替它抵挡。',
+    maxHp: 2600000,
+    atk: 4000,
+    atkSpeed: 0.4,
+    exp: 8000,
+    def: 350,
+    level: 96,
+    skills: [{ key: 'azathoth.transformDark', level: 0 }, { key: 'melee', level: 0 }],
+    gold: [4000, 7000],
+    originKey: 'chapter3.element.azathoth.earth',
+  }),
+  bossEntry({
+    key: 'boss.chaos.T13',
+    name: '混沌化身·蚀暗灵',
+    description: '没有形状的影子，只在爆开的一瞬显形。',
+    maxHp: 3200000,
+    atk: 4800,
+    atkSpeed: 0.4,
+    exp: 8000,
+    def: 0,
+    level: 97,
+    skills: [{ key: 'azathoth.explode', level: 0 }],
+    gold: [5000, 9000],
+    originKey: 'chapter3.element.azathoth.dark',
+  }),
+  bossEntry({
+    key: 'boss.chaos.T14',
+    name: '混沌化身·深海领主',
+    description: '深海之主的化身，水压本身就是武器。',
+    maxHp: 4000000,
+    atk: 5800,
+    atkSpeed: 0.4,
+    exp: 10000,
+    def: 150,
+    level: 98,
+    skills: [
+      { key: 'waterElement.waterArrow', level: 0 },
+      { key: 'waterElement.waterFlow', level: 0 },
+      { key: 'enemy.upgrade', level: 0 },
+    ],
+    gold: [6000, 11000],
+    originKey: 'chapter3.waterElement.Nynnroth',
+  }),
+  bossEntry({
+    key: 'boss.chaos.T15',
+    name: '混沌化身·兽人萨满',
+    description: '雷鸣缠绕着它的法杖，召唤出的图腾治好了整支兽群。',
+    maxHp: 5500000,
+    atk: 7000,
+    atkSpeed: 0.4,
+    exp: 1800,
+    level: 99,
+    skills: [
+      { key: 'melee', level: 0 },
+      { key: 'shaman.chainingLightning', level: 0 },
+      { key: 'orcs.summonHealToken', level: 0 },
+      { key: 'enemy.upgrade', level: 0 },
+    ],
+    gold: [8000, 14000],
+    originKey: 'chapter3.orcs.shaman',
+  }),
+  bossEntry({
+    key: 'boss.chaos.T16',
+    name: '混沌化身·终末海怪',
+    description: '混沌深处最后一道浪潮，吞没一切。',
+    maxHp: 8000000,
+    atk: 8500,
+    atkSpeed: 0.6,
+    exp: 5000,
+    level: 100,
+    skills: [
+      { key: 'fishzilla.summonSlaves', level: 0 },
+      { key: 'fishzilla.bomb', level: 12 },
+      { key: 'melee', level: 0 },
+    ],
+    gold: [10000, 18000],
+    originKey: 'chapter3.fishzilla',
+  }),
+];
+
+/** 29 条守关 BOSS（13 野外 + 16 混沌），稳定顺序：先野外后混沌。 */
+export const mapBosses: Record<string, EnemyEntry> = Object.fromEntries(
+  [...worldBosses, ...chaosBosses].map((entry) => [entry.key, entry]),
+);
