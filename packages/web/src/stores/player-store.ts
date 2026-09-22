@@ -10,7 +10,7 @@
  * **不写回** `state.gold` / `state.exp` —— 权威数值只认服务端下一次下发。
  */
 import { makeAutoObservable, runInAction } from 'mobx';
-import type { PlayerStateDto } from '@idle-dark/protocol';
+import type { PlayerStateDto, WalletEntryDto } from '@idle-dark/protocol';
 import { toastFailure } from '../services/game-client.js';
 import { LoadGuard } from './load-guard.js';
 import type { StoreContext } from './store-context.js';
@@ -70,6 +70,16 @@ export class PlayerStore {
 
   get maxExp(): number {
     return this.state?.maxExp ?? 0;
+  }
+
+  /**
+   * 钱包条目（R1）：通货 / 精华 / 一般等价物，**不占背包格**。
+   *
+   * 服务端已过滤数量 > 0、已按 `goodOrder` 排序、已补全 `name` / `type`
+   * （`walletDtoOf`），前端只渲染、**不排序不推导**。
+   */
+  get wallet(): readonly WalletEntryDto[] {
+    return this.state?.wallet ?? [];
   }
 
   get selectedSkills(): readonly string[] {

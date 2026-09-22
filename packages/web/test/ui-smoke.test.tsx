@@ -280,10 +280,70 @@ describe('页面渲染冒烟（有数据，防空分支假绿）', () => {
   });
 });
 
+/**
+ * 钱包域（R1）：入口是新增的独立导航域，数据来自 `PlayerStateDto.wallet`
+ * （服务端 `walletDtoOf` 已过滤 >0、已排序、已补 name）。本组同时覆盖
+ * 「有数据分支」与「空态分支」——只测空态会漏掉真实渲染路径。
+ */
+describe('钱包域：显示 PlayerStateDto.wallet（通货 / 精华）', () => {
+  function seedWallet(wallet: unknown[]): RootStore {
+    const root = makeRoot();
+    runInAction(() => {
+      root.player.state = { wallet } as never;
+    });
+    return root;
+  }
+
+  it('有数据：按通货 / 精华分组渲染，名称与数量直接来自服务端', () => {
+    const root = seedWallet([
+      { key: 'currency.transmute', count: 12, name: '蜕变石', type: 'material' },
+      { key: 'essence.atk', count: 3, name: '锋锐精华', type: 'material' },
+    ]);
+    const html = render(<>{renderPanelContent('wallet')}</>, root);
+    const text = htmlToText(html);
+
+    expect(html).toContain('data-testid="wallet-panel"');
+    expect(html).toContain('data-testid="wallet-group-currency"');
+    expect(html).toContain('data-testid="wallet-group-essence"');
+    expect(text).toContain('蜕变石');
+    expect(text).toContain('12');
+    expect(text).toContain('锋锐精华');
+    expect(text).toContain('3');
+    expect(text).not.toContain('钱包还是空的');
+  });
+
+  it('未知命名空间落「其他」，既不抛错也不丢条目', () => {
+    const root = seedWallet([{ key: 'mystery.token', count: 1, name: '神秘代币', type: 'material' }]);
+    const html = render(<>{renderPanelContent('wallet')}</>, root);
+
+    expect(html).toContain('data-testid="wallet-group-other"');
+    expect(htmlToText(html)).toContain('神秘代币');
+  });
+
+  it('空钱包 / 无角色态 → 空态提示，不是空白也不是 NaN', () => {
+    const emptyText = htmlToText(render(<>{renderPanelContent('wallet')}</>, seedWallet([])));
+    expect(emptyText).toContain('钱包还是空的');
+    expect(emptyText).not.toContain('NaN');
+
+    const noStateText = htmlToText(render(<>{renderPanelContent('wallet')}</>, makeRoot()));
+    expect(noStateText).toContain('钱包还是空的');
+    expect(noStateText).not.toContain('NaN');
+  });
+});
+
 describe('域注册表：角色属性排在战斗之前，落地页仍是战斗', () => {
-  it('导航顺序 = 角色属性 → 战斗 → 包裹 → 技能 → 生产 → 混沌仪', () => {
+  it('导航顺序 = 角色属性 → 战斗 → 包裹 → 钱包 → 技能 → 生产 → 混沌仪', () => {
     const keys = listPanelKeys();
-    expect(keys).toEqual(['attributes', 'battle', 'inventory', 'skills', 'produce', 'chaos']);
+    expect(keys).toEqual(['attributes', 'battle', 'inventory', 'wallet', 'skills', 'produce', 'chaos']);
+  });
+
+  it('钱包域落在「征伐」组，紧随包裹之后', () => {
+    const items = createPanelNavItems();
+    const index = items.findIndex((item) => item.key === 'wallet');
+    expect(index).toBeGreaterThan(-1);
+    expect(items[index]?.label).toBe('钱包');
+    expect(items[index]?.group).toBe('征伐');
+    expect(items[index - 1]?.key).toBe('inventory');
   });
 
   it('角色属性落在「征伐」组，且是导航第一项', () => {

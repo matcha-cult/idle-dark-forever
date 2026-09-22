@@ -13,6 +13,7 @@ import { LoadGuard } from '../src/stores/load-guard.js';
 import { ToastStore } from '../src/stores/toast-store.js';
 import { UiStore } from '../src/stores/ui-store.js';
 import { appendEvents, isAttackableCamp, type BattleLogEntry } from '../src/stores/world-store.js';
+import { groupWalletEntries, walletGroupOf, WALLET_GROUP_LABELS } from '../src/pages/game/panels/wallet-groups.js';
 import { THEME_STORAGE_KEY, ThemeStore, parseThemeMode } from '../src/theme/theme-store.js';
 
 describe('isAttackableCamp（可被点选为攻击目标的阵营）', () => {
@@ -267,5 +268,44 @@ describe('BattleLog 裁剪', () => {
     const capped = appendEvents(many, [event], 200, () => (seq += 1));
     expect(capped).toHaveLength(200);
     expect(capped[0]?.seq).toBe(seq);
+  });
+});
+
+describe('钱包分组 walletGroupOf / groupWalletEntries（纯函数边界）', () => {
+  it('按 key 命名空间分流：currency. / essence. / 其它', () => {
+    expect(walletGroupOf('currency.transmute')).toBe('currency');
+    expect(walletGroupOf('essence.atk')).toBe('essence');
+    expect(walletGroupOf('keystone.t01')).toBe('other');
+    expect(WALLET_GROUP_LABELS.currency).toBe('通货');
+    expect(WALLET_GROUP_LABELS.essence).toBe('精华');
+  });
+
+  it('非字符串 / 仅有前缀无点 / 空串 / 未知值一律落「其他」，不抛错', () => {
+    for (const key of ['currency', 'currencyX', 'essence', '', 'Currency.a', undefined, null, 0, {}]) {
+      expect(walletGroupOf(key as unknown)).toBe('other');
+    }
+  });
+
+  it('空 / null / undefined / 非数组 → 三个空分组（不抛错）', () => {
+    for (const input of [undefined, null, [] as const]) {
+      const groups = groupWalletEntries(input as never);
+      expect(groups).toEqual({ currency: [], essence: [], other: [] });
+    }
+  });
+
+  it('归类时保持服务端顺序、跳过 null 条目，且不丢条目', () => {
+    const entries = [
+      { key: 'currency.transmute', count: 1, name: '蜕变石', type: 'material' },
+      { key: 'essence.atk', count: 2, name: '锋锐精华', type: 'material' },
+      { key: 'mystery.token', count: 3, name: '神秘代币', type: 'material' },
+      { key: 'currency.mirror', count: 4, name: '映道镜', type: 'material' },
+    ];
+    const groups = groupWalletEntries(entries as never);
+    expect(groups.currency.map((entry) => entry.key)).toEqual(['currency.transmute', 'currency.mirror']);
+    expect(groups.essence.map((entry) => entry.key)).toEqual(['essence.atk']);
+    expect(groups.other.map((entry) => entry.key)).toEqual(['mystery.token']);
+
+    const withNull = groupWalletEntries([null, entries[0]] as never);
+    expect(withNull.currency).toHaveLength(1);
   });
 });

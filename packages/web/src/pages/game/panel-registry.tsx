@@ -13,6 +13,8 @@
  * 包裹域内含「背包 / 装备 / 储藏箱 / 拾取规则 / 神力商店」，生产域内含四个子页。
  * 「角色属性」是本仓新增的独立域（原版是战斗页里的一个 Tab，本仓没有 Tab）——
  * 它回答「我有多强」，与战斗页的「在哪打、打成什么样」不同，故不塞进战斗页。
+ * 「钱包」同样是本仓新增的独立域（R1 通货 / 精华不占背包格，需要一个看得见的入口）——
+ * 它是「攒下的硬通货」，与包裹域「格子里的东西」不是同一种东西，故不塞进包裹子页。
  *
  * ⚠️ **导航顺序 ≠ 默认落地页**：默认落地页由 `DEFAULT_PANEL_KEY` 显式给定，
  * 不要再用 `listPanelKeys()[0]` —— 那会让「把某个域排到最前面」意外改掉落地页
@@ -25,6 +27,7 @@ import {
   ShoppingOutlined,
   ThunderboltOutlined,
   ToolOutlined,
+  WalletOutlined,
 } from '@ant-design/icons';
 import { ErrorBoundary, type SideNavItem } from '@idle-dark/ui-kit';
 import type { ReactNode } from 'react';
@@ -34,8 +37,9 @@ import { ChaosPanel } from './panels/ChaosPanel.js';
 import { InventoryPanel } from './panels/InventoryPanel.js';
 import { ProducePanel } from './panels/ProducePanel.js';
 import { SkillsPanel } from './panels/SkillsPanel.js';
+import { WalletPanel } from './panels/WalletPanel.js';
 
-export type PanelKey = 'attributes' | 'battle' | 'inventory' | 'skills' | 'produce' | 'chaos';
+export type PanelKey = 'attributes' | 'battle' | 'inventory' | 'wallet' | 'skills' | 'produce' | 'chaos';
 
 /**
  * 默认落地面板（未手动切过域时显示哪个）。
@@ -62,12 +66,13 @@ export interface PanelDomainEntry {
 /**
  * 域列表。顺序 = 导航展示顺序（也是「先看自己、再看出征」的阅读顺序）：
  * 角色属性（我是谁 / 我有多强）→ 战斗（在哪打、打成什么样）→ 包裹（拿到了什么）
- * → 技能（怎么变强）→ 生产（把材料变成战力）→ 混沌仪（终局玩法）。
+ * → 钱包（攒下了什么硬通货）→ 技能（怎么变强）→ 生产（把材料变成战力）→ 混沌仪（终局玩法）。
  */
 const DOMAINS: readonly PanelDomainEntry[] = [
   { key: 'attributes', label: '角色属性', icon: <IdcardOutlined />, group: 'war', panel: <AttributesPanel /> },
   { key: 'battle', label: '战斗', icon: <ThunderboltOutlined />, group: 'war', panel: <BattlePanel /> },
   { key: 'inventory', label: '包裹', icon: <ShoppingOutlined />, group: 'war', panel: <InventoryPanel /> },
+  { key: 'wallet', label: '钱包', icon: <WalletOutlined />, group: 'war', panel: <WalletPanel /> },
   { key: 'skills', label: '技能', icon: <ToolOutlined />, group: 'growth', panel: <SkillsPanel /> },
   { key: 'produce', label: '生产', icon: <ExperimentOutlined />, group: 'growth', panel: <ProducePanel /> },
   { key: 'chaos', label: '混沌仪', icon: <DeploymentUnitOutlined />, group: 'growth', panel: <ChaosPanel /> },
