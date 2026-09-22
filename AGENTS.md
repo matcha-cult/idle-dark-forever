@@ -398,12 +398,22 @@ cmd 段唯一归属、每个 `*LogicServer` 里不得出现 `@ActionMethod`。
   ⚠️ **副作用（产品已接受）**：BOSS 波期间 `Born.total` 恒达不到 `config.total` ⇒
   `isWaveComplete()` 不成立 ⇒ **波数冻在 BOSS 那一波**。这是「BOSS 波只有 BOSS」的代价，
   由下一条的「通关自动重开」收口。
-  ⚠️ **已知尾巴**：`chapter3.beast.pengpeng`（world.11 的 BOSS）携带 `simba.goodFriends`，其
-  `willClean` 在「仍有兄弟存活」时返回 `false` ⇒ 尸体**不挂清尸计时器**；而该图刷怪池里就有
-  同为携带者的 `chapter3.beast.dingman` ⇒ 必须把剩余兄弟也清掉才恢复（不是永久锁死）。
+  ⚠️ **已知尾巴 —— 历史：W12 时曾有，v4.2 换池后消除**：当时 BOSS `chapter3.beast.pengpeng`
+  （world.11）携带 `simba.goodFriends`，其 `willClean` 在「仍有兄弟存活」时返回 `false` ⇒ 尸体
+  **不挂清尸计时器**，而同池就有携带者 `chapter3.beast.dingman` ⇒ 必须把剩余兄弟也清掉才恢复。
+  v4.2 换池后 world.11 的池里**不再有携带者**、新 BOSS 也**不继承**该 buff ⇒ 尾巴消失（详见
+  [`ai-docs/19`](ai-docs/19-钱包地图混沌仪约定.md) §19.9）。
   ⚠️ **只拦守关 BOSS**：精英（`elite`，每 10 波保底）与敌方**召唤物**都不拦 —— 后者走
   `data/skills.ts` 的 `addEnemy(..., summoner)`、不经刷怪闸门，拦它等于废掉 world.4/6/8 三只
   BOSS 的看家技能（`wolf.call` / `candle.call` / `necromancer.ghostShield`）。
+- **守关 BOSS 唯一化 + 传奇化 + 三合同族（v4.2）**：新数据在 `data/map-bosses.ts`
+  （`mapBosses` 29 = 13 野外 `boss.world.NN` + 16 混沌 `boss.chaos.TNN`；`mapMobs` 8 条新普通怪），
+  `data/index.ts` 合并进 `enemies`（**只改这一行**）。**P5 只加不改**：`enemies.ts` 逐字不动、
+  旧 BOSS 留作**未被引用**的遗留；新条目带 `originKey` 溯源。**P6 三合一**：地图名（主题）=
+  普通刷怪池 = 守关 BOSS。门禁 7 条在 `data/spawn-eligibility.test.ts`（唯一 / 不入池 / 数值地板 /
+  单调 / 可战性 / 不抬人名 / 同族，各带反向用例）。⚠️ **数值地板只对 13 张野外图强断言**；
+  混沌 ATK 地板豁免 T4/T5/T6（池里的 `chapter3.murloc.slaves`，§9.3 Q2 拍板不动）。
+  详见 [`ai-docs/19`](ai-docs/19-钱包地图混沌仪约定.md) §19.9。
 - **通关后自动重进本图（W11 决策 3 的另一半）**：`EnemyUnit.kill` 在非混沌图登记通关后调
   `world.noteWorldCleared()`；服务端 `WorldService.handleRunReset` **等该 BOSS 清尸**再
   `resetOpenWorldRun()`（波数归 0 ⇒ 因 `bossPending` 已翻 `false` 而自动转挂机节拍）。
