@@ -26,9 +26,10 @@
 |---|---|---|
 | `golden-compute.mjs` | 复算金样事件哈希 / 状态哈希 | `node ai-script/golden-compute.mjs` |
 
-固定种子（`20240919`）+ 30s 虚拟时间，输出 `stateHash`。**AGENTS §21 引用的金样哈希 `0xf7d493b3`
+固定种子（`20240919`）+ 30s 虚拟时间，输出 `stateHash`。**AGENTS §21 引用的金样哈希 `0x3af5fd2f`
 就是它的输出** —— 改了 `game-core` 推演后跑一次，哈希没变即证「推演未动」（实测：27 事件 /
-`eventHash 0x1dd67f6b` / `stateHash 0xf7d493b3`）。
+`eventHash 0x1dd67f6b` / `stateHash 0x3af5fd2f`）。⚠️ 状态哈希在 W11 重录过一次
+（`EnemyBorn.dumpState()` 新增里程碑字段，属**快照形状变化**、非推演变化，见 `combat/golden.test.ts`）。
 
 ## 3. 环境工具
 
@@ -52,10 +53,11 @@ PID namespace 里本会话够不到也杀不掉（AGENTS §7），也不该另�
 | `check-exp-rate.mjs` | 指定等级/地图的经验速率（`MAP` / `LEVEL` / `MINUTES` 可调）。**原用途**是判定「13 级在 `world.2` 升到 15 级是否现实可达」（结论：不可达）。⚠️ W10 已移除经验等级差惩罚，`expPerKill` 不再随等级差变化 —— 本脚本现定位为**调经验曲线时的速率测量工具**，也是「经验效率估算脚本」的雏形（见 `ai-docs/05` §5） |
 | `bench-offline-tick.mjs` | 若让**离线角色**也在服务端实时 tick，成本是多少（为「离线实时战斗」方案给量化依据） |
 | `check-gains.mjs` | 仅靠时钟推进（不走 `WorldService.isOnline` 判断）角色是否真的涨经验/金币/掉落 |
+| `check-boss-balance.mjs` | 守关 BOSS 重做（v4.2）后**单挑口径**逐图模拟「同级基准角色 vs 守关 BOSS」，输出击杀时长；`TIMEOUT` = 基准角色打不动（底材无词缀），**不代表满配不可击杀**。`MAPS` / `CAP_SECONDS` / `LEVEL_OFFSET` / `WEAPON` 可调 |
 
 运行：`node ai-script/explore/<脚本>.mjs`，参数见各脚本头部注释。
-后两个连同设计稿一起构成「离线实时战斗（C3）」探究，结论见
-[`../ai-docs/26-离线实时战斗探究稿.md`](../ai-docs/26-离线实时战斗探究稿.md)（**未采纳的探究稿**）。
+`bench-offline-tick.mjs` 与 `check-gains.mjs` 连同设计稿一起构成「离线实时战斗（C3）」探究，
+结论见 [`../ai-docs/26-离线实时战斗探究稿.md`](../ai-docs/26-离线实时战斗探究稿.md)（**未采纳的探究稿**）。
 
 ---
 
