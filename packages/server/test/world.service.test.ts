@@ -600,7 +600,10 @@ describe('WorldService', () => {
     // （真实掉落表全是概率条目，可能合法地一件都不掉）。
     // ⚠️ 用**钱包物品**（通货）而不是 `gold`：`gold` 的落地量会乘 `gf`（金币加成），
     // 无装备时可能是 0，那样连 `handled:'lost'` 都算不出正数，断言会失真。
-    const bossLoots = (tables.enemies['slime.giant.enemy']!.loots ??= []);
+    // ⚠️ BOSS key 必须**从地图数据取**（v4.2 起 world.1 的守关 BOSS 是 `boss.world.01`，
+    // 不再是 `slime.giant.enemy`）—— 写死旧 key 会把必掉挂到一条**没人引用的**遗留条目上。
+    const worldBossKey = tables.maps[world.map]!.boss!;
+    const bossLoots = (tables.enemies[worldBossKey]!.loots ??= []);
     bossLoots.push({ key: 'currency.transmute', count: [1, 1], rate: 1 });
     try {
       for (let i = 0; i < WORLD_BOSS_WAVE_INTERVAL; i += 1) spawner.completeWave();

@@ -9,6 +9,15 @@
  *    **不参与解锁判定**（见下一条）；
  *  - 每张图带一个 `boss`（守关 BOSS 的敌人 key，W4 消费）。
  *
+ * ## 守关 BOSS 重做（v4.2，P6 三合一）
+ *
+ * **地图名（主题）= 普通刷怪池 = 守关 BOSS**，三者必须同族/同域：
+ *  - BOSS 一律指向 `data/map-bosses.ts` 的传奇条目 `boss.world.01..13`（旧 BOSS key 已全部换下）；
+ *  - 刷怪池按主题重排（去沼泽狼 / 去鱼人的兽巢 / 牛头人迷宫 / 九头蛇深潭 / …）；
+ *  - 地图名与 hint 同步重写，读名字就能猜到守关者是谁。
+ *  门禁见 `data/spawn-eligibility.test.ts`（BOSS 唯一 / 不入普通池 / 数值地板 / 单调 / 可战性 /
+ *  不抬人名 / 三合同族）。
+ *
  * ⚠️ 本文件是**纯数据模块，无模块级副作用**：只有对象字面量，不注册、不 mock、不读写全局。
  * ⚠️ `total` = 一波的刷怪总量（W4 消费，`spawner` 用它判定「刷满 + 全部清空 = 完成一波」）。
  * ⚠️ `requirement` = **只用 `bossKilled` 的通关链**（W11）：`world.1` 无门槛，`world.N` 需先击杀
@@ -73,8 +82,9 @@ const __world1: MapEntry = {
   name: '边境荒野',
   hint: '王国边境的荒芜地带，弱小的史莱姆在此游荡。',
   exp: 5000,
-  // 段 0~5：只有 `slime.minimal` 是数值最弱的可自动索敌杂兵；BOSS 用同系的巨史莱姆。
-  boss: 'slime.giant.enemy',
+  // 段 0~5：只有 `slime.minimal` 是数值最弱的可自动索敌杂兵；BOSS 用同系的变异史莱姆
+  // （`boss.world.01`，传奇档，数值 160/3，受 ≤200 / ≤5 的段首硬上限约束）。
+  boss: 'boss.world.01',
   monsters: spawn({
     'slime.minimal': 10,
   }),
@@ -84,10 +94,10 @@ const __world2: MapEntry = {
   key: 'world.2',
   level: 5,
   name: '迷雾林间',
-  hint: '终年浓雾不散的林间小径，史莱姆王后潜伏在雾中。',
+  hint: '终年浓雾不散的林间小径，空气里飘着令人作呕的甜腥味——臭源就在雾里。',
   requirement: { bossKilled: 'world.1' },
   exp: 20000,
-  boss: 'slime.queen',
+  boss: 'boss.world.02',
   monsters: spawn({
     'slime.minimal': 6,
     'slime.giant.enemy': 4,
@@ -97,14 +107,14 @@ const __world2: MapEntry = {
 const __world3: MapEntry = {
   key: 'world.3',
   level: 15,
-  name: '腐骨沼泽',
-  hint: '腐水与白骨交错的沼泽，凶暴的巨狼在雾里游弋。',
+  name: '腐骨林地',
+  hint: '白骨散落的枯林，狼群在暗处低吼，狼妖就伏在骨堆之后。',
   requirement: { bossKilled: 'world.2' },
   exp: 80000,
-  boss: 'wolf.giant',
+  boss: 'boss.world.03',
   monsters: spawn({
-    'slime.giant.enemy': 5,
-    'wolf.minimal': 5,
+    'wolf.minimal': 6,
+    'wolf.giant': 4,
   }),
 };
 
@@ -112,70 +122,69 @@ const __world4: MapEntry = {
   key: 'world.4',
   level: 25,
   name: '狼嚎雪原',
-  hint: '风雪呼啸的冻原，狼群在夜里格外凶暴。',
+  hint: '风雪呼啸的冻原，狼群在夜里格外凶暴，狼主一嚎便群狼毕至。',
   requirement: { bossKilled: 'world.3' },
   exp: 150000,
-  boss: 'wolf.king',
+  boss: 'boss.world.04',
   monsters: spawn({
-    'wolf.minimal': 5,
+    'wolf.minimal': 4,
     'wolf.giant': 3,
-    'kobold.miner': 2,
+    'wolf.frost': 3,
   }),
 };
 
 const __world5: MapEntry = {
   key: 'world.5',
   level: 35,
-  name: '废弃矿坑',
-  hint: '被狗头人占据的旧矿坑，矿工与萨满盘踞其中。',
+  name: '熔炉矿坑',
+  hint: '被狗头人占据的旧矿坑，坑底那座熄灭的熔炉里还烧着怨魂。',
   requirement: { bossKilled: 'world.4' },
   exp: 250000,
-  boss: 'zombies.hammersmith',
+  boss: 'boss.world.05',
   monsters: spawn({
     'kobold.miner': 4,
-    'zombies.farmer': 3,
-    'kobold.shaman': 2,
+    'mine.ghoul': 3,
+    'kobold.shaman': 3,
   }),
 };
 
 const __world6: MapEntry = {
   key: 'world.6',
   level: 45,
-  name: '亡者墓园',
-  hint: '常年不散的尸气让死者重新站起，贪婪的食尸鬼在碑间翻找。',
+  name: '狗头人金窟',
+  hint: '狗头人把抢来的财宝都藏进了这座地窟，暴君亲自坐镇。',
   requirement: { bossKilled: 'world.5' },
   exp: 400000,
-  boss: 'kobold.goldteeth',
+  boss: 'boss.world.06',
   monsters: spawn({
-    'kakarif.generations': 4,
-    'knight.normal': 3,
-    'kakarif.servants': 2,
+    'kobold.miner': 3,
+    'kobold.digger': 4,
+    'kobold.shaman': 3,
   }),
 };
 
 const __world7: MapEntry = {
   key: 'world.7',
   level: 55,
-  name: '骑士哨站',
-  hint: '堕落骑士扼守的哨站，祈祷声从不停歇。',
+  name: '堕誓哨站',
+  hint: '背弃誓约的骑士扼守的哨站，无冕者站在哨塔顶端。',
   requirement: { bossKilled: 'world.6' },
   exp: 600000,
-  boss: 'knight.leader',
+  boss: 'boss.world.07',
   monsters: spawn({
-    'knight.normal': 4,
-    'knight.prayer': 3,
-    'kakarif.servants': 2,
+    'knight.normal': 5,
+    'knight.prayer': 5,
   }),
 };
 
 const __world8: MapEntry = {
   key: 'world.8',
   level: 65,
-  name: '幽魂回廊',
-  hint: '幽魂与亡者在长长的回廊里往复徘徊。',
+  name: '噬魂回廊',
+  hint: '幽魂与亡者在长长的回廊里往复徘徊，暗影法师在尽头吞食它们。',
   requirement: { bossKilled: 'world.7' },
   exp: 900000,
-  boss: 'chapter3.necromancer',
+  boss: 'boss.world.08',
   monsters: spawn({
     'chapter3.undead.ghost': 4,
     'chapter3.undead.zombie': 3,
@@ -186,57 +195,58 @@ const __world8: MapEntry = {
 const __world9: MapEntry = {
   key: 'world.9',
   level: 75,
-  name: '猛兽巢穴',
-  hint: '野兽的巢穴，越靠近深处吼声越沉。',
+  name: '蛮荒兽巢',
+  hint: '野兽的巢穴，越靠近深处吼声越沉，巨狮在骸骨堆上踱步。',
   requirement: { bossKilled: 'world.8' },
   exp: 1300000,
-  boss: 'chapter3.beast.simba',
+  boss: 'boss.world.09',
   monsters: spawn({
     'chapter3.beast.wildpig': 4,
     'chapter3.beast.lion': 3,
-    'chapter3.murloc.minions': 2,
-    'chapter3.murloc.shaman': 1,
+    'beast.bear': 3,
   }),
 };
 
 const __world10: MapEntry = {
   key: 'world.10',
   level: 85,
-  name: '鱼人海湾',
-  hint: '咸腥的海湾里，鱼人部落正在集结。',
+  name: '牛头人迷宫',
+  hint: '混沌守卫·牛头人盘踞的迷宫，每一次转弯都可能撞上斧刃。',
   requirement: { bossKilled: 'world.9' },
   exp: 1800000,
-  boss: 'chapter3.murloc.warlord',
+  boss: 'boss.world.10',
   monsters: spawn({
-    'chapter3.murloc.minions': 4,
-    'chapter3.murloc.shaman': 3,
-    'chapter3.murloc.slaves': 1,
+    'mino.grunt': 4,
+    'mino.seer': 3,
+    // 迷宫里的石像：元素系杂兵，作为「居所」主题里的场景物。
+    'chapter3.element.earth': 3,
   }),
 };
 
 const __world11: MapEntry = {
   key: 'world.11',
   level: 85,
-  name: '疯狂兽场',
-  hint: '巨兽相互吞噬的战场，庞然大物盘踞中央。',
+  name: '九头蛇深潭',
+  hint: '混沌守卫·九头蛇盘踞的深潭，斩下一颗头，还有更多在等着。',
   requirement: { bossKilled: 'world.9' },
   exp: 2000000,
-  boss: 'chapter3.beast.pengpeng',
+  boss: 'boss.world.11',
   monsters: spawn({
-    'chapter3.beast.dingman': 4,
-    'chapter3.beast.wildpig': 3,
-    'chapter3.beast.lion': 3,
+    'hydra.spawn': 4,
+    // 水中的鱼人喽啰：与深潭主题相符的次级杂兵。
+    'chapter3.murloc.minions': 3,
+    'chapter3.murloc.shaman': 3,
   }),
 };
 
 const __world12: MapEntry = {
   key: 'world.12',
   level: 85,
-  name: '元素祭坛',
-  hint: '火、水、土三种元素在此地交锋。',
+  name: '奇美拉岩窟',
+  hint: '混沌守卫·奇美拉栖息的岩窟，三种元素在它体内撕咬。',
   requirement: { bossKilled: 'world.9' },
   exp: 2200000,
-  boss: 'chapter3.element.azathoth.fire',
+  boss: 'boss.world.12',
   monsters: spawn({
     'chapter3.element.fire': 4,
     'chapter3.element.water': 3,
@@ -247,16 +257,14 @@ const __world12: MapEntry = {
 const __world13: MapEntry = {
   key: 'world.13',
   level: 85,
-  name: '混沌前沿',
-  hint: '混沌大军的前哨，兽人与水元素混杂行进。',
+  name: '不死鸟圣坛',
+  hint: '混沌守卫·不死鸟的圣坛，火焰熄灭之处，灰烬里又亮起火星。',
   requirement: { bossKilled: 'world.9' },
   exp: 2400000,
-  boss: 'chapter3.waterElement.Nynnroth',
+  boss: 'boss.world.13',
   monsters: spawn({
-    'chapter4.orcs.warrior': 4,
-    'chapter3.orcs.wolf': 3,
-    'chapter4.orcs.hunter': 2,
-    'chapter3.waterElement': 1,
+    'chapter3.element.fire': 5,
+    'phoenix.spark': 5,
   }),
 };
 
