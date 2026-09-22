@@ -22,6 +22,7 @@ import { buffs } from './buffs.js';
 import { careers } from './careers.js';
 import { enemyAffixes } from './enemy-affixes.js';
 import { enemies } from './enemies.js';
+import { mapBosses, mapMobs } from './map-bosses.js';
 import { enhances } from './enhances.js';
 import { goods } from './goods.js';
 import { legends } from './legends.js';
@@ -48,7 +49,9 @@ const baseTables = {
   careers,
   roles,
   maps: { ...maps, ...chaosMaps },
-  enemies,
+  // 守关 BOSS 重做（v4.2）：新数据只加不改，`enemies.ts`（逐字移植）保持原样。
+  // 后写的 `mapMobs` / `mapBosses` 覆盖同名 key —— 目前 key 互不重叠（`map-bosses.test` 有门禁）。
+  enemies: { ...enemies, ...mapMobs, ...mapBosses },
   skills,
   goods,
   passives,
