@@ -11,7 +11,8 @@
  * - `total` = 一波的刷怪总量（W4 消费）；每 20 波出守关 BOSS。
  *
  * ⚠️ 本文件是**纯数据模块，无模块级副作用**。
- * ⚠️ 敌人 key 全部取自既有 `enemies.ts`（不新增敌人）；高 T 阶使用高阶元素 / 水元素 / 阿撒托斯。
+ * ⚠️ 普通刷怪池的敌人 key 取自既有 `enemies.ts`；守关 BOSS 自 v4.2 起改指
+ *    `data/map-bosses.ts` 的 `boss.chaos.T01..T16`（池本身不动）。
  */
 
 import type { MapEntry } from './_shapes.js';
@@ -44,7 +45,10 @@ function spawn(types: Record<string, number>): MapEntry['monsters'] {
 }
 
 /**
- * 每个 T 阶的刷怪池与守关 BOSS（敌人 key 全部来自既有 `enemies.ts`）。
+ * 每个 T 阶的刷怪池与守关 BOSS。
+ *
+ * 普通刷怪池的敌人 key 来自既有 `enemies.ts`；守关 BOSS 自 v4.2 起为 `boss.chaos.TNN`
+ * （混沌化身，见 `data/map-bosses.ts`）。
  *
  * ⚠️ 选怪纪律同 `maps-world.ts`：**必须是 `camp:'enemy'`、非 `onPress` 机关**，
  * 且 **BOSS 的 HP 不低于本图任一普通怪**（否则「守关者」比杂兵还弱，且波次奖励倒挂）。
@@ -54,22 +58,22 @@ function spawn(types: Record<string, number>): MapEntry['monsters'] {
  * 1M（阿撒托斯）→ 1.6M（尼恩罗斯）→ 2.4M（兽人萨满）→ 10M（鱼斯拉）。
  */
 const CHAOS_TIERS: ReadonlyArray<{ readonly types: Record<string, number>; readonly boss: string }> = [
-  { types: { 'chapter3.undead.ghost': 4, 'chapter3.undead.ghostShield': 3, 'chapter3.undead.zombie': 3 }, boss: 'chapter3.beast.wildpig' },
-  { types: { 'chapter3.undead.zombie': 4, 'chapter3.beast.wildpig': 3, 'chapter3.beast.lion': 3 }, boss: 'chapter3.murloc.shaman' },
-  { types: { 'chapter3.murloc.minions': 4, 'chapter3.murloc.shaman': 3, 'chapter3.undead.zombie': 3 }, boss: 'chapter3.murloc.slaves' },
-  { types: { 'chapter3.murloc.slaves': 4, 'kakarif.illusion': 3, 'knight.leader': 3 }, boss: 'chapter3.beast.dingman' },
-  { types: { 'kakarif.illusion': 4, 'knight.leader': 3, 'chapter3.murloc.slaves': 3 }, boss: 'chapter3.beast.simba' },
-  { types: { 'chapter3.murloc.slaves': 4, 'chapter3.beast.dingman': 3, 'chapter3.waterElement': 3 }, boss: 'chapter3.beast.pengpeng' },
-  { types: { 'chapter3.beast.simba': 4, 'chapter3.beast.dingman': 3, 'chapter3.waterElement': 3 }, boss: 'chapter4.orcs.warrior' },
-  { types: { 'chapter3.element.fire': 4, 'chapter3.element.water': 3, 'chapter3.beast.pengpeng': 3 }, boss: 'chapter3.waterElement.giants' },
-  { types: { 'chapter3.waterElement.giants': 4, 'chapter4.orcs.warrior': 3, 'chapter3.element.earth': 3 }, boss: 'chapter3.murloc.warlord' },
-  { types: { 'chapter4.orcs.warrior': 4, 'chapter3.waterElement.giants': 3, 'chapter3.element.earth': 3 }, boss: 'chapter3.element.azathoth.fire' },
-  { types: { 'chapter3.element.fire': 4, 'chapter3.element.water': 3, 'chapter3.element.earth': 3 }, boss: 'chapter3.element.azathoth.ice' },
-  { types: { 'chapter3.element.fire': 4, 'chapter3.element.earth': 3, 'chapter3.waterElement.giants': 3 }, boss: 'chapter3.element.azathoth.earth' },
-  { types: { 'chapter3.element.fire': 4, 'chapter3.element.water': 3, 'chapter3.waterElement.giants': 3 }, boss: 'chapter3.element.azathoth.dark' },
-  { types: { 'chapter3.element.azathoth.fire': 4, 'chapter3.element.azathoth.ice': 3, 'chapter3.element.azathoth.earth': 3 }, boss: 'chapter3.waterElement.Nynnroth' },
-  { types: { 'chapter3.waterElement.Nynnroth': 4, 'chapter3.element.azathoth.none': 3, 'chapter3.waterElement.giants': 3 }, boss: 'chapter3.orcs.shaman' },
-  { types: { 'chapter3.orcs.shaman': 4, 'chapter3.waterElement.Nynnroth': 3, 'chapter3.element.azathoth.dark': 3 }, boss: 'chapter3.fishzilla' },
+  { types: { 'chapter3.undead.ghost': 4, 'chapter3.undead.ghostShield': 3, 'chapter3.undead.zombie': 3 }, boss: 'boss.chaos.T01' },
+  { types: { 'chapter3.undead.zombie': 4, 'chapter3.beast.wildpig': 3, 'chapter3.beast.lion': 3 }, boss: 'boss.chaos.T02' },
+  { types: { 'chapter3.murloc.minions': 4, 'chapter3.murloc.shaman': 3, 'chapter3.undead.zombie': 3 }, boss: 'boss.chaos.T03' },
+  { types: { 'chapter3.murloc.slaves': 4, 'kakarif.illusion': 3, 'knight.leader': 3 }, boss: 'boss.chaos.T04' },
+  { types: { 'kakarif.illusion': 4, 'knight.leader': 3, 'chapter3.murloc.slaves': 3 }, boss: 'boss.chaos.T05' },
+  { types: { 'chapter3.murloc.slaves': 4, 'chapter3.beast.dingman': 3, 'chapter3.waterElement': 3 }, boss: 'boss.chaos.T06' },
+  { types: { 'chapter3.beast.simba': 4, 'chapter3.beast.dingman': 3, 'chapter3.waterElement': 3 }, boss: 'boss.chaos.T07' },
+  { types: { 'chapter3.element.fire': 4, 'chapter3.element.water': 3, 'chapter3.beast.pengpeng': 3 }, boss: 'boss.chaos.T08' },
+  { types: { 'chapter3.waterElement.giants': 4, 'chapter4.orcs.warrior': 3, 'chapter3.element.earth': 3 }, boss: 'boss.chaos.T09' },
+  { types: { 'chapter4.orcs.warrior': 4, 'chapter3.waterElement.giants': 3, 'chapter3.element.earth': 3 }, boss: 'boss.chaos.T10' },
+  { types: { 'chapter3.element.fire': 4, 'chapter3.element.water': 3, 'chapter3.element.earth': 3 }, boss: 'boss.chaos.T11' },
+  { types: { 'chapter3.element.fire': 4, 'chapter3.element.earth': 3, 'chapter3.waterElement.giants': 3 }, boss: 'boss.chaos.T12' },
+  { types: { 'chapter3.element.fire': 4, 'chapter3.element.water': 3, 'chapter3.waterElement.giants': 3 }, boss: 'boss.chaos.T13' },
+  { types: { 'chapter3.element.azathoth.fire': 4, 'chapter3.element.azathoth.ice': 3, 'chapter3.element.azathoth.earth': 3 }, boss: 'boss.chaos.T14' },
+  { types: { 'chapter3.waterElement.Nynnroth': 4, 'chapter3.element.azathoth.none': 3, 'chapter3.waterElement.giants': 3 }, boss: 'boss.chaos.T15' },
+  { types: { 'chapter3.orcs.shaman': 4, 'chapter3.waterElement.Nynnroth': 3, 'chapter3.element.azathoth.dark': 3 }, boss: 'boss.chaos.T16' },
 ];
 
 function buildChaosMap(tier: number): MapEntry {
