@@ -52,6 +52,7 @@ PID namespace 里本会话够不到也杀不掉（AGENTS §7），也不该另�
 | `check-world2-unlock.mjs` | `world.2` 挂到 20 波，守关 BOSS 会不会刷、击杀后 `world.3` 会不会解锁 |
 | `check-exp-rate.mjs` | 指定等级/地图的经验速率（`MAP` / `LEVEL` / `MINUTES` 可调）。**原用途**是判定「13 级在 `world.2` 升到 15 级是否现实可达」（结论：不可达）。⚠️ W10 已移除经验等级差惩罚，`expPerKill` 不再随等级差变化 —— 本脚本现定位为**调经验曲线时的速率测量工具**，也是「经验效率估算脚本」的雏形（见 `ai-docs/05` §5） |
 | `bench-offline-tick.mjs` | 若让**离线角色**也在服务端实时 tick，成本是多少（为「离线实时战斗」方案给量化依据） |
+| `bench-offline-emit.mjs` | 续探（`ai-docs/26` §13.4）：把**同一 tick** 拆成 `stepPaused` / `unitStateDtoOf` / `diffUnitStates` 三段计时，证明推送差分路径 ≈ 纯 step 的 **2.6–3.5×**（§7 的容量结论只在「离线跳过构帧」时成立）。只读 `game-core` + `server` 的 dist |
 | `check-gains.mjs` | 仅靠时钟推进（不走 `WorldService.isOnline` 判断）角色是否真的涨经验/金币/掉落 |
 | `check-boss-balance.mjs` | 守关 BOSS 重做（v4.2）后**单挑口径**逐图模拟「同级基准角色 vs 守关 BOSS」，输出击杀时长；`TIMEOUT` = 基准角色打不动（底材无词缀），**不代表满配不可击杀**。`MAPS` / `CAP_SECONDS` / `LEVEL_OFFSET` / `WEAPON` 可调 |
 
