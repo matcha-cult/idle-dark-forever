@@ -9,7 +9,12 @@
  * - `leave` 结束会话。
  */
 import { describe, expect, it, beforeEach } from 'vitest';
-import { createDefaultTables, WORLD_BOSS_WAVE_INTERVAL, type DataTables } from '@idle-dark/game-core';
+import {
+  createDefaultTables,
+  EnemyUnit,
+  WORLD_BOSS_WAVE_INTERVAL,
+  type DataTables,
+} from '@idle-dark/game-core';
 import { type WorldTickDto } from '@idle-dark/protocol';
 import type { NotificationBatcher, PushFrame } from '../src/modules/game/notification-batcher.js';
 import { OpIdempotencyService } from '../src/modules/game/op-idempotency.service.js';
@@ -583,6 +588,71 @@ describe('WorldService', () => {
     const extras = await context.extrasOf(1);
     expect(extras.worldMaps['c1']?.map).toBe('world.1');
     expect(worldWaveOf(extras.worldMaps['c1']?.wave)).toBe(0);
+  });
+
+  it('W11 决策 3：击杀守关 BOSS → **等清尸后**自动重进本图（波次归 0），且掉落没被吞', async () => {
+    await startInStreet();
+    const live = await service.start(1, 'c1');
+    const world = live!.world;
+    const spawner = world.enemyBorn!;
+
+    // 给这只 BOSS 挂一条 `rate: 1` 的必掉，让「掉落有没有被吞」可确定性断言
+    // （真实掉落表全是概率条目，可能合法地一件都不掉）。
+    // ⚠️ 用**钱包物品**（通货）而不是 `gold`：`gold` 的落地量会乘 `gf`（金币加成），
+    // 无装备时可能是 0，那样连 `handled:'lost'` 都算不出正数，断言会失真。
+    const bossLoots = (tables.enemies['slime.giant.enemy']!.loots ??= []);
+    bossLoots.push({ key: 'currency.transmute', count: [1, 1], rate: 1 });
+    try {
+      for (let i = 0; i < WORLD_BOSS_WAVE_INTERVAL; i += 1) spawner.completeWave();
+      const boss = world.units.find(
+        (u): u is EnemyUnit => u instanceof EnemyUnit && u.worldBoss,
+      );
+      expect(boss).toBeTruthy();
+
+      boss!.kill(); // shouldWait=true → 3s 后清尸（掉落结算在 clean）
+      expect(world.openWorldCleared).toBe(true);
+      expect(world.bossPending).toBe(false); // 一次性：已登记 → 之后是挂机节拍
+
+      // 清尸之前：**不**重开（提前重开会 dispose 清尸计时器 → 吞掉落）。
+      now += 1000;
+      service.tick();
+      expect(world.enemyBorn).toBe(spawner);
+      expect(spawner.wave).toBe(WORLD_BOSS_WAVE_INTERVAL);
+      expect(world.openWorldCleared).toBe(true);
+
+      // 越过清尸周期 → 重开本图：新刷怪器、波数 0、清场、标志清零。
+      now += 3000;
+      service.tick();
+      expect(world.openWorldCleared).toBe(false);
+      expect(world.enemyBorn).not.toBe(spawner);
+      expect(world.enemyBorn!.wave).toBe(0);
+      expect(world.playerUnit).toBeTruthy();
+      expect(bossLoots.length).toBeGreaterThan(0);
+
+      // 掉落确实落到了帧上（证明等清尸换来的掉落没被吞）。
+      // 掉落确实落到了帧上（证明「等清尸」换来的掉落没被吞）。
+      // ⚠️ `LootDto` 是 `{ slot: {...}, handled }` 的**嵌套**形状，key 在 `slot.key`。
+      const loots = tickFrames().flatMap((frame) => frame.loot ?? []);
+      const drop = loots.find((loot) => loot.slot?.key === 'currency.transmute');
+      expect(drop).toBeTruthy();
+      expect(drop!.handled).toBe('pickup'); // 真落地，不是 'lost'
+    } finally {
+      bossLoots.pop();
+    }
+  });
+
+  it('W11 决策 3：混沌图击杀 BOSS **不**走「通关重进」（由 chaosOutcome 决定）', async () => {
+    await startInStreet();
+    const live = await service.start(1, 'c1');
+    const world = live!.world;
+    // 直接把会话挪到混沌图（跳过混沌仪入口，只为验证内核分支）。
+    world.map = 'chaos.t01';
+    world.onMapChanged();
+    for (let i = 0; i < WORLD_BOSS_WAVE_INTERVAL; i += 1) world.enemyBorn!.completeWave();
+    const boss = world.units.find((u): u is EnemyUnit => u instanceof EnemyUnit && u.worldBoss);
+    boss!.kill();
+    expect(world.openWorldCleared).toBe(false);
+    expect(world.chaosOutcome).toBe('clear');
   });
 
   it('W11 决策 4：混沌图阵亡**不**走野外重开（保持 chaosOutcome 失败分支）', async () => {

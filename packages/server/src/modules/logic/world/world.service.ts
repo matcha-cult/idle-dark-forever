@@ -383,9 +383,9 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
       session.carryMs = 0;
     }
 
-    // W11 / 决策 4：本 tick 内野外阵亡 ⇒ **先重开本图 run，再出帧**，
+    // W11：本 tick 内的 run 重开（阵亡 / 通关）⇒ **先重开，再出帧**，
     // 这样清场 + 「进入地图」日志能与同一帧一起下发，而不是延后 200ms。
-    this.handleOpenWorldDeath(session);
+    this.handleRunReset(session);
 
     this.emitTick(session, now);
     this.publishChaosOutcome(session);
@@ -529,12 +529,12 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
   private publishChaosOutcome(session: WorldSession): void {
     const outcome = session.world.chaosOutcome;
     if (outcome === null) return;
-    // `clear` 时先等守关 BOSS 尸体清理（掉落 / 钥石结算在 `clean()`）：本 tick 立刻换图会
+    // `clear` 时先等守关 BOSS **清尸**（掉落 / 钥石结算在 `clean()`）：本 tick 立刻换图会
     // `dispose()` 掉 clean 计时器，导致 BOSS 掉落被静默吞掉。最多延后一个清尸周期（3s）。
-    if (
-      outcome === 'clear' &&
-      session.world.units.some((unit) => unit instanceof EnemyUnit && unit.worldBoss)
-    ) {
+    // ⚠️ 口径是「**存在**」（含 `ghost` 尸体）—— 唯一实现在 `BattleWorld.hasWorldBossUnit`。
+    // 与 `Born.onTimer` 的刷怪闸门共用同一判定，但**消费意图不同**：这里等掉落结算，
+    // 那里拦自然刷怪（见 `AGENTS.md` §19 的 W12 条）。
+    if (outcome === 'clear' && session.world.hasWorldBossUnit()) {
       return;
     }
     session.world.chaosOutcome = null;
@@ -891,30 +891,45 @@ export class WorldService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * W11 / 决策 4：野外战斗图阵亡 ⇒ **重开本图 run**（波数归 0、里程碑复位、清场重刷）。
+   * 本图 run 重开：两个触发源共用（W11 决策 3「通关」+ 决策 4「阵亡」）。
+   *
+   * ## 决策 4：野外战斗图阵亡 ⇒ 立刻重开
    *
    * 产品口径（用户原话）：*"连续死肯定是玩家问题，正常人应该是回去提升装备，或者回到上一个
-   * 能打过的图，系统不为玩家做选择"* —— 所以这里**不加任何护栏**：不做「连续死亡 N 次停手」、
+   * 能打过的图，系统不为玩家做选择"* —— 所以**不加任何护栏**：不做「连续死亡 N 次停手」、
    * 不自动退回上一张图、不弹确认。
+   * ⚠️ **不等清尸**：阵亡时守关 BOSS 通常还活着，等它就是永远不重开。
    *
-   * 实现上**有意不销毁 / 不重建会话**（那会牵进离线时间锚点 `player.timestamp`、`opId` 幂等、
-   * 跨服命令与会话回收竞态），而是复用「重复进入当前地图 = 重置本图」的同一条路径
-   * （`BattleWorld.resetOpenWorldRun` → `onMapChanged`），可观测效果一致：波次归零、怪物重刷、
-   * 且会发一条 `mapEnter` 日志。
+   * ## 决策 3：击杀守关 BOSS 通关 ⇒ 自动重新进入本图（波次归 0 → 转挂机节拍）
    *
-   * 幂等：`resetOpenWorldRun()` 会把标志清零，因此每次阵亡只重开一次；
-   * 未置位时本函数是 no-op（安全）。
+   * ⚠️ 这一条**必须等该 BOSS 清尸**再重开：BOSS 的掉落与混沌钥石在 `EnemyUnit.clean()` 里结算，
+   * 提前 `onMapChanged()` 会 `dispose()` 掉清尸计时器、**吞掉掉落** —— 与混沌 `clear` 同一条纪律
+   * （见 `AGENTS.md` §19）。清尸默认 3s，所以通关后最多晚 3s 重进。
+   *
+   * 两个实现共用的部分：**有意不销毁 / 不重建会话**（那会牵进离线时间锚点 `player.timestamp`、
+   * `opId` 幂等、跨服命令与会话回收竞态），而是复用「重复进入当前地图 = 重置本图」的同一条路径
+   * （`BattleWorld.resetOpenWorldRun` → `onMapChanged`）：波次归零、怪物重刷、发一条 `mapEnter` 日志。
+   *
+   * 幂等：`resetOpenWorldRun()` 会把两个标志一起清零，因此每个触发源只生效一次；
+   * 两个标志都没置位时本函数是 no-op（安全）。
    */
-  private handleOpenWorldDeath(session: WorldSession): void {
-    if (!session.world.openWorldDeath) return;
-    const map = session.world.map;
-    session.world.resetOpenWorldRun();
+  private handleRunReset(session: WorldSession): void {
+    const world = session.world;
+    const cleared = world.openWorldCleared;
+    const died = world.openWorldDeath;
+    if (!cleared && !died) return;
+    // 通关重开：等守关 BOSS 清尸（掉落结算），下一 tick 再看。
+    if (cleared && !died && world.hasWorldBossUnit()) return;
+
+    const map = world.map;
+    const reason = died ? '野外阵亡' : '通关守关 BOSS';
+    world.resetOpenWorldRun();
     this.logger.log(
-      `[W11] 野外阵亡 → 重开本图 run userId=${session.userId} characterId=${session.characterId} map=${map}`,
+      `[W11] ${reason} → 重开本图 run userId=${session.userId} characterId=${session.characterId} map=${map}`,
     );
     // 立刻把「波数 0 / 里程碑复位」落进侧车：否则紧接着的刷新会读回旧波数。
     void this.persistPosition(session).catch((error: unknown) => {
-      this.logger.warn(`阵亡重开后落库失败：${session.characterId}`, {
+      this.logger.warn(`重开本图 run 后落库失败：${session.characterId}`, {
         reason: error instanceof Error ? error.message : String(error),
       });
     });

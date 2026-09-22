@@ -330,6 +330,55 @@ describe('W11 通关清算：首通全额发 map.exp', () => {
     }
   });
 
+  // ── 决策 3 的「自动重新进入当前图」半边（W11 补全） ──
+
+  it('通关置位「自动重进本图」标志；`resetOpenWorldRun` 一次清两个标志', () => {
+    const { t, spawner } = setup();
+    waves(spawner, WORLD_BOSS_WAVE_INTERVAL);
+    expect(t.world.openWorldCleared).toBe(false);
+
+    bosses(t)[0]!.kill();
+    expect(t.world.openWorldCleared).toBe(true);
+    // 已登记 ⇒ 挂机节拍（不再出 BOSS）。
+    expect(t.world.bossPending).toBe(false);
+
+    t.world.resetOpenWorldRun();
+    expect(t.world.openWorldCleared).toBe(false);
+    expect(t.world.openWorldDeath).toBe(false);
+    expect((t.world.enemyBorn as EnemyBorn).wave).toBe(0);
+  });
+
+  it('阵亡与通关两个标志互不干扰（同一次重开把所有待处理标志清干净）', () => {
+    const { t, spawner } = setup();
+    waves(spawner, WORLD_BOSS_WAVE_INTERVAL);
+    t.world.noteOpenWorldPlayerDeath();
+    bosses(t)[0]!.kill();
+    expect(t.world.openWorldDeath).toBe(true);
+    expect(t.world.openWorldCleared).toBe(true);
+    t.world.resetOpenWorldRun();
+    expect(t.world.openWorldDeath).toBe(false);
+    expect(t.world.openWorldCleared).toBe(false);
+  });
+
+  it('通关清算经验在重开前已发到玩家身上 → 重开不会吞掉它', () => {
+    const { t, player, spawner } = setup();
+    waves(spawner, WORLD_BOSS_WAVE_INTERVAL);
+    bosses(t)[0]!.kill();
+    const afterKill = player.exp;
+    expect(clearRewardEvents(t)).toBe(1);
+    // 重开世界（清场 + 换刷怪器）不影响玩家侧的经验。
+    t.world.resetOpenWorldRun();
+    expect(player.exp).toBe(afterKill);
+  });
+
+  it('混沌图击杀 BOSS **不**置位自动重进（走 `chaosOutcome`，由混沌域决定后续）', () => {
+    const { t, spawner } = setup({ map: CHAOS_MAP });
+    waves(spawner, WORLD_BOSS_WAVE_INTERVAL);
+    bosses(t)[0]!.kill();
+    expect(t.world.openWorldCleared).toBe(false);
+    expect(t.world.chaosOutcome).toBe('clear');
+  });
+
   it('混沌图通关不发野外通关清算（可重复刷，不属于 worldBossKilled 链）', () => {
     const { t, spawner } = setup({ map: CHAOS_MAP });
     waves(spawner, WORLD_BOSS_WAVE_INTERVAL);

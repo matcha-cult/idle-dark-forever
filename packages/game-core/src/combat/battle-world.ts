@@ -223,6 +223,18 @@ export class BattleWorld {
    * （`wave = 0`、里程碑复位、清场、重新武装刷怪器），然后把标志清零。
    */
   openWorldDeath = false;
+  /**
+   * 野外图**通关**待处理标志（W11 / 决策 3：「击杀守关 BOSS 后自动重新进入当前图」）。
+   *
+   * 非混沌图的守关 BOSS **首次**被击杀时置位。服务端 tick 读取它，但**必须等该 BOSS 清尸**
+   * 才能落实重开 —— 掉落 / 钥石结算在 `EnemyUnit.clean()` 里，提前 `onMapChanged()` 会
+   * `dispose()` 掉清尸计时器、**吞掉 BOSS 掉落**（与混沌 `clear` 同一条纪律，见 `AGENTS.md` §19）。
+   *
+   * 落实后的效果：波数归 0、清场、重建刷怪器；此时 `player.worldBossKilled` 已登记 ⇒
+   * `bossPending === false` ⇒ 自动进入**挂机节拍**（每 10 波精英、不再出 BOSS）。
+   * 清算经验在 `kill()` 里已发到玩家身上（不在世界里），因此重开不会吞掉它。
+   */
+  openWorldCleared = false;
   player: PlayerLike | null = null;
   playerUnit: PlayerUnit | null = null;
 
@@ -332,6 +344,25 @@ export class BattleWorld {
     return this.player?.hasWorldBossKilled?.(this._map) !== true;
   }
 
+  /**
+   * 场上**是否存在守关 BOSS 单位** —— 口径是「存在」，**含已死亡但尚未清尸的 `ghost`**。
+   *
+   * ⚠️ 「存在」而不是「存活」是**刻意**的，两个消费方都依赖它：
+   * 1. `WorldService.publishChaosOutcome`：混沌 `clear` 必须等 BOSS **清尸**
+   *    （掉落 / 钥石结算在 `clean()`）才能上报，否则换图会 `dispose` 掉清尸计时器 → **吞掉落**；
+   * 2. `Born.onTimer` 的自然刷怪闸门（W12，产品拍板）：BOSS 在场时**停止刷杂兵**，
+   *    让 BOSS 战不再掺杂兵 —— 因此「尸体还在」那 3s 也算在场。
+   *
+   * ⚠️ **已知尾巴（world.11）**：BOSS `chapter3.beast.pengpeng` 携带 `simba.goodFriends`，
+   * 其 `willClean` 在「仍有兄弟存活」时返回 `false` ⇒ **尸体不挂清尸计时器**。而该图刷怪池里
+   * 就有同为携带者的 `chapter3.beast.dingman`。因此「BOSS 死时还有兄弟活着」⇒ 尸体留在场上
+   * ⇒ 杂兵停刷，直到**最后一个兄弟死亡**时统一 `setCleanTimer()` 才放开。
+   * 不是永久锁死（兄弟死光即恢复），但那段时间确实没有杂兵。
+   */
+  hasWorldBossUnit(): boolean {
+    return this.units.some((unit) => unit instanceof EnemyUnit && unit.worldBoss);
+  }
+
   /** 记录混沌图守关 BOSS 击杀（仅混沌图有效；幂等，保留首个结果）。 */
   noteChaosBossKilled(): void {
     if (this.chaosOutcome === null && this.isChaosMap) {
@@ -367,7 +398,23 @@ export class BattleWorld {
   }
 
   /**
-   * 重开本图 run：波数归 0、里程碑复位、清场、重新武装刷怪器（W11 / 决策 4）。
+   * 记录野外图**通关**（决策 3：击杀守关 BOSS 后自动重进本图）。
+   *
+   * 只在**非混沌图**置位：混沌图的 BOSS 可重复刷，由 `chaosOutcome` 与混沌域决定后续，
+   * 不走「通关即重开」这条语义。
+   */
+  noteWorldCleared(): void {
+    if (this.isChaosMap) return;
+    this.openWorldCleared = true;
+  }
+
+  /**
+   * 重开本图 run：波数归 0、里程碑复位、清场、重新武装刷怪器。
+   *
+   * 两个触发源共用（**会一并清掉两个待处理标志**）：
+   * - 决策 4「野外阵亡」（`openWorldDeath`）—— **不等清尸**，立刻重开；
+   * - 决策 3「通关守关 BOSS」（`openWorldCleared`）—— 服务端会**等 BOSS 清尸**再调本方法，
+   *   以免吞掉掉落（调用方负责这个前置条件，见 `WorldService.handleRunReset`）。
    *
    * 复用 {@link onMapChanged}（与「重复进入当前地图 = 重置本图」同一条路径），
    * 因此顺带发出一次 `mapEnter` 日志 —— 这正是「自动重新进入地图」应有的可观测效果。
@@ -377,6 +424,7 @@ export class BattleWorld {
    */
   resetOpenWorldRun(): void {
     this.openWorldDeath = false;
+    this.openWorldCleared = false;
     this.onMapChanged();
   }
 

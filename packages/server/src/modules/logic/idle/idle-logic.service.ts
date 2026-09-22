@@ -334,6 +334,11 @@ export class IdleService {
         const progressed = remaining - left;
         if (!(progressed > 0)) break;
         remaining = left;
+        // W12：离线也执行「阵亡即重开本图」（与在线 tick 同语义，见
+        // `WorldService.handleOpenWorldDeath`）。不这么做的话，玩家带着一个打不死的守关 BOSS
+        // 下线时会颗粒无收：BOSS 在场 ⇒ 自然刷怪被闸门拦住 ⇒ 模拟区间击杀≈0
+        // ⇒ `extrapolate` 拿 0 速率外推，整段离线收益也≈0。
+        applyRunResets(world);
         if (remaining <= 0) break;
         if (collector.snapshot().kills >= SIM_KILL_BUDGET) break;
       }
@@ -525,6 +530,40 @@ export function offlineExtrapolationMs(
   // 非法输入（NaN / Infinity）一律不外推：宁可少给，也不给出无依据的收益。
   if (!Number.isFinite(cappedMs) || !Number.isFinite(simulatedMs)) return 0;
   return Math.max(0, Math.max(0, cappedMs) - Math.max(0, simulatedMs));
+}
+
+/**
+ * 离线模拟里的「本图 run 重开」—— 与在线 `WorldService.handleRunReset` **同语义**，
+ * 区别只在于调用时机：在线是每 tick 一次，离线是每个快进分片之后一次（离线没有 tick 概念）。
+ *
+ * 两个触发源，门槛不同（与在线一致）：
+ * - **阵亡**（`openWorldDeath`）：**立刻**重开（阵亡时 BOSS 通常还活着，等清尸就是永不重开）；
+ * - **通关**（`openWorldCleared`）：**等守关 BOSS 清尸**再重开 —— 掉落 / 钥石在 `clean()` 里结算，
+ *   提前重建世界会把它吞掉。
+ *
+ * ⚠️ **必须做**：这两个标志由内核置位、只有服务端消费。离线路径若不管，玩家带着一个打不死的
+ * 守关 BOSS 下线会拿不到任何收益 —— 因为 W12 起「BOSS 在场就停刷杂兵」，模拟区间的击杀数≈0，
+ * 而外推恰恰乘的是模拟区间的速率。
+ *
+ * 幂等：`resetOpenWorldRun()` 会把两个标志一起清零；都未置位时是纯 no-op。
+ *
+ * @returns 是否真的重开过（便于测试与将来接指标）。
+ */
+export function applyRunResets(world: {
+  openWorldDeath: boolean;
+  openWorldCleared: boolean;
+  hasWorldBossUnit(): boolean;
+  resetOpenWorldRun(): void;
+}): boolean {
+  if (world.openWorldDeath) {
+    world.resetOpenWorldRun();
+    return true;
+  }
+  if (world.openWorldCleared && !world.hasWorldBossUnit()) {
+    world.resetOpenWorldRun();
+    return true;
+  }
+  return false;
 }
 
 /**

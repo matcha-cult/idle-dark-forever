@@ -198,13 +198,19 @@ export class Born {
     if (this.config.total && this.total >= this.config.total) {
       return;
     }
+    // W12（产品拍板）：**守关 BOSS 在场时不刷杂兵** —— BOSS 战不再掺杂兵。
+    // 口径是「存在」：`hasWorldBossUnit()` 连已死亡但尚未清尸的 `ghost` 也算在场，
+    // 因此 BOSS 死后要等清尸（默认 3s）才恢复刷怪。⚠️ world.11 的 BOSS 因
+    // `simba.goodFriends` 可能延后清尸（见 `BattleWorld.hasWorldBossUnit` 的尾巴说明）。
+    // 与下面两条一样**保持轮询**：BOSS 一旦离场就自动恢复，不需要任何人重置状态。
+    //
     // W12：全图怪物总数（含 BOSS 与召唤物）达到上限 → 暂停自然刷新。
     // 保持定时轮询，因此召唤物 / 杂兵死亡后会自动恢复刷新，不会永久停刷。
     //
     // 此外还要查**全局单位硬顶**（I2）：`addEnemy` 在超顶时会**拒绝注册**，
     // 而本函数在其后会 `count += 1 / total += 1` —— 若不在**调用前**拦住，
     // 记账会失真、该波永远无法判定完成。这里的提前 return 让刷新推迟而**不是丢失**。
-    if (this.atMonsterCap() || this.world.atUnitCap()) {
+    if (this.world.hasWorldBossUnit() || this.atMonsterCap() || this.world.atUnitCap()) {
       this.setTimer();
       return;
     }
@@ -532,7 +538,7 @@ export class EnemyBorn {
     if (!this.world.bossPending) {
       return false;
     }
-    if (this.world.units.some((u) => u instanceof EnemyUnit && u.worldBoss)) {
+    if (this.world.hasWorldBossUnit()) {
       return false;
     }
     // I2：全图单位已达硬顶 → 本次不刷 BOSS（下一波还会再试，不会永久丢失）。

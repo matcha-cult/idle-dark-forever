@@ -9,6 +9,7 @@ import { Player, createDefaultTables } from '@idle-dark/game-core';
 import {
   addMaterial,
   applyExpBounded,
+  applyRunResets,
   extrapolate,
 } from '../src/modules/logic/idle/idle-logic.service.js';
 
@@ -141,5 +142,70 @@ describe('addMaterial', () => {
     addMaterial(p, tables, 'dust1', 1e9);
     expect(p.countGood('dust1')).toBeGreaterThan(0);
     expect(Number.isFinite(p.countGood('dust1'))).toBe(true);
+  });
+});
+
+describe('applyRunResets（W12：离线也执行「本图 run 重开」）', () => {
+  /** 记录 reset 次数的假世界；`openWorldDeath` / `openWorldCleared` 可注入。 */
+  function fakeWorld(options: {
+    openWorldDeath?: boolean;
+    openWorldCleared?: boolean;
+    bossPresent?: boolean;
+  }) {
+    const state = {
+      openWorldDeath: options.openWorldDeath ?? false,
+      openWorldCleared: options.openWorldCleared ?? false,
+      resets: 0,
+      hasWorldBossUnit: () => options.bossPresent ?? false,
+      resetOpenWorldRun() {
+        state.resets += 1;
+        // 与 `BattleWorld.resetOpenWorldRun` 一致：一次清两个标志。
+        state.openWorldDeath = false;
+        state.openWorldCleared = false;
+      },
+    };
+    return state;
+  }
+
+  it('阵亡 → **立刻**重开（不等清尸：阵亡时 BOSS 通常还活着）', () => {
+    const world = fakeWorld({ openWorldDeath: true, bossPresent: true });
+    expect(applyRunResets(world)).toBe(true);
+    expect(world.resets).toBe(1);
+    expect(world.openWorldDeath).toBe(false);
+  });
+
+  it('通关且 BOSS 尸体已清 → 重开', () => {
+    const world = fakeWorld({ openWorldCleared: true, bossPresent: false });
+    expect(applyRunResets(world)).toBe(true);
+    expect(world.resets).toBe(1);
+    expect(world.openWorldCleared).toBe(false);
+  });
+
+  it('通关但 BOSS **尸体仍在场** → 不重开（等清尸，否则吞掉落）', () => {
+    const world = fakeWorld({ openWorldCleared: true, bossPresent: true });
+    expect(applyRunResets(world)).toBe(false);
+    expect(world.resets).toBe(0);
+    expect(world.openWorldCleared).toBe(true); // 标志保留，下一分片再试
+  });
+
+  it('两个标志都没置位 → 纯 no-op', () => {
+    const world = fakeWorld({});
+    expect(applyRunResets(world)).toBe(false);
+    expect(world.resets).toBe(0);
+  });
+
+  it('同时置位时**阵亡优先**（不等清尸）', () => {
+    const world = fakeWorld({ openWorldDeath: true, openWorldCleared: true, bossPresent: true });
+    expect(applyRunResets(world)).toBe(true);
+    expect(world.resets).toBe(1);
+    expect(world.openWorldDeath).toBe(false);
+    expect(world.openWorldCleared).toBe(false);
+  });
+
+  it('幂等：紧接着再调一次不会重复重开', () => {
+    const world = fakeWorld({ openWorldCleared: true, bossPresent: false });
+    expect(applyRunResets(world)).toBe(true);
+    expect(applyRunResets(world)).toBe(false);
+    expect(world.resets).toBe(1);
   });
 });

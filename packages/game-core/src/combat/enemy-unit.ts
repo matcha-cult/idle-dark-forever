@@ -492,6 +492,10 @@ export class EnemyUnit extends Unit {
         if (firstClear) {
           this.world.grantWorldClearReward();
         }
+        // W11 / 决策 3：**通关后自动重新进入当前图**（波数归 0 → 转挂机节拍）。
+        // 这里只置位；服务端 tick 会**等本 BOSS 清尸**（掉落结算）后才落实
+        // —— 提前重开会 `dispose()` 掉清尸计时器、吞掉 BOSS 掉落。
+        this.world.noteWorldCleared();
       }
     }
   }

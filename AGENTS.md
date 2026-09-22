@@ -390,6 +390,28 @@ cmd 段唯一归属、每个 `*LogicServer` 里不得出现 `@ActionMethod`。
   取模在会话恢复后必然错过窗口（旧实现恢复到第 20 波要等到第 40 波）。野外 BOSS 的判据是
   「`bossPending` 且场上没有 BOSS」⇒ **恢复到第 20 波会当波补刷**；混沌 BOSS 按 20 波窗口记
   `lastBossWave`（否则杀掉后每波重刷）。`completeWave()` 与会话恢复都要调 `ensureMilestones()`。
+- **守关 BOSS 在场 ⇒ 停刷杂兵（W12）**：`Born.onTimer` 在原有两条闸门（本图同屏上限 / 全局单位
+  硬顶）**之前**先查 `BattleWorld.hasWorldBossUnit()`，BOSS 在场则**一只杂兵都不刷**；与那两条一样
+  **保持轮询**，BOSS 一离场自动恢复，不需要任何人重置状态。
+  ⚠️ 口径是「**存在**」（含已死未清尸的 `ghost`）—— 与混沌 `clear` 等掉落用的是**同一个**判定，
+  但**消费意图不同**（那里等结算，这里拦刷怪）。⇒ BOSS 死后要等清尸（默认 3s）才恢复刷杂兵。
+  ⚠️ **副作用（产品已接受）**：BOSS 波期间 `Born.total` 恒达不到 `config.total` ⇒
+  `isWaveComplete()` 不成立 ⇒ **波数冻在 BOSS 那一波**。这是「BOSS 波只有 BOSS」的代价，
+  由下一条的「通关自动重开」收口。
+  ⚠️ **已知尾巴**：`chapter3.beast.pengpeng`（world.11 的 BOSS）携带 `simba.goodFriends`，其
+  `willClean` 在「仍有兄弟存活」时返回 `false` ⇒ 尸体**不挂清尸计时器**；而该图刷怪池里就有
+  同为携带者的 `chapter3.beast.dingman` ⇒ 必须把剩余兄弟也清掉才恢复（不是永久锁死）。
+  ⚠️ **只拦守关 BOSS**：精英（`elite`，每 10 波保底）与敌方**召唤物**都不拦 —— 后者走
+  `data/skills.ts` 的 `addEnemy(..., summoner)`、不经刷怪闸门，拦它等于废掉 world.4/6/8 三只
+  BOSS 的看家技能（`wolf.call` / `candle.call` / `necromancer.ghostShield`）。
+- **通关后自动重进本图（W11 决策 3 的另一半）**：`EnemyUnit.kill` 在非混沌图登记通关后调
+  `world.noteWorldCleared()`；服务端 `WorldService.handleRunReset` **等该 BOSS 清尸**再
+  `resetOpenWorldRun()`（波数归 0 ⇒ 因 `bossPending` 已翻 `false` 而自动转挂机节拍）。
+  ⚠️ **必须等清尸**：掉落 / 钥石在 `clean()` 结算，提前重开会 `dispose()` 清尸计时器 → **吞掉落**。
+  ⚠️ 与**阵亡重开（决策 4）相反：不等清尸** —— 阵亡时 BOSS 通常还活着，等它就是永不重开。
+  两个触发源共用一个消费者 `handleRunReset`；离线侧同语义实现在 `applyRunResets`
+  （`idle-logic.service.ts`），否则「带着打不死的 BOSS 下线」会因停刷杂兵而**离线收益≈0**
+  （外推乘的是模拟区间的速率）。
 - **怪物稀有度四阶（W11）**：`普通 / 稀有 / 精英 / 传奇` = `quality 0/1/2` + 守关 BOSS。
   唯一实现 `combat/enemy-rarity.ts`（`enemyRarityOf` / `clampEnemyQuality`）；服务端只序列化。
   **等级偏移 = `mapLevel + min(quality, 2)`**（普通 +0 / 稀有 +1 / 精英 +2 / BOSS +2）。
